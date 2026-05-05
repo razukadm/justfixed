@@ -267,7 +267,7 @@ class TestCouponFrequency:
 
 class TestLCDMinimumTerm:
     def test_lcd_below_365_days_rejected(self) -> None:
-        with pytest.raises(ValueError, match="minimum term"):
+        with pytest.raises(ValueError, match="minimum security term"):
             Investment.create(
                 product=ProductType.LCD,
                 issuer=development_bank(),
@@ -380,3 +380,136 @@ class TestIdentity:
     def test_compared_to_non_investment(self) -> None:
         a = make_cdb()
         assert (a == "not an investment") is False
+
+        # ------------------------------------------------------------------
+# Issue date and secondary market behavior
+# ------------------------------------------------------------------
+
+
+class TestIssueDateDefault:
+    """When issue_date is not provided, it defaults to purchase_date."""
+
+    def test_issue_date_defaults_to_purchase_date(self) -> None:
+        inv = make_cdb(purchase=date(2024, 1, 15), maturity=date(2026, 1, 15))
+        assert inv.issue_date == date(2024, 1, 15)
+
+    def test_explicit_issue_date_preserved(self) -> None:
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 6, 1),
+            maturity_date=date(2026, 1, 15),
+            issue_date=date(2024, 1, 15),
+        )
+        assert inv.issue_date == date(2024, 1, 15)
+        assert inv.purchase_date == date(2024, 6, 1)
+
+
+class TestPurchaseBeforeIssue:
+    """You cannot buy a security before it was issued."""
+
+    def test_purchase_before_issue_rejected(self) -> None:
+        with pytest.raises(ValueError, match="cannot be before"):
+            Investment.create(
+                product=ProductType.CDB,
+                issuer=commercial_bank(),
+                principal=Money.from_reais("10000"),
+                rate=PostFixedCDI.from_percent("110"),
+                purchase_date=date(2024, 1, 1),
+                maturity_date=date(2026, 1, 15),
+                issue_date=date(2024, 6, 1),
+            )
+
+    def test_purchase_same_day_as_issue_accepted(self) -> None:
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            issue_date=date(2024, 1, 15),
+        )
+        assert inv.purchase_date == inv.issue_date
+
+
+class TestSecondaryMarket:
+    """Real-world: an LCD bought today that was issued months ago."""
+
+    def test_secondary_lcd_with_full_security_term_accepted(self) -> None:
+        # LCD issued 2025-10-01, matures 2026-10-01 (365-day security).
+        # Investor buys mid-life on 2026-05-04 (~150 days before maturity).
+        # Regulatory minimum is satisfied at the security level.
+        inv = Investment.create(
+            product=ProductType.LCD,
+            issuer=development_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("100"),
+            purchase_date=date(2026, 5, 4),
+            maturity_date=date(2026, 10, 1),
+            issue_date=date(2025, 10, 1),
+        )
+        assert inv.security_term_days == 365
+        assert inv.holding_term_days == 150
+        assert inv.is_secondary_market is True
+
+    def test_secondary_lcd_with_short_security_term_rejected(self) -> None:
+        # An LCD whose security term is < 365 days should never exist.
+        # Even on the secondary market, this is a malformed security.
+        with pytest.raises(ValueError, match="minimum security term"):
+            Investment.create(
+                product=ProductType.LCD,
+                issuer=development_bank(),
+                principal=Money.from_reais("10000"),
+                rate=PostFixedCDI.from_percent("100"),
+                purchase_date=date(2026, 5, 4),
+                maturity_date=date(2026, 9, 1),  # only ~330 days from issue
+                issue_date=date(2025, 10, 1),
+            )
+
+    def test_primary_market_is_not_secondary(self) -> None:
+        # When issue_date defaults to purchase_date, is_secondary_market is False.
+        inv = make_cdb(purchase=date(2024, 1, 15), maturity=date(2026, 1, 15))
+        assert inv.is_secondary_market is False
+
+    def test_explicit_same_day_purchase_is_not_secondary(self) -> None:
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            issue_date=date(2024, 1, 15),
+        )
+        assert inv.is_secondary_market is False
+
+
+class TestTermProperties:
+    """security_term_days and holding_term_days should differ correctly."""
+
+    def test_primary_market_terms_are_equal(self) -> None:
+        inv = make_cdb(purchase=date(2024, 1, 15), maturity=date(2026, 1, 15))
+        assert inv.security_term_days == inv.holding_term_days
+
+    def test_secondary_market_holding_term_is_shorter(self) -> None:
+        inv = Investment.create(
+            product=ProductType.LCD,
+            issuer=development_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("100"),
+            purchase_date=date(2026, 5, 4),
+            maturity_date=date(2026, 10, 1),
+            issue_date=date(2025, 10, 1),
+        )
+        assert inv.holding_term_days < inv.security_term_days
+        assert inv.security_term_days == 365
+        assert inv.holding_term_days == 150
+
+    def test_term_days_alias_matches_holding(self) -> None:
+        # Backward compatibility: existing callers using term_days
+        # get the holding period (the most common engine-relevant term).
+        inv = make_cdb(purchase=date(2024, 1, 15), maturity=date(2025, 1, 15))
+        assert inv.term_days == inv.holding_term_days
