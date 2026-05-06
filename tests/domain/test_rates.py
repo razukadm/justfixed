@@ -1,10 +1,16 @@
 """Tests for the Rate hierarchy."""
-
+import dataclasses
 from decimal import Decimal
 
 import pytest
 
-from justfixed.domain.rates import Prefixed, PostFixedCDI, PostFixedIPCA, Rate
+from justfixed.domain.rates import (
+    PostFixedCDI,
+    PostFixedCDIPlusSpread,
+    PostFixedIPCA,
+    Prefixed,
+    Rate,
+)
 
 
 # ---------- Prefixed ----------
@@ -162,3 +168,51 @@ class TestMatching:
 
     def test_match_post_ipca(self) -> None:
         assert self.describe(PostFixedIPCA.from_percent("5.5")) == "tracks inflation"
+
+
+class TestPostFixedCDIPlusSpread:
+    """The CDI + fixed spread rate (e.g. 'CDI + 2,05%')."""
+
+    def test_from_decimal_fraction(self) -> None:
+        rate = PostFixedCDIPlusSpread(Decimal("0.0205"))
+        assert rate.spread == Decimal("0.0205")
+
+    def test_from_percent_string(self) -> None:
+        rate = PostFixedCDIPlusSpread.from_percent("2.05")
+        assert rate.spread == Decimal("0.0205")
+
+    def test_from_percent_with_decimals(self) -> None:
+        rate = PostFixedCDIPlusSpread.from_percent("3.75")
+        assert rate.spread == Decimal("0.0375")
+
+    def test_spread_percent_property(self) -> None:
+        rate = PostFixedCDIPlusSpread.from_percent("2.05")
+        assert rate.spread_percent == Decimal("2.05")
+
+    def test_float_rejected(self) -> None:
+        with pytest.raises(TypeError):
+            PostFixedCDIPlusSpread(0.0205)  # type: ignore[arg-type]
+
+    def test_display(self) -> None:
+        rate = PostFixedCDIPlusSpread.from_percent("2.05")
+        assert rate.to_display() == "CDI + 2,05%"
+
+    def test_display_with_zero_spread(self) -> None:
+        rate = PostFixedCDIPlusSpread(Decimal("0"))
+        assert rate.to_display() == "CDI + 0,00%"
+
+    def test_distinct_from_post_fixed_cdi(self) -> None:
+        """A 110% CDI rate is NOT equal to a CDI+10% rate, even though
+        they're textually similar. They're different math entirely."""
+        cdi_pct = PostFixedCDI.from_percent("110")
+        cdi_plus = PostFixedCDIPlusSpread.from_percent("10")
+        assert cdi_pct != cdi_plus
+
+    def test_immutable(self) -> None:
+        rate = PostFixedCDIPlusSpread.from_percent("2.05")
+        with pytest.raises((AttributeError, dataclasses.FrozenInstanceError)):
+            rate.spread = Decimal("0.05")  # type: ignore[misc]
+
+    def test_is_a_rate(self) -> None:
+        rate = PostFixedCDIPlusSpread.from_percent("2.05")
+        assert isinstance(rate, Rate)

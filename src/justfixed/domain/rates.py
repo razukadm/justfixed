@@ -147,3 +147,37 @@ class PostFixedIPCA(Rate):
 
     def to_display(self) -> str:
         return f"IPCA + {_format_brazilian_percent(self.spread_percent)}"
+    
+@dataclass(frozen=True, slots=True)
+class PostFixedCDIPlusSpread(Rate):
+    """CDI plus a fixed annual spread.
+
+    Example: PostFixedCDIPlusSpread(Decimal('0.0205')) means CDI + 2.05% a.a.
+
+    The spread is stored as a fraction (0.0205), not as a percentage (2.05).
+    Use `from_percent` if you have a percentage.
+
+    This is mathematically distinct from PostFixedCDI:
+    - PostFixedCDI("110% CDI"): you earn 110% × CDI_annual
+    - PostFixedCDIPlusSpread("CDI + 2,05%"): you earn CDI + 2.05%, and the
+      cross-term (CDI × spread) compounds via Fisher form, same as IPCA.
+    """
+
+    spread: Decimal
+
+    def __post_init__(self) -> None:
+        normalized = _to_decimal(self.spread)
+        object.__setattr__(self, "spread", normalized)
+
+    @classmethod
+    def from_percent(cls, percent: str | int | Decimal) -> Self:
+        """Construct from a percentage value, e.g. '2.05' for CDI + 2.05%."""
+        return cls(_to_decimal(percent) / Decimal("100"))
+
+    @property
+    def spread_percent(self) -> Decimal:
+        """The spread as a percentage (e.g. 2.05 for CDI + 2.05%)."""
+        return self.spread * Decimal("100")
+
+    def to_display(self) -> str:
+        return f"CDI + {_format_brazilian_percent(self.spread_percent)}"

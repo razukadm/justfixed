@@ -22,6 +22,7 @@ from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType
 from justfixed.domain.rates import (
     PostFixedCDI,
+    PostFixedCDIPlusSpread,
     PostFixedIPCA,
     Prefixed,
     Rate,
@@ -67,6 +68,7 @@ def issuer_from_row(row: IssuerRow) -> Issuer:
 _RATE_KIND_PREFIXED = "prefixed"
 _RATE_KIND_POST_FIXED_CDI = "post_fixed_cdi"
 _RATE_KIND_POST_FIXED_IPCA = "post_fixed_ipca"
+_RATE_KIND_POST_FIXED_CDI_PLUS_SPREAD = "post_fixed_cdi_plus_spread"
 
 
 def _rate_to_columns(rate: Rate) -> tuple[str, Decimal]:
@@ -78,6 +80,8 @@ def _rate_to_columns(rate: Rate) -> tuple[str, Decimal]:
             return _RATE_KIND_POST_FIXED_CDI, v
         case PostFixedIPCA(spread=v):
             return _RATE_KIND_POST_FIXED_IPCA, v
+        case PostFixedCDIPlusSpread(spread=v):
+            return _RATE_KIND_POST_FIXED_CDI_PLUS_SPREAD, v
         case _:
             raise ValueError(f"Unknown Rate subclass: {type(rate).__name__}")
 
@@ -91,6 +95,8 @@ def _rate_from_columns(kind: str, value: Decimal) -> Rate:
             return PostFixedCDI(value)
         case "post_fixed_ipca":
             return PostFixedIPCA(value)
+        case "post_fixed_cdi_plus_spread":
+            return PostFixedCDIPlusSpread(value)
         case _:
             raise ValueError(f"Unknown rate_kind in row: {kind!r}")
 

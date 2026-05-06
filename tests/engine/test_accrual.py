@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 
 from justfixed.domain.money import Money
-from justfixed.domain.rates import PostFixedCDI, PostFixedIPCA, Prefixed
+from justfixed.domain.rates import PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA, Prefixed
 from justfixed.engine.accrual import accrue
 
 
@@ -265,3 +265,78 @@ class TestComposition:
 
         # Should match within tolerance.
         assert_close(full, composed, tolerance=Decimal("0.01"))
+
+class TestPostFixedCDIPlusSpreadAccrual:
+    """Accrual for CDI + fixed spread rates."""
+
+    def test_one_year_at_cdi_plus_two_percent(self) -> None:
+        # CDI + 2%, with CDI = 12%. Effective rate (Fisher):
+        # 0.12 + 0.02 + 0.12 × 0.02 = 0.1424 (14.24%).
+        # 10000 × 1.1424 = 11424.
+        result = accrue(
+            Money.from_reais("10000"),
+            PostFixedCDIPlusSpread.from_percent("2"),
+            252,
+            assumed_cdi=Decimal("0.12"),
+        )
+        assert_close(result, Money.from_reais("11424"))
+
+    def test_one_year_at_cdi_plus_2_05_percent(self) -> None:
+        # The exact "CDB BMG" rate from your XP statement.
+        # Fisher: 0.12 + 0.0205 + (0.12 × 0.0205) = 0.14296.
+        # 10000 × 1.14296 = 11429.60 (verified empirically).
+        result = accrue(
+            Money.from_reais("10000"),
+            PostFixedCDIPlusSpread.from_percent("2.05"),
+            252,
+            assumed_cdi=Decimal("0.12"),
+        )
+        assert_close(result, Money.from_reais("11429.60"))
+
+    def test_zero_spread_equals_pure_cdi(self) -> None:
+        # CDI + 0% should give the same result as 100% CDI.
+        cdi_plus_zero = accrue(
+            Money.from_reais("10000"),
+            PostFixedCDIPlusSpread(Decimal("0")),
+            252,
+            assumed_cdi=Decimal("0.12"),
+        )
+        pure_cdi = accrue(
+            Money.from_reais("10000"),
+            PostFixedCDI.from_percent("100"),
+            252,
+            assumed_cdi=Decimal("0.12"),
+        )
+        assert_close(cdi_plus_zero, pure_cdi)
+
+    def test_distinct_from_post_fixed_cdi_at_same_label(self) -> None:
+        """Critical correctness test: CDI + 10% is NOT the same as 110% CDI."""
+        cdi_plus_10 = accrue(
+            Money.from_reais("10000"),
+            PostFixedCDIPlusSpread.from_percent("10"),
+            252,
+            assumed_cdi=Decimal("0.12"),
+        )
+        cdi_at_110 = accrue(
+            Money.from_reais("10000"),
+            PostFixedCDI.from_percent("110"),
+            252,
+            assumed_cdi=Decimal("0.12"),
+        )
+        # CDI+10% effective rate: 0.12 + 0.10 + 0.012 = 0.232 (23.2%)
+        # 110% CDI effective rate: 1.10 × 0.12 = 0.132 (13.2%)
+        # These are very different. CDI+10% should yield substantially more.
+        assert cdi_plus_10 > cdi_at_110
+        # Specifically: cdi_plus_10 ≈ 12320, cdi_at_110 ≈ 11320.
+        # Difference should be around R$ 1000.
+        diff = cdi_plus_10 - cdi_at_110
+        assert diff > Money.from_reais("900")
+
+    def test_missing_assumed_cdi_raises(self) -> None:
+        with pytest.raises(ValueError, match="assumed_cdi"):
+            accrue(
+                Money.from_reais("10000"),
+                PostFixedCDIPlusSpread.from_percent("2"),
+                252,
+                # assumed_cdi not provided
+            )

@@ -12,7 +12,7 @@ from justfixed.domain.investment import Investment
 from justfixed.domain.issuer import Issuer, IssuerKind
 from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType
-from justfixed.domain.rates import PostFixedCDI, PostFixedIPCA, Prefixed
+from justfixed.domain.rates import PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA, Prefixed
 from justfixed.persistence.mappers import (
     investment_from_row,
     investment_to_row,
@@ -132,6 +132,14 @@ class TestRateRoundTrip:
         restored_inv = investment_from_row(row, inv.issuer)
         assert restored_inv.rate == original
 
+    def test_post_fixed_cdi_plus_spread(self) -> None:
+        original = PostFixedCDIPlusSpread.from_percent("2.05")
+        inv = self._make_inv_with_rate(original)
+        row = investment_to_row(inv)
+        assert row.rate_kind == "post_fixed_cdi_plus_spread"
+        assert row.rate_value == Decimal("0.0205")
+        restored_inv = investment_from_row(row, inv.issuer)
+        assert restored_inv.rate == original
 
 # ---------- Investment mappers, full round-trip ----------
 

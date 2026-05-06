@@ -28,6 +28,7 @@ from decimal import Decimal
 from justfixed.domain.money import Money
 from justfixed.domain.rates import (
     PostFixedCDI,
+    PostFixedCDIPlusSpread,
     PostFixedIPCA,
     Prefixed,
     Rate,
@@ -117,6 +118,15 @@ def _effective_annual_rate(
                 )
             # Fisher form: (1 + ipca)(1 + spread) - 1 = ipca + spread + ipca*spread
             return assumed_ipca + s + (assumed_ipca * s)
+        
+        case PostFixedCDIPlusSpread(spread=s):
+            if assumed_cdi is None:
+                raise ValueError(
+                    "PostFixedCDIPlusSpread rate requires assumed_cdi parameter "
+                    "(e.g. Decimal('0.12') for 12% annual CDI)."
+                )
+            # Fisher form: (1 + cdi)(1 + spread) - 1 = cdi + spread + cdi*spread
+            return assumed_cdi + s + (assumed_cdi * s)
 
         case _:
             raise ValueError(f"Unknown Rate type: {type(rate).__name__}")
