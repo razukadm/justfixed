@@ -10,16 +10,16 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 
 | Layer | Status | Test count |
 |---|---|---|
-| Domain | Complete | 132 |
-| Persistence | Complete | 47 |
-| Engine | Complete | 123 |
-| Importer (parser, mapper) | Complete | 92 |
-| Importer (loader / DB persistence) | **Not built** | 0 |
+| Domain | Complete | 151 |
+| Persistence | Complete | 73 |
+| Engine | Complete | 119 |
+| Importer (parser, mapper) | Complete | 77 |
+| Importer (loader / DB persistence) | Complete | 9 |
 | UI (PySide6) | **Not built** | 0 |
 | FGC concentration check | **Not built** | 0 |
 | Maturity calendar / ICS export | **Not built** | 0 |
 
-395 tests pass in under 3 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+429 tests pass in ~2 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -260,21 +260,48 @@ Five small parsers, each tested in isolation, then composed:
 
 The composition function `parse_row(XPRow) → ParsedXPRow` produces a typed bundle but **does not create an `Issuer` instance**. That's deliberate: the parser is database-free, fully unit-testable.
 
-### Layer 3: `xp_loader.py` — **NOT BUILT**
+### Layer 3: `xp_loader.py` — parsed rows → persisted Investments
 
-This layer takes a `list[ParsedXPRow]`, resolves each `issuer_name` against the database (creating if missing), constructs `Investment`s, and persists them idempotently.
+The seam between "data parsed from a spreadsheet" and "rows in the database." Public surface is one function:
 
-When you build it, the open design questions are:
+```python
+def load_xp_statement(path: Path, session_factory) -> LoadResult:
+    ...
+```
 
-- **Issuer matching strategy**: exact uppercase match? Fuzzy? For now, exact uppercase normalization is probably right.
-- **Idempotency key for investments**: `(issuer_id, product, principal, purchase_date, maturity_date)` should uniquely identify a position. Test by re-importing the same file twice.
-- **What to do with `CDB BMG +CDI 2,05%`-type rows after Phase 1**: with `PostFixedCDIPlusSpread` now in the type system, these import cleanly.
+It reads the file via layer 1, parses each row via layer 2, then for each parsed row resolves the issuer (creating if needed) and persists the Investment (or skips if already present). Returns a `LoadResult` summarizing what happened: `inserted`, `skipped`, `issuers_created`, `issuers_reused`.
+
+#### Issuer reconciliation
+
+Issuer matching uses **normalized name** as the key. `Issuer.normalize_name(s)` is the classmethod: strip outer whitespace, collapse internal whitespace, uppercase. Punctuation and accents are preserved — `"Banco BV S/A"` and `"Banco BV SA"` stay distinct, as do `"Itaú"` and `"Itau"`.
+
+The normalized form is stored on `IssuerRow.normalized_name` with a unique database index. Two issuers cannot share a normalized name; the database enforces this, not application code.
+
+Treasury rows route specially: parsed name `"Tesouro Nacional"` resolves via `Issuer.treasury()` (the canonical factory with the right CNPJ and `IssuerKind.TREASURY`). Everything else creates as `IssuerKind.COMMERCIAL_BANK` with conglomerate marked unverified — see below.
+
+#### The `[unverified]` conglomerate convention
+
+The loader has only one piece of issuer information: the parser-emitted name. It can't know whether `"BMG"` and `"PAN"` belong to the same conglomerate, or whether `"CEF"` is part of a holding company. So new commercial-bank issuers are created with `conglomerate=f"[unverified] {name}"` — a string convention that signals "this needs human review."
+
+The FGC concentration check (when built) will surface these for the user to merge into real conglomerates. Until then, the prefix is honest about what we don't know. This is a string convention, not a schema constraint, so future migration to a nullable conglomerate field is a one-line UPDATE.
+
+The constant `UNVERIFIED_CONGLOMERATE_PREFIX` is exported from `xp_loader` for callers (notably the FGC layer) to import.
+
+#### Investment idempotency
+
+Re-importing the same statement does not duplicate investments. The natural key is the 5-tuple `(issuer_id, product, principal, purchase_date, maturity_date)`. Before insert, the loader queries `InvestmentRepository.find_by_natural_key(...)`; if a match exists, the row is skipped.
+
+There is **no unique constraint** on this key in the database. A user can legitimately hold two identical positions through separate orders; the database doesn't reject this, it's the importer's idempotency contract that prevents accidental re-insertion. Other entry paths (manual UI entry in Phase 2) are free to create natural-key duplicates.
+
+#### Lessons from real-world data
+
+The synthetic fixture (6 rows, all 4 rate types) is not enough. Running against a real `PosicaoDetalhada.xlsx` (~94 positions) immediately surfaced one over-strict rule: the domain rejected LCAs with monthly coupons, but real LCAs in the Brazilian market commonly pay monthly. The fix was a one-line domain change (`allowed_coupons=frozenset(CouponFrequency)` for LCA), discovered only because real data forced it. **Audit when crashes happen, not preemptively.** The rule for LCI is still NONE-only and stays that way until a real LCI-with-coupons crashes the loader.
 
 ---
 
 ## Test discipline
 
-**395 tests, ~2 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**429 tests, ~2 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
@@ -366,11 +393,10 @@ The project uses what's in `pyproject.toml` and nothing else. Don't add a new de
 
 In rough order:
 
-1. **Importer Layer 3** (`xp_loader.py`) — issuer reconciliation + idempotent persistence. Maybe 2 sessions.
-2. **UI** — PySide6 windows: portfolio list, manual-entry form, projection display, ICS export. ~5-6 sessions.
-3. **FGC concentration check** — table per CPF/conglomerate, warn if >R$250k single, >R$1M aggregate. 1 session.
-4. **Maturity calendar / ICS export** — emit cash-flow dates as iCalendar. 1 session.
-5. **Windows installer** — PyInstaller + Inno Setup. 1-2 sessions.
+1. **UI** — PySide6 windows: portfolio list, manual-entry form, projection display, ICS export. ~5-6 sessions.
+2. **FGC concentration check** — table per CPF/conglomerate, warn if >R$250k single, >R$1M aggregate. The natural surface for reviewing `[unverified]` conglomerate values from the loader; users merge same-conglomerate issuers into a shared name. 1 session.
+3. **Maturity calendar / ICS export** — emit cash-flow dates as iCalendar. 1 session.
+4. **Windows installer** — PyInstaller + Inno Setup. 1-2 sessions.
 
 Phase 2 (post-MVP):
 - DI-curve mark-to-market

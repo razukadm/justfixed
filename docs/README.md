@@ -2,7 +2,7 @@
 
 A desktop portfolio tracker for Brazilian fixed-income investments (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, Windows-targeted, single-user.
 
-**Status:** in development. Engine and persistence layers complete; importer 2/3 done; UI not started. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for what's built and what isn't.
+**Status:** in development. Engine, persistence, and importer layers complete; UI not started. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for what's built and what isn't.
 
 ## What it does
 
@@ -41,7 +41,7 @@ alembic upgrade head
 pytest tests/ -v
 ```
 
-You should see ~395 tests passing in under 3 seconds. If anything fails, the architecture doc covers common environment issues.
+You should see ~429 tests passing in about 2 seconds. If anything fails, the architecture doc covers common environment issues.
 
 ## Using what's built
 
@@ -75,18 +75,25 @@ print(f"IR tax:            {result.tax_amount.to_display()}")
 print(f"Net at maturity:   {result.net_at_maturity.to_display()}")
 ```
 
-To import an XP statement (parsing layers only — DB persistence not yet built):
+To import an XP statement into the database:
 
 ```python
 from pathlib import Path
-from justfixed.importers.xp import read_renda_fixa_rows
-from justfixed.importers.xp_mapper import parse_row
+from justfixed.persistence.database import (
+    Base, default_database_url, make_engine, make_session_factory,
+)
+from justfixed.importers.xp_loader import load_xp_statement
 
-rows = read_renda_fixa_rows(Path("PosicaoDetalhada.xlsx"))
-for r in rows:
-    parsed = parse_row(r)
-    print(f"{parsed.product.value:15} {parsed.issuer_name:30} {parsed.principal}")
+engine = make_engine(default_database_url())
+Base.metadata.create_all(engine)  # First-time setup; alembic upgrade head also works
+factory = make_session_factory(engine)
+
+result = load_xp_statement(Path("PosicaoDetalhada.xlsx"), factory)
+print(f"Inserted: {result.inserted}, skipped: {result.skipped}")
+print(f"Issuers created: {result.issuers_created}, reused: {result.issuers_reused}")
 ```
+
+Re-running the same file is safe: investments matching the natural key `(issuer, product, principal, purchase_date, maturity_date)` are skipped, not duplicated.
 
 ## Project structure
 
@@ -95,8 +102,8 @@ src/justfixed/
   domain/         # Money, Rate, Issuer, Investment — pure value/entity types
   persistence/    # SQLAlchemy models, migrations, repositories
   engine/         # Calendar, accrual, tax, cash flows, projection
-  importers/      # XP statement parser
-tests/            # 395 tests; mirrors src/ structure
+  importers/      # XP statement parser + DB loader
+tests/            # 429 tests; mirrors src/ structure
 alembic/          # Database migrations
 docs/             # ARCHITECTURE.md and other design notes
 ```
