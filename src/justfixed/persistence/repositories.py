@@ -58,6 +58,32 @@ class IssuerRepository:
             if row is None:
                 return None
             return issuer_from_row(row)
+        
+    def find_by_normalized_name(self, name: str) -> Issuer | None:
+        """Return the Issuer whose normalized name matches, or None if not found.
+
+        The input is normalized via Issuer.normalize_name before lookup, so
+        callers can pass the raw name they have on hand — typically a parsed
+        issuer name from an XP statement — without pre-normalizing.
+
+        Args:
+            name: Any string. Will be normalized (uppercase, trim, collapse
+                  whitespace) before the database lookup.
+
+        Returns:
+            The matching Issuer, or None if no issuer with that normalized
+            name exists.
+        """
+        normalized = Issuer.normalize_name(name)
+        with session_scope(self._factory) as session:
+            row = (
+                session.query(IssuerRow)
+                .filter(IssuerRow.normalized_name == normalized)
+                .one_or_none()
+            )
+            if row is None:
+                return None
+            return issuer_from_row(row)
 
     def list_all(self) -> list[Issuer]:
         """Return all issuers, ordered by name."""

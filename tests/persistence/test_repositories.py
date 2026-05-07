@@ -148,6 +148,67 @@ class TestIssuerDelete:
             issuer_repo.delete(issuer.id)
 
 
+class TestIssuerFindByNormalizedName:
+    def test_returns_none_when_database_is_empty(self, issuer_repo) -> None:
+        assert issuer_repo.find_by_normalized_name("Banco Inter") is None
+
+    def test_returns_none_when_no_match(self, issuer_repo) -> None:
+        issuer_repo.save(make_issuer("Banco Inter"))
+        assert issuer_repo.find_by_normalized_name("Banco BV") is None
+
+    def test_finds_issuer_by_exact_name(self, issuer_repo) -> None:
+        saved = make_issuer("Banco Inter")
+        issuer_repo.save(saved)
+        found = issuer_repo.find_by_normalized_name("Banco Inter")
+        assert found is not None
+        assert found.id == saved.id
+        assert found.name == "Banco Inter"
+
+    def test_finds_issuer_by_lowercase_name(self, issuer_repo) -> None:
+        saved = make_issuer("Banco Inter")
+        issuer_repo.save(saved)
+        found = issuer_repo.find_by_normalized_name("banco inter")
+        assert found is not None
+        assert found.id == saved.id
+
+    def test_finds_issuer_by_name_with_extra_whitespace(self, issuer_repo) -> None:
+        saved = make_issuer("Banco Inter")
+        issuer_repo.save(saved)
+        found = issuer_repo.find_by_normalized_name("  Banco   Inter  ")
+        assert found is not None
+        assert found.id == saved.id
+
+    def test_does_not_find_distinct_issuers_with_similar_names(
+        self, issuer_repo
+    ) -> None:
+        # "Banco Inter" and "Banco Inter S/A" normalize to different strings;
+        # the lookup must not collapse them. This documents that we
+        # deliberately do not try to be clever about punctuation variants.
+        issuer_repo.save(make_issuer("Banco Inter S/A"))
+        assert issuer_repo.find_by_normalized_name("Banco Inter") is None
+
+    def test_unique_constraint_prevents_duplicate_normalized_names(
+        self, issuer_repo
+    ) -> None:
+        # "Banco Inter" and "BANCO INTER" normalize to the same string.
+        # The database's unique index on normalized_name must reject the
+        # second insert. We catch IntegrityError specifically — a different
+        # exception would mean the constraint is wrong or missing.
+        from sqlalchemy.exc import IntegrityError
+
+        issuer_repo.save(make_issuer("Banco Inter"))
+        with pytest.raises(IntegrityError):
+            issuer_repo.save(make_issuer("BANCO INTER"))
+
+    def test_finds_treasury_by_canonical_name(self, issuer_repo) -> None:
+        # The Tesouro Nacional issuer must be findable via its canonical name
+        # — this is exactly how the loader will route NTN-B parsings.
+        treasury = Issuer.treasury()
+        issuer_repo.save(treasury)
+        found = issuer_repo.find_by_normalized_name("Tesouro Nacional")
+        assert found is not None
+        assert found.id == treasury.id
+
 # ---------- InvestmentRepository ----------
 
 
