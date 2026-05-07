@@ -24,7 +24,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session, sessionmaker
 
 from justfixed.domain.investment import Investment
-from justfixed.domain.issuer import Issuer, IssuerKind
+from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.importers.xp import read_renda_fixa_rows
 from justfixed.importers.xp_mapper import parse_row
 from justfixed.persistence.repositories import (
@@ -32,17 +32,6 @@ from justfixed.persistence.repositories import (
     IssuerRepository,
 )
 
-
-# Marker prefix written into Issuer.conglomerate when the loader has no
-# better information than the issuer's name itself. The FGC concentration
-# check (when built) treats issuers with this prefix as "needs human
-# review" — the user (or a future curated mapping) replaces the prefixed
-# value with the real conglomerate name (e.g. "Itaú Unibanco Holding").
-#
-# This is a string convention, not a schema constraint. Future migration
-# to a nullable conglomerate field would simply replace these values
-# with NULL via a one-line UPDATE.
-UNVERIFIED_CONGLOMERATE_PREFIX = "[unverified] "
 
 
 @dataclass(frozen=True)

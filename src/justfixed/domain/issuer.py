@@ -23,6 +23,19 @@ from enum import Enum
 from typing import Self
 
 
+# Marker prefix written into Issuer.conglomerate when the issuer's
+# origin (e.g. the XP importer) has no curated conglomerate mapping.
+# The FGC concentration check (when built) treats issuers with this
+# prefix as "needs human review" — the user, or a future curated
+# mapping, replaces the prefixed value with the real conglomerate name
+# (e.g. "Itaú Unibanco Holding").
+#
+# This is a string convention, not a schema constraint. Future migration
+# to a nullable conglomerate field would replace these values with NULL
+# via a one-line UPDATE.
+UNVERIFIED_CONGLOMERATE_PREFIX = "[unverified] "
+
+
 class IssuerKind(Enum):
     """Categorization of issuers for FGC and product-eligibility logic."""
 
