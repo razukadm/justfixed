@@ -222,6 +222,23 @@ class TestCouponFrequency:
                 maturity_date=date(2026, 1, 15),
                 coupon_frequency=CouponFrequency.MONTHLY,
             )
+    
+    def test_lca_allows_monthly_coupons(self) -> None:
+        # Real-world: LCAs with monthly coupons (juros mensais) are
+        # commonly issued in the Brazilian market. The product rule
+        # allows any coupon frequency for LCA; this test pins that
+        # behavior so it doesn't silently regress.
+        inv = Investment.create(
+            product=ProductType.LCA,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=Prefixed.from_percent("12"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            coupon_frequency=CouponFrequency.MONTHLY,
+        )
+        assert inv.coupon_frequency == CouponFrequency.MONTHLY
+        assert inv.product == ProductType.LCA
 
     def test_lcd_rejects_semi_annual_coupons(self) -> None:
         with pytest.raises(ValueError, match="LCD does not allow"):

@@ -86,7 +86,12 @@ PRODUCT_RULES: dict[ProductType, ProductRule] = {
         required_issuer_kind=IssuerKind.COMMERCIAL_BANK,
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_EXEMPT,
-        allowed_coupons=frozenset({CouponFrequency.NONE}),
+        # LCAs are commonly issued with monthly coupons in the Brazilian
+        # market (juros mensais), and semi-annual variants exist too.
+        # Allow any frequency; we trust the broker's reported value.
+        # Note: LCI is more conservative (NONE only) until real-world
+        # data shows otherwise — same audit-when-it-crashes discipline.
+        allowed_coupons=frozenset(CouponFrequency),
         display_name="LCA",
     ),
     ProductType.LC: ProductRule(
