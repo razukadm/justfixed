@@ -101,7 +101,32 @@ class Issuer:
             kind=IssuerKind.TREASURY,
             tax_id="00394460000141",  # CNPJ of Secretaria do Tesouro Nacional
         )
+    
+    @classmethod
+    def normalize_name(cls, name: str) -> str:
+        """Return a canonical form of an issuer name for matching.
 
+        Used by persistence to find existing issuers regardless of
+        capitalization or incidental whitespace differences. Two names
+        that normalize to the same string are treated as the same issuer.
+
+        Rules:
+          1. Strip leading/trailing whitespace
+          2. Collapse internal whitespace runs to a single space
+          3. Uppercase
+
+        Punctuation and accents are preserved: "Banco BV S/A" and
+        "Banco BV SA" remain distinct, as do "São" and "Sao". The
+        loader matches on exact (post-normalization) equality only.
+
+        Examples:
+            >>> Issuer.normalize_name("Banco BV S/A")
+            'BANCO BV S/A'
+            >>> Issuer.normalize_name("  banco  bv  s/a  ")
+            'BANCO BV S/A'
+        """
+        return re.sub(r"\s+", " ", name.strip()).upper()
+    
     @property
     def is_fgc_covered(self) -> bool:
         """Whether products from this issuer are FGC-covered.
