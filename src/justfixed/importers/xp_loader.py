@@ -23,6 +23,10 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from justfixed.domain.investment import Investment
+from justfixed.domain.issuer import Issuer, IssuerKind
+from justfixed.importers.xp import read_renda_fixa_rows
+from justfixed.importers.xp_mapper import parse_row
 from justfixed.persistence.repositories import (
     InvestmentRepository,
     IssuerRepository,
@@ -84,4 +88,94 @@ def load_xp_statement(
                                        violated (typically indicates
                                        data corruption).
     """
-    raise NotImplementedError("load_xp_statement is not yet implemented")
+    issuer_repo = IssuerRepository(session_factory)
+    investment_repo = InvestmentRepository(session_factory)
+
+    inserted = 0
+    skipped = 0
+    issuers_created = 0
+    issuers_reused = 0
+
+    raw_rows = read_renda_fixa_rows(path)
+    for raw in raw_rows:
+        parsed = parse_row(raw)
+
+        issuer, was_created = _resolve_issuer(parsed.issuer_name, issuer_repo)
+        if was_created:
+            issuers_created += 1
+        else:
+            issuers_reused += 1
+
+        # Idempotency check: does an investment with this natural key
+        # already exist? If so, skip — re-running the import does not
+        # create duplicates and does not modify existing records.
+        existing = investment_repo.find_by_natural_key(
+            issuer_id=issuer.id,
+            product=parsed.product,
+            principal=parsed.principal,
+            purchase_date=parsed.purchase_date,
+            maturity_date=parsed.maturity_date,
+        )
+        if existing is not None:
+            skipped += 1
+            continue
+
+        # Build and save. Investment.create defaults issue_date to
+        # purchase_date — appropriate for primary-market positions, which
+        # is what XP statements report. Secondary-market case is not
+        # distinguished in the XP data and would need a separate input.
+        investment = Investment.create(
+            product=parsed.product,
+            issuer=issuer,
+            principal=parsed.principal,
+            rate=parsed.rate,
+            purchase_date=parsed.purchase_date,
+            maturity_date=parsed.maturity_date,
+            coupon_frequency=parsed.coupon_frequency,
+        )
+        investment_repo.save(investment)
+        inserted += 1
+
+    return LoadResult(
+        inserted=inserted,
+        skipped=skipped,
+        issuers_created=issuers_created,
+        issuers_reused=issuers_reused,
+    )
+
+def _resolve_issuer(
+    parsed_name: str, issuer_repo: IssuerRepository
+) -> tuple[Issuer, bool]:
+    """Resolve a parsed issuer name to an existing or newly-created Issuer.
+
+    Treasury (parsed name "Tesouro Nacional") routes to Issuer.treasury(),
+    which carries the canonical CNPJ and TREASURY kind. Everything else
+    is created as COMMERCIAL_BANK with conglomerate marked unverified —
+    no human has reviewed the conglomerate grouping yet, and the FGC
+    layer (when built) will surface this for review.
+
+    Args:
+        parsed_name: Issuer name as emitted by xp_mapper.parse_issuer_name.
+                     "Tesouro Nacional" for treasuries; otherwise the bank's
+                     short code (e.g. "BMG", "CEF", "BANCO INTER").
+        issuer_repo: Repository for lookup and persistence.
+
+    Returns:
+        A tuple (issuer, was_created) where was_created is True if this
+        call inserted a new row, False if an existing row was reused.
+    """
+    existing = issuer_repo.find_by_normalized_name(parsed_name)
+    if existing is not None:
+        return existing, False
+
+    if parsed_name == "Tesouro Nacional":
+        new_issuer = Issuer.treasury()
+    else:
+        new_issuer = Issuer.create(
+            name=parsed_name,
+            conglomerate=f"{UNVERIFIED_CONGLOMERATE_PREFIX}{parsed_name}",
+            kind=IssuerKind.COMMERCIAL_BANK,
+        )
+
+    issuer_repo.save(new_issuer)
+    return new_issuer, True
