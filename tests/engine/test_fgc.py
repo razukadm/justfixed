@@ -118,6 +118,17 @@ def test_status_approaching_between_thresholds() -> None:
     assert c.current_exposure == Money.from_reais("220000")
 
 
+def test_approaching_not_in_at_or_over_limit_list() -> None:
+    # APPROACHING is below the R$250k limit (it's a buffer zone),
+    # so it should not appear in conglomerates_at_or_over_limit.
+    bank = _bank("Banco B", "Banco B S.A.")
+    inv = _cdb(bank, "220000", date(2026, 1, 2))
+    report = fgc_concentration_report([inv], as_of=PURCHASE, assumed_cdi=ASSUMED_CDI)
+    c = next(c for c in report.conglomerates if c.conglomerate_name == "Banco B S.A.")
+    assert c.current_status == ExposureStatus.APPROACHING
+    assert report.conglomerates_at_or_over_limit == []
+
+
 def test_status_over_above_limit() -> None:
     # R$ 280,000 > R$ 250,000 limit → OVER.  as_of == purchase_date.
     bank = _bank("Banco C", "Banco C S.A.")
