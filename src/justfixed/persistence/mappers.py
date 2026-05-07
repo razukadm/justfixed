@@ -38,6 +38,7 @@ def issuer_to_row(issuer: Issuer) -> IssuerRow:
     return IssuerRow(
         id=issuer.id,
         name=issuer.name,
+        normalized_name=Issuer.normalize_name(issuer.name),
         conglomerate=issuer.conglomerate,
         kind=issuer.kind.value,
         tax_id=issuer.tax_id,

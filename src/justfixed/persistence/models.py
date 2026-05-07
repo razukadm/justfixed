@@ -48,6 +48,9 @@ class IssuerRow(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
+    normalized_name: Mapped[str] = mapped_column(
+        String, nullable=False, unique=True, index=True
+    )
     conglomerate: Mapped[str] = mapped_column(String, nullable=False)
     kind: Mapped[str] = mapped_column(String, nullable=False)
     tax_id: Mapped[str] = mapped_column(String, nullable=False, default="")

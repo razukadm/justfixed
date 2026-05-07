@@ -36,6 +36,7 @@ def make_issuer_row(**overrides) -> IssuerRow:
     defaults = {
         "id": uuid.uuid4(),
         "name": "Banco Inter",
+        "normalized_name": "BANCO INTER",
         "conglomerate": "Banco Inter S.A.",
         "kind": "commercial_bank",
         "tax_id": "00416968000101",
@@ -119,6 +120,7 @@ class TestIssuerRow:
             row = IssuerRow(
                 id=row_id,
                 name="No Tax ID Bank",
+                normalized_name="NO TAX ID BANK",
                 conglomerate="No Tax ID",
                 kind="commercial_bank",
             )
