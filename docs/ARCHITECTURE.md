@@ -16,10 +16,10 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Importer (parser, mapper) | Complete | 77 |
 | Importer (loader / DB persistence) | Complete | 9 |
 | UI (PySide6) | **Not built** | 0 |
-| FGC concentration check | **Not built** | 0 |
+| FGC concentration check | Complete | 12 |
 | Maturity calendar / ICS export | **Not built** | 0 |
 
-429 tests pass in ~2 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+441 tests pass in ~2 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -226,6 +226,10 @@ Behavior at edges:
 
 **Documented simplification:** for coupon products, IR is computed on the *total gain* using the holding-period bracket. The real Brazilian rule withholds per coupon at its own date (early coupons get worse brackets). The current behavior produces slightly more favorable numbers; refining is a future enhancement.
 
+### `fgc.py`
+
+Computes per-conglomerate FGC exposure. Given a list of investments and an as-of date, returns an `FGCReport` listing each conglomerate's current and peak gross exposure with status flags (under, approaching, over the R$250k limit). Treasury holdings are filtered out (FGC doesn't cover sovereign debt). Investments are grouped by `issuer.conglomerate`; issuers whose conglomerate begins with `UNVERIFIED_CONGLOMERATE_PREFIX` are flagged as needing human review. Peak exposure is a deliberate conservative overestimate — each investment's value at its own maturity, summed; simultaneous peaks are physically impossible but the false positive is safe.
+
 ---
 
 ## Importers (`src/justfixed/importers/`)
@@ -301,7 +305,7 @@ The synthetic fixture (6 rows, all 4 rate types) is not enough. Running against 
 
 ## Test discipline
 
-**429 tests, ~2 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**441 tests, ~2 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
@@ -393,10 +397,9 @@ The project uses what's in `pyproject.toml` and nothing else. Don't add a new de
 
 In rough order:
 
-1. **UI** — PySide6 windows: portfolio list, manual-entry form, projection display, ICS export. ~5-6 sessions.
-2. **FGC concentration check** — table per CPF/conglomerate, warn if >R$250k single, >R$1M aggregate. The natural surface for reviewing `[unverified]` conglomerate values from the loader; users merge same-conglomerate issuers into a shared name. 1 session.
-3. **Maturity calendar / ICS export** — emit cash-flow dates as iCalendar. 1 session.
-4. **Windows installer** — PyInstaller + Inno Setup. 1-2 sessions.
+1. **UI** — PySide6 windows: portfolio list, manual-entry form, projection display, ICS export. ~5-6 sessions. The list and manual-entry surfaces will need to display FGC concentration warnings (computed by the existing engine/fgc.py); the future conglomerate-curation flow lives here too — users review and merge `[unverified]` conglomerates into shared groups.
+2. **Maturity calendar / ICS export** — emit cash-flow dates as iCalendar. 1 session.
+3. **Windows installer** — PyInstaller + Inno Setup. 1-2 sessions.
 
 Phase 2 (post-MVP):
 - DI-curve mark-to-market

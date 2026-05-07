@@ -18,7 +18,7 @@ Strict layer ordering, no upward dependencies:
 
 - `domain/` — pure value/entity types (Money, Rate, Issuer, Investment). No I/O.
 - `persistence/` — SQLAlchemy models, mappers, repositories, alembic migrations.
-- `engine/` — calendar, accrual, tax, projection. Pure functions over domain types.
+- `engine/` — calendar, accrual, tax, projection, fgc. Pure functions over domain types.
 - `importers/` — three layers: parser (xlsx → strings), mapper (strings → typed),
   loader (typed → persisted).
 - `ui/` — not yet built. PySide6.
@@ -33,7 +33,7 @@ Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 - **Domain types validate in `__post_init__`.** Corrupt data fails to load with a
   clear `ValueError`. The domain is the gatekeeper for invariants.
 - **Tests are the spec.** If behavior changes, the test changes first. Currently
-  429 tests, ~2 second runtime, no skips. Tests pass on every commit.
+  441 tests, ~2 second runtime, no skips. Tests pass on every commit.
 - **Hand-compute financial test expected values.** Show all decimals; don't approximate.
   Approximation has been a real source of bugs.
 - **Repositories are the only public access to persistence.** Engine, UI, and importers
@@ -60,10 +60,11 @@ factory with the right CNPJ and `IssuerKind.TREASURY`), not as a generic commerc
 
 New commercial-bank issuers from the loader are created with
 `conglomerate=f"[unverified] {name}"`. The loader doesn't know which brands roll up
-into which holdings (Itaú/Unibanco, BTG/Pan, etc.) — that's a curation problem for the
-FGC concentration check (future work). The prefix signals "human review needed."
-The constant `UNVERIFIED_CONGLOMERATE_PREFIX` is exported from `xp_loader` for the
-FGC layer to import when built.
+into which holdings (Itaú/Unibanco, BTG/Pan, etc.) — that's a curation problem the
+FGC concentration check (engine/fgc.py) surfaces and the future curation UI will resolve.
+The prefix signals "human review needed."
+The constant `UNVERIFIED_CONGLOMERATE_PREFIX` lives in `domain/issuer.py` and is consumed
+by both the loader (writing) and the FGC engine (reading).
 
 ### Natural-key idempotency, no DB constraint
 
