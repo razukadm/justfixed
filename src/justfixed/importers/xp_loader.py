@@ -1,0 +1,87 @@
+"""Layer 3 of the XP importer: persists parsed rows to the database.
+
+This module is the seam between parsed-but-unsaved data (the output of
+xp.py + xp_mapper.py) and rows-in-the-database. It handles:
+
+  - Issuer reconciliation: matching a parsed issuer name against existing
+    issuers via normalized-name lookup, creating new ones when missing.
+  - Treasury routing: parsed name "Tesouro Nacional" maps to the
+    Issuer.treasury() factory rather than creating a duplicate.
+  - Investment idempotency: an investment matching an existing row's
+    natural key (issuer + product + principal + dates) is skipped, so
+    re-importing the same XP statement does not create duplicates.
+
+The single public entry point is `load_xp_statement(path)`. Internal
+helpers (issuer resolution, conglomerate handling) are not part of the
+public API and may change shape without notice.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from sqlalchemy.orm import Session, sessionmaker
+
+from justfixed.persistence.repositories import (
+    InvestmentRepository,
+    IssuerRepository,
+)
+
+
+# Marker prefix written into Issuer.conglomerate when the loader has no
+# better information than the issuer's name itself. The FGC concentration
+# check (when built) treats issuers with this prefix as "needs human
+# review" — the user (or a future curated mapping) replaces the prefixed
+# value with the real conglomerate name (e.g. "Itaú Unibanco Holding").
+#
+# This is a string convention, not a schema constraint. Future migration
+# to a nullable conglomerate field would simply replace these values
+# with NULL via a one-line UPDATE.
+UNVERIFIED_CONGLOMERATE_PREFIX = "[unverified] "
+
+
+@dataclass(frozen=True)
+class LoadResult:
+    """Summary of what happened during a load_xp_statement call.
+
+    Useful for the UI to display "Imported 94 positions: 12 new,
+    82 already known" after a run.
+
+    Attributes:
+        inserted: Investments newly inserted into the database.
+        skipped: Investments already present (matched by natural key).
+        issuers_created: Issuers newly inserted into the database.
+        issuers_reused: Issuers already present (matched by normalized name).
+    """
+
+    inserted: int
+    skipped: int
+    issuers_created: int
+    issuers_reused: int
+
+
+def load_xp_statement(
+    path: Path, session_factory: sessionmaker[Session]
+) -> LoadResult:
+    """Read an XP statement, reconcile issuers, persist investments idempotently.
+
+    Args:
+        path: Filesystem path to the XP statement (.xlsx file).
+        session_factory: SQLAlchemy session factory bound to the target
+                         database engine. Repositories will be constructed
+                         from this factory internally.
+
+    Returns:
+        A LoadResult summarizing how many investments were newly inserted
+        vs. skipped, and how many issuers were newly created vs. reused.
+
+    Raises:
+        FileNotFoundError: If `path` does not exist.
+        ValueError: If any row in the statement fails parsing
+                    (propagated from xp_mapper.parse_row).
+        sqlalchemy.exc.IntegrityError: If a database constraint is
+                                       violated (typically indicates
+                                       data corruption).
+    """
+    raise NotImplementedError("load_xp_statement is not yet implemented")
