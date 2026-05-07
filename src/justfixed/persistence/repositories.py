@@ -24,11 +24,14 @@ Idempotency:
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 from sqlalchemy.orm import Session, sessionmaker
 
 from justfixed.domain.investment import Investment
 from justfixed.domain.issuer import Issuer
+from justfixed.domain.money import Money
+from justfixed.domain.product import ProductType
 from justfixed.persistence.database import session_scope
 from justfixed.persistence.mappers import (
     investment_from_row,
@@ -134,6 +137,58 @@ class InvestmentRepository:
                 return None
             # The relationship is eager-loaded (lazy="joined" on the model),
             # so row.issuer is already populated.
+            issuer = issuer_from_row(row.issuer)
+            return investment_from_row(row, issuer)
+        
+    def find_by_natural_key(
+        self,
+        issuer_id: uuid.UUID,
+        product: ProductType,
+        principal: Money,
+        purchase_date: date,
+        maturity_date: date,
+    ) -> Investment | None:
+        """Find an investment matching this natural key, or None.
+
+        The natural key (issuer + product + principal + dates) is the
+        importer's idempotency mechanism: re-importing the same XP statement
+        finds existing rows by this key rather than creating duplicates.
+
+        Note: there is no unique constraint enforcing this on the database.
+        A user can legitimately hold two identical positions (separate
+        orders, same broker, same day, same parameters). The natural key
+        is the *importer's* deduplication contract, not a domain invariant.
+
+        Args:
+            issuer_id: UUID of the issuing entity.
+            product: ProductType (CDB, LCI, etc.).
+            principal: Money — exact match required (Decimal comparison).
+            purchase_date: When this user acquired the position.
+            maturity_date: When the position pays out.
+
+        Returns:
+            The matching Investment, or None if no investment with this
+            natural key exists.
+
+        Raises:
+            sqlalchemy.exc.MultipleResultsFound: If more than one investment
+            matches. This signals a data integrity problem — the natural key
+            is treated as effectively unique by the importer, and the
+            database having two matches means something bypassed it.
+        """
+        with session_scope(self._factory) as session:
+            row = (
+                session.query(InvestmentRow)
+                .filter(InvestmentRow.issuer_id == issuer_id)
+                .filter(InvestmentRow.product == product.value)
+                .filter(InvestmentRow.principal_amount == principal.amount)
+                .filter(InvestmentRow.principal_currency == principal.currency)
+                .filter(InvestmentRow.purchase_date == purchase_date)
+                .filter(InvestmentRow.maturity_date == maturity_date)
+                .one_or_none()
+            )
+            if row is None:
+                return None
             issuer = issuer_from_row(row.issuer)
             return investment_from_row(row, issuer)
 

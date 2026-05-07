@@ -251,6 +251,186 @@ class TestInvestmentSave:
         assert investment_repo.find_by_id(uuid.uuid4()) is None
 
 
+class TestInvestmentFindByNaturalKey:
+    # The natural key is (issuer_id, product, principal, purchase_date,
+    # maturity_date). All five fields participate. The "differs" tests
+    # below collectively prove that — drop any one filter from the
+    # production code and one of these tests fails.
+
+    def test_returns_none_when_database_is_empty(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        # Arrange a fake key. The issuer doesn't even exist in the DB —
+        # the lookup should still gracefully return None, not crash.
+        result = investment_repo.find_by_natural_key(
+            issuer_id=uuid.uuid4(),
+            product=ProductType.CDB,
+            principal=Money.from_reais("10000"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+        )
+        assert result is None
+
+    def test_finds_matching_investment(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        inv = make_investment(issuer)
+        investment_repo.save(inv)
+
+        found = investment_repo.find_by_natural_key(
+            issuer_id=issuer.id,
+            product=inv.product,
+            principal=inv.principal,
+            purchase_date=inv.purchase_date,
+            maturity_date=inv.maturity_date,
+        )
+        assert found is not None
+        assert found.id == inv.id
+
+    def test_returns_none_when_issuer_differs(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        issuer = make_issuer("Banco Inter")
+        issuer_repo.save(issuer)
+        other_issuer = make_issuer("Banco BV")
+        issuer_repo.save(other_issuer)
+        investment_repo.save(make_investment(issuer))
+
+        result = investment_repo.find_by_natural_key(
+            issuer_id=other_issuer.id,
+            product=ProductType.CDB,
+            principal=Money.from_reais("10000"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+        )
+        assert result is None
+
+    def test_returns_none_when_product_differs(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        investment_repo.save(make_investment(issuer, product=ProductType.CDB))
+
+        result = investment_repo.find_by_natural_key(
+            issuer_id=issuer.id,
+            product=ProductType.LCI,  # Different product, all else equal
+            principal=Money.from_reais("10000"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+        )
+        assert result is None
+
+    def test_returns_none_when_principal_differs(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        # One cent difference must be enough to miss the match.
+        # Decimal comparison is exact; this proves the query uses it
+        # correctly rather than (say) an integer-rounded comparison.
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        investment_repo.save(
+            make_investment(issuer, principal=Money.from_reais("10000.00"))
+        )
+
+        result = investment_repo.find_by_natural_key(
+            issuer_id=issuer.id,
+            product=ProductType.CDB,
+            principal=Money.from_reais("10000.01"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+        )
+        assert result is None
+
+    def test_returns_none_when_purchase_date_differs(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        investment_repo.save(
+            make_investment(issuer, purchase_date=date(2024, 1, 15))
+        )
+
+        result = investment_repo.find_by_natural_key(
+            issuer_id=issuer.id,
+            product=ProductType.CDB,
+            principal=Money.from_reais("10000"),
+            purchase_date=date(2024, 1, 16),  # One day later
+            maturity_date=date(2026, 1, 15),
+        )
+        assert result is None
+
+    def test_returns_none_when_maturity_date_differs(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        investment_repo.save(
+            make_investment(issuer, maturity_date=date(2026, 1, 15))
+        )
+
+        result = investment_repo.find_by_natural_key(
+            issuer_id=issuer.id,
+            product=ProductType.CDB,
+            principal=Money.from_reais("10000"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 16),  # One day later
+        )
+        assert result is None
+
+    def test_finds_correct_match_among_multiple_investments(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        # Realistic case: multiple investments share some fields, the
+        # query has to pick the right one.
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        target = make_investment(
+            issuer,
+            principal=Money.from_reais("25000"),
+            purchase_date=date(2024, 6, 1),
+            maturity_date=date(2027, 6, 1),
+        )
+        investment_repo.save(target)
+        # Decoys: same issuer, same product, but different other fields.
+        investment_repo.save(
+            make_investment(
+                issuer,
+                principal=Money.from_reais("10000"),
+                purchase_date=date(2024, 6, 1),
+                maturity_date=date(2027, 6, 1),
+            )
+        )
+        investment_repo.save(
+            make_investment(
+                issuer,
+                principal=Money.from_reais("25000"),
+                purchase_date=date(2024, 6, 2),
+                maturity_date=date(2027, 6, 1),
+            )
+        )
+        investment_repo.save(
+            make_investment(
+                issuer,
+                principal=Money.from_reais("25000"),
+                purchase_date=date(2024, 6, 1),
+                maturity_date=date(2027, 6, 2),
+            )
+        )
+
+        found = investment_repo.find_by_natural_key(
+            issuer_id=issuer.id,
+            product=target.product,
+            principal=target.principal,
+            purchase_date=target.purchase_date,
+            maturity_date=target.maturity_date,
+        )
+        assert found is not None
+        assert found.id == target.id
+        
+
 class TestInvestmentListAll:
     def test_empty_database_returns_empty_list(self, investment_repo) -> None:
         assert investment_repo.list_all() == []
