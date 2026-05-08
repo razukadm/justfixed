@@ -26,7 +26,7 @@ Thumbs.db
 *.xls
 *.xlsm
 data/
-exports/
+/exports/
 
 # Allow only the synthetic test fixture (no real broker data)
 !tests/importers/fixtures/synthetic_xp_statement.xlsx
