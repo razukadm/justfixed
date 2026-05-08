@@ -109,7 +109,7 @@ def test_event_uid_is_stable_across_exports() -> None:
 
 
 def test_past_maturities_are_filtered_out() -> None:
-    inv = _cdb(_bank("Banco Inter"), "50000", date(2024, 1, 1))
+    inv = _cdb(_bank("Banco Inter"), "50000", date(2024, 1, 1), purchase=date(2023, 1, 2))
     output = export_maturity_calendar([inv], as_of=date(2026, 1, 1), assumed_cdi=ASSUMED_CDI)
     assert _events(_parse(output)) == []
 
