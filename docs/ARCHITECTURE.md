@@ -15,7 +15,7 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Engine | Complete | 119 |
 | Importer (parser, mapper) | Complete | 77 |
 | Importer (loader / DB persistence) | Complete | 9 |
-| UI (PySide6) | **Not built** | 0 |
+| UI (PySide6) | Milestone A′ complete (read-only) | 0 |
 | FGC concentration check | Complete | 12 |
 | Exports (calendar / ICS) | Complete | 9 |
 
@@ -31,9 +31,11 @@ domain ←─── persistence
    └────── engine
               ↑
               ├─── importers
-              │        ↑
-              │        └─── ui (planned)
-              └─── exports
+              ├─── exports
+              └─── ui ───────┐
+                             │
+                       depends on all
+                       layers above
 ```
 
 **Rules:**
@@ -41,7 +43,7 @@ domain ←─── persistence
 - `persistence` and `engine` depend on `domain` only
 - `importers` depend on `domain`, `engine`, `persistence`
 - `exports` depend on `domain` and `engine` only (not persistence — callers supply loaded investments)
-- `ui` (when built) depends on everything below it; nothing depends on `ui`
+- `ui` depends on domain, persistence, engine, importers, and exports; nothing depends on `ui`
 
 If you find yourself wanting `domain` to import from `engine`, or `persistence` to know about importers, **stop and reconsider**. The dependency direction is the architecture; violating it once gives permission to violate it again, and the project devolves.
 
@@ -236,7 +238,7 @@ Computes per-conglomerate FGC exposure. Given a list of investments and an as-of
 
 ## Importers (`src/justfixed/importers/`)
 
-The XP Investimentos pipeline is split into three layers. Two are built; the third is the next thing to build.
+The XP Investimentos pipeline is split into three layers, all complete. Multi-broker importers (BTG, Itaú, Nu) are Phase 2.
 
 ### Layer 1: `xp.py` — XLSX → strings
 
@@ -341,9 +343,25 @@ Design choices:
 
 ---
 
+## UI layer (`src/justfixed/ui/`)
+
+### `main.py`
+
+PySide6 single-window desktop application. Imports an XP statement, displays investments in a read-only table with per-row FGC concentration badges, projects current values as of today, and exports the maturity calendar to an `.ics` file. Background work (statement loading, projection) runs on `QThread` workers; a single `_set_busy` guard prevents overlapping operations. Empty state (no investments loaded) swaps the table for a centered prompt via `QStackedWidget`.
+
+The module imports from `domain`, `persistence`, `engine.projection`, `engine.fgc`, `exports.calendar`, and `importers.xp_loader`. It introduces no new architectural layer between itself and those — direct calls, no service or presenter layer.
+
+CDI is hardcoded as a module-level constant (`_ASSUMED_CDI`) for postfixed-rate projections. Replace with the current Selic/CDI value at each rebuild until ROADMAP B10 (real index data fetching) is implemented.
+
+This module has no automated tests by deliberate design — UI verification is the human "build, run, look at it" loop, per `docs/UI_DESIGN.md`. Backend changes touched by UI work are still tested at the engine/persistence level.
+
+See `docs/UI_DESIGN.md` for the design rationale, milestone A′ scope, and the deferred B′/C′ surfaces (curation, manual-entry form, projection detail view).
+
+---
+
 ## Test discipline
 
-**441 tests, ~2 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**450 tests, ~2 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
@@ -435,8 +453,9 @@ The project uses what's in `pyproject.toml` and nothing else. Don't add a new de
 
 In rough order:
 
-1. **UI** — PySide6 windows: portfolio list, manual-entry form, projection display, ICS export trigger (calls the existing `exports/calendar.py`). ~5-6 sessions. The list and manual-entry surfaces will need to display FGC concentration warnings (computed by the existing engine/fgc.py); the future conglomerate-curation flow lives here too — users review and merge `[unverified]` conglomerates into shared groups.
-2. **Windows installer** — PyInstaller + Inno Setup. 1-2 sessions.
+1. **UI — milestone B′ (curation)** — extend `ui/main.py` to support reviewing and editing `[unverified]` conglomerate values inline, with autocomplete from existing DB values. Resolves the deferred contract created by the loader's `[unverified]` prefix convention. See `docs/UI_DESIGN.md`. ~2-3 sessions.
+2. **UI — milestone C′ (manual entry, detail view)** — manual-entry form for investments outside XP statements, per-investment detail view (accrual breakdown, IR tax, net at maturity). ~3-4 sessions.
+3. **Windows installer** — PyInstaller + Inno Setup. 1-2 sessions.
 
 Phase 2 (post-MVP):
 - DI-curve mark-to-market

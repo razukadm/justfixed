@@ -22,50 +22,34 @@ removed as the project evolves.
 What comes next, in rough order. Estimates are sessions of the slow,
 careful pace this project uses (2–4 hours each).
 
-### 1. UI — PySide6 (next)
+### 1. UI — PySide6
 
-**Status:** Not started. Substantial design conversation needed before
-any code.
+**Status:** Milestone A′ complete (commit `ad05ad4`). See
+`docs/UI_DESIGN.md` for what shipped and what's deferred.
 
-**Open scope question (must resolve before starting):**
-- **Option A — One-window MVP (~2 sessions).** Single window: file
-  picker + import button + read-only investment table + project button.
-- **Option B — Two-window functional (~4 sessions).** A + per-investment
-  detail view with accrual breakdown, projected payout, IR tax.
-- **Option C — Full sketch (~6–8 sessions).** Everything in
-  `ARCHITECTURE.md`'s "What's next" UI item: list, manual entry,
-  projection display, ICS export, FGC warnings, conglomerate curation.
+**A′ — shipped.** One-window read-only app: import XP statement,
+investment table with per-row FGC badges, project as of today,
+export maturity calendar to .ics. Manual-entry form, projection
+detail view, and conglomerate curation deliberately deferred.
 
-**Required surfaces, regardless of scope:**
-- Display of FGC concentration warnings (computed by existing
-  `engine/fgc.py`). The list and manual-entry views need to surface
-  per-conglomerate `under/approaching/over` status.
-- Trigger for ICS export (calls existing `exports/calendar.py`,
-  saves bytes to a user-chosen file path).
+**B′ — next (~2-3 sessions).** Extend the existing window with
+inline conglomerate editing and autocomplete. Resolves the
+`[unverified]` curation contract. Conglomerate model decision
+already recorded in `docs/UI_DESIGN.md` (string-based, no entity).
 
-**Required for full scope (deferred from Option A/B):**
-- **Conglomerate curation flow** — users review `[unverified]`
-  conglomerates and merge issuers into shared groups. This is the
-  "deferred contract" the loader created with its
-  `[unverified]` prefix convention. See Open Question Q1 for the UX
-  shape (not yet decided).
-- Manual-entry form for investments not covered by XP statements.
+**C′ — later (~3-4 sessions).** Manual-entry form for non-XP
+investments, per-investment detail view with accrual breakdown
+and IR tax.
 
-**Dependencies:**
-- All backend work is in place (domain, persistence, engine, importer,
-  exports). UI is the integration layer.
-- No new persistence concerns. UI reads/writes through existing
-  repositories.
-
-**Risks worth naming up front:**
-- PySide6 evolves faster than Python's deeper ecosystem. Rate of "I need
-  to verify this against current docs" will be higher than for engine
-  work.
-- UI bugs are visual; pytest doesn't catch them. The feedback loop is
-  "run the app, look at it, describe what's wrong" — slower per
-  iteration than backend.
-- UI is taste-driven. There are no existing UI conventions in the
-  codebase to anchor decisions against.
+**Risks worth keeping in mind for B′/C′:**
+- PySide6 changes between minor versions. Verify against current
+  docs at build time, not from training-time memory.
+- UI bugs are visual; the feedback loop stays "run the app, look
+  at it." Don't try to instrument GUI verification through
+  background-launch tricks.
+- API names in the backend (LoadResult fields, ProjectionResult
+  shape, etc.) need to be confirmed by reading source before code
+  is written that depends on them.
 
 ### 2. Windows installer
 

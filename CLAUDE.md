@@ -22,7 +22,7 @@ Strict layer ordering, no upward dependencies:
 - `importers/` — three layers: parser (xlsx → strings), mapper (strings → typed),
   loader (typed → persisted).
 - `exports/` — calendar.py: iCalendar (.ics) export. Depends on domain + engine, not persistence.
-- `ui/` — not yet built. PySide6.
+- `ui/` — PySide6 single-window app. Milestone A′ shipped (read-only). See docs/UI_DESIGN.md.
 
 Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 
