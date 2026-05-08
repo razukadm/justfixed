@@ -331,43 +331,18 @@ Decisions that surfaced as "we should figure this out before X"
 but haven't been answered. Different from backlog items: these are
 *blocking* future work, not features to build.
 
-### Q1. Conglomerate curation UX
+### Q1. Conglomerate curation UX — Resolved
 
-**Surfaced in:** XP loader chat.
+`Issuer.conglomerate` remains a free-form string; no `Conglomerate`
+entity. B′ curation is inline string editing with autocomplete from
+existing DB values. See `docs/UI_DESIGN.md`, "Conglomerate model —
+decision recorded."
 
-**Question:** When the user reviews `[unverified]` conglomerates,
-what does the curation workflow look like?
+### Q2. UI scope (Option A/B/C) — Resolved
 
-**Options discussed:**
-- "Click a row, type the real conglomerate name."
-- "Drag-and-drop issuers into named groups."
-- "We provide a starter dataset of known Brazilian conglomerates and
-  the user confirms."
-
-**Why it matters:** The data structure decisions for FGC engine
-follow from this. If curation is a "type the name" model, conglomerate
-is just a string. If curation is a "merge into named group" model,
-there might be a separate `Conglomerate` entity with its own table.
-The current engine assumes the simpler string model; changing later
-is a migration.
-
-**Blocks:** UI work that surfaces FGC concentration. The conglomerate
-curation flow lives in the UI item (1) above.
-
-### Q2. UI scope (Option A/B/C)
-
-**Surfaced in:** XP loader chat and again at the start of UI
-discussion.
-
-**Question:** Is the first UI milestone the one-window MVP, the
-two-window functional version, or the full sketch?
-
-**Why it matters:** Determines session count (~2 vs ~4 vs ~6–8) and
-whether the manual-entry form, ICS trigger, FGC warnings, and
-conglomerate curation are in the first deliverable or deferred to
-follow-up sessions.
-
-**Blocks:** All UI work.
+Milestone A′ (~2–3 sessions): one window, import + read-only table
+with FGC badges + project + calendar export. Manual entry, detail
+view, and curation deferred to B′/C′. See `docs/UI_DESIGN.md`.
 
 ### Q3. DI-curve MtM and projection screen design
 
