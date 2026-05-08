@@ -2,7 +2,7 @@
 
 A desktop portfolio tracker for Brazilian fixed-income investments (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, Windows-targeted, single-user.
 
-**Status:** in development. Engine, persistence, and importer layers complete; UI not started. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for what's built and what isn't.
+**Status:** in development. Engine, persistence, importer, and export layers complete; UI not started. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for what's built and what isn't.
 
 ## What it does
 
@@ -11,7 +11,8 @@ Given a portfolio of Brazilian fixed-income positions, JustFixed answers:
 - *What is each position worth today?* (252-business-day accrual from purchase date)
 - *What will it pay at maturity, gross and net of IR tax?*
 - *When are the next coupon payments?* (for juros mensais / juros semestrais bonds)
-- *How exposed are you to a single FGC conglomerate?* (planned, not built)
+- *How exposed are you to a single FGC conglomerate?* (R$250k per-conglomerate limit with UNDER/APPROACHING/OVER status)
+- *When do my positions mature, and how much will I receive?* Export a .ics calendar file to drag into Google Calendar or Apple Calendar.
 
 It does **not** mark positions to market — accrual only. Phase 2 will add DI-curve MtM.
 
@@ -41,7 +42,7 @@ alembic upgrade head
 pytest tests/ -v
 ```
 
-You should see ~429 tests passing in about 2 seconds. If anything fails, the architecture doc covers common environment issues.
+You should see ~450 tests passing in about 2 seconds. If anything fails, the architecture doc covers common environment issues.
 
 ## Using what's built
 
@@ -95,15 +96,43 @@ print(f"Issuers created: {result.issuers_created}, reused: {result.issuers_reuse
 
 Re-running the same file is safe: investments matching the natural key `(issuer, product, principal, purchase_date, maturity_date)` are skipped, not duplicated.
 
+To export upcoming maturities as a calendar file:
+
+```python
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+from justfixed.exports.calendar import export_maturity_calendar
+
+# investments: list of Investment objects, e.g. from InvestmentRepository.all()
+ics_bytes = export_maturity_calendar(
+    investments,
+    as_of=date.today(),
+    assumed_cdi=Decimal("0.12"),  # your assumed CDI for the year
+)
+Path("vencimentos.ics").write_bytes(ics_bytes)
+# Drag vencimentos.ics into Google Calendar, Apple Calendar, Outlook, etc.
+```
+
+Each event shows the post-IR net amount — what your bank account will actually
+receive, not a pre-tax gross.
+
+**Limitation:** re-importing an updated .ics file will refresh existing events but
+will not remove events for investments you've since sold or deleted. Calendar apps
+only update events present in the file; they don't delete events whose UIDs are
+absent. Remove stale events manually if needed. A calendar subscription URL that
+your app can poll automatically is out of scope for v1.
+
 ## Project structure
 
 ```
 src/justfixed/
   domain/         # Money, Rate, Issuer, Investment — pure value/entity types
   persistence/    # SQLAlchemy models, migrations, repositories
-  engine/         # Calendar, accrual, tax, cash flows, projection
+  engine/         # Calendar, accrual, tax, cash flows, projection, FGC analysis
   importers/      # XP statement parser + DB loader
-tests/            # 429 tests; mirrors src/ structure
+  exports/        # iCalendar (.ics) export
+tests/            # 450 tests; mirrors src/ structure
 alembic/          # Database migrations
 docs/             # ARCHITECTURE.md and other design notes
 ```
