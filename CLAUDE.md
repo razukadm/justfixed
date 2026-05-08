@@ -7,9 +7,9 @@ this file is the working-style and conventions summary.
 ## What this project is
 
 JustFixed is a Windows desktop portfolio tracker for Brazilian fixed-income investments
-(CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, single-user. Engine and
-persistence are complete; the importer for XP statements is complete; the UI (PySide6)
-is the next major piece. The README covers the user-facing intent; ARCHITECTURE.md
+(CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, single-user. Engine,
+persistence, and exports are complete; the importer for XP statements is complete;
+the UI (PySide6) is the next major piece. The README covers the user-facing intent; ARCHITECTURE.md
 covers the internal shape.
 
 ## Architectural shape
@@ -21,6 +21,7 @@ Strict layer ordering, no upward dependencies:
 - `engine/` — calendar, accrual, tax, projection, fgc. Pure functions over domain types.
 - `importers/` — three layers: parser (xlsx → strings), mapper (strings → typed),
   loader (typed → persisted).
+- `exports/` — calendar.py: iCalendar (.ics) export. Depends on domain + engine, not persistence.
 - `ui/` — not yet built. PySide6.
 
 Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
@@ -33,7 +34,7 @@ Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 - **Domain types validate in `__post_init__`.** Corrupt data fails to load with a
   clear `ValueError`. The domain is the gatekeeper for invariants.
 - **Tests are the spec.** If behavior changes, the test changes first. Currently
-  441 tests, ~2 second runtime, no skips. Tests pass on every commit.
+  450 tests, ~2 second runtime, no skips. Tests pass on every commit.
 - **Hand-compute financial test expected values.** Show all decimals; don't approximate.
   Approximation has been a real source of bugs.
 - **Repositories are the only public access to persistence.** Engine, UI, and importers

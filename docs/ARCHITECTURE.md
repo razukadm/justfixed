@@ -17,9 +17,9 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Importer (loader / DB persistence) | Complete | 9 |
 | UI (PySide6) | **Not built** | 0 |
 | FGC concentration check | Complete | 12 |
-| Maturity calendar / ICS export | **Not built** | 0 |
+| Exports (calendar / ICS) | Complete | 9 |
 
-441 tests pass in ~2 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+450 tests pass in ~2 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -30,15 +30,17 @@ domain ←─── persistence
    ↑
    └────── engine
               ↑
-              └─── importers
-                       ↑
-                       └─── ui (planned)
+              ├─── importers
+              │        ↑
+              │        └─── ui (planned)
+              └─── exports
 ```
 
 **Rules:**
 - `domain` depends on nothing inside the project
 - `persistence` and `engine` depend on `domain` only
 - `importers` depend on `domain`, `engine`, `persistence`
+- `exports` depend on `domain` and `engine` only (not persistence — callers supply loaded investments)
 - `ui` (when built) depends on everything below it; nothing depends on `ui`
 
 If you find yourself wanting `domain` to import from `engine`, or `persistence` to know about importers, **stop and reconsider**. The dependency direction is the architecture; violating it once gives permission to violate it again, and the project devolves.
@@ -303,6 +305,42 @@ The synthetic fixture (6 rows, all 4 rate types) is not enough. Running against 
 
 ---
 
+## Exports (`src/justfixed/exports/`)
+
+Translates computed data into foreign formats. Depends on domain types and
+the engine; does not touch persistence — callers supply investments already
+loaded from wherever they came from.
+
+### `calendar.py`
+
+```python
+export_maturity_calendar(
+    investments: list[Investment],
+    *,
+    as_of: date,
+    assumed_cdi: Decimal,
+    assumed_ipca: Decimal | None = None,
+) -> bytes
+```
+
+Generates an iCalendar (.ics) file with one VEVENT per investment that matures
+on or after `as_of`. The user drags the file into Google Calendar, Apple
+Calendar, etc. and sees maturity dates as ordinary calendar entries.
+
+Design choices:
+- **DTSTART/DTEND as DATE (not DATETIME).** Maturities are conceptually all-day
+  events; DATE avoids timezone questions.
+- **DTEND is maturity + 1 day.** iCalendar treats DATE-form DTEND as exclusive.
+- **UID derived from `investment.id`.** Stable across re-exports — re-importing
+  updates existing events rather than creating duplicates.
+- **SUMMARY shows post-IR net amount.** That's what the user's bank account
+  receives; gross would be misleading.
+- **Orphan cleanup deferred to v2.** Removed investments leave stale events in
+  the user's calendar. Re-importing only updates/adds; calendar apps don't
+  delete absent UIDs.
+
+---
+
 ## Test discipline
 
 **441 tests, ~2 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
@@ -397,9 +435,8 @@ The project uses what's in `pyproject.toml` and nothing else. Don't add a new de
 
 In rough order:
 
-1. **UI** — PySide6 windows: portfolio list, manual-entry form, projection display, ICS export. ~5-6 sessions. The list and manual-entry surfaces will need to display FGC concentration warnings (computed by the existing engine/fgc.py); the future conglomerate-curation flow lives here too — users review and merge `[unverified]` conglomerates into shared groups.
-2. **Maturity calendar / ICS export** — emit cash-flow dates as iCalendar. 1 session.
-3. **Windows installer** — PyInstaller + Inno Setup. 1-2 sessions.
+1. **UI** — PySide6 windows: portfolio list, manual-entry form, projection display, ICS export trigger (calls the existing `exports/calendar.py`). ~5-6 sessions. The list and manual-entry surfaces will need to display FGC concentration warnings (computed by the existing engine/fgc.py); the future conglomerate-curation flow lives here too — users review and merge `[unverified]` conglomerates into shared groups.
+2. **Windows installer** — PyInstaller + Inno Setup. 1-2 sessions.
 
 Phase 2 (post-MVP):
 - DI-curve mark-to-market
