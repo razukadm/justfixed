@@ -23,6 +23,9 @@ dev = [
     "mypy>=1.10,<2.0",
 ]
 
+[project.scripts]
+justfixed = "justfixed.ui.main:main"
+
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"

@@ -14,6 +14,9 @@ venv/
 .vscode/
 .idea/
 
+# Claude Code local state
+.claude/
+
 # OS
 Thumbs.db
 .DS_Store

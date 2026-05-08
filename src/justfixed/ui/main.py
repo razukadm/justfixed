@@ -1,0 +1,369 @@
+"""PySide6 main window for JustFixed — Milestone A′."""
+
+from __future__ import annotations
+
+import sys
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+
+from PySide6.QtCore import QDate, QLocale, QStandardPaths, Qt, QThread, Signal
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QStackedWidget,
+    QStatusBar,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from justfixed.domain.issuer import IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
+from justfixed.domain.money import Money
+from justfixed.domain.product import rules_for
+from justfixed.engine.fgc import ExposureStatus, FGCReport, fgc_concentration_report
+from justfixed.engine.projection import project
+from justfixed.exports.calendar import export_maturity_calendar
+from justfixed.importers.xp_loader import LoadResult, load_xp_statement
+from justfixed.persistence.database import (
+    Base,
+    default_database_url,
+    make_engine,
+    make_session_factory,
+)
+from justfixed.persistence.repositories import InvestmentRepository
+
+# Hardcoded CDI assumption for milestone A′.
+# Built 2026-05-08. Source: Selic at 14.50%/year per Copom decision
+# 2026-04-29 (Banco Central / Agência Brasil); CDI typically Selic − 0.10
+# p.p., giving ~14.40%. Verify and update at each rebuild until B10
+# (real index data fetching) is implemented.
+_ASSUMED_CDI = Decimal("0.144")
+
+_COL_ISSUER       = 0
+_COL_CONGLOMERATE = 1
+_COL_PRODUCT      = 2
+_COL_PRINCIPAL    = 3
+_COL_MATURITY     = 4
+_COL_CURRENT      = 5
+_COL_FGC          = 6
+_NCOLS            = 7
+
+_HEADERS = [
+    "Issuer", "Conglomerate", "Product",
+    "Principal", "Maturity", "Current value", "FGC",
+]
+
+_PT_BR = QLocale(QLocale.Language.Portuguese, QLocale.Country.Brazil)
+
+_FGC_COLORS: dict[ExposureStatus, tuple[QColor, str]] = {
+    ExposureStatus.UNDER:       (QColor("#2ecc71"), "● UNDER"),
+    ExposureStatus.APPROACHING: (QColor("#e67e22"), "● APPROACHING"),
+    ExposureStatus.OVER:        (QColor("#e74c3c"), "● OVER"),
+}
+
+
+# ── Background workers ────────────────────────────────────────────────────────
+
+class _ImportWorker(QThread):
+    finished = Signal(object)  # LoadResult
+    error    = Signal(str)
+
+    def __init__(self, path: Path, session_factory) -> None:
+        super().__init__()
+        self._path = path
+        self._factory = session_factory
+
+    def run(self) -> None:
+        try:
+            self.finished.emit(load_xp_statement(self._path, self._factory))
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class _ProjectWorker(QThread):
+    finished = Signal(object, object)  # list[ProjectionResult], FGCReport
+    error    = Signal(str)
+
+    def __init__(self, investments: list) -> None:
+        super().__init__()
+        self._investments = investments
+
+    def run(self) -> None:
+        try:
+            today = date.today()
+            results = [
+                project(inv, as_of=today, assumed_cdi=_ASSUMED_CDI)
+                for inv in self._investments
+            ]
+            fgc_report = fgc_concentration_report(
+                self._investments, as_of=today, assumed_cdi=_ASSUMED_CDI
+            )
+            self.finished.emit(results, fgc_report)
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+# ── Main window ───────────────────────────────────────────────────────────────
+
+class MainWindow(QMainWindow):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setWindowTitle("JustFixed")
+        self.setMinimumSize(1100, 600)
+
+        try:
+            engine = make_engine(default_database_url())
+            Base.metadata.create_all(engine)
+            self._session_factory = make_session_factory(engine)
+            self._repo = InvestmentRepository(self._session_factory)
+        except Exception as exc:
+            QMessageBox.critical(None, "Database error", str(exc))
+            sys.exit(1)
+
+        # Loaded investments — only mutated by _refresh_table(), never by
+        # error handlers, so a failed import/project leaves the previous
+        # list intact and _set_busy(False) re-enables buttons correctly.
+        self._investments: list = []
+        self._worker: QThread | None = None  # keeps worker alive during run
+
+        self._build_ui()
+        self._refresh_table()
+
+    # ── Layout ────────────────────────────────────────────────────────────────
+
+    def _build_ui(self) -> None:
+        central = QWidget()
+        self.setCentralWidget(central)
+        root = QVBoxLayout(central)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(6)
+
+        # Top — import controls
+        top = QHBoxLayout()
+        self._import_btn = QPushButton("Import XP statement…")
+        self._import_btn.clicked.connect(self._on_import_clicked)
+        self._status_label = QLabel("Ready.")
+        top.addWidget(self._import_btn)
+        top.addWidget(self._status_label, stretch=1)
+        root.addLayout(top)
+
+        # Middle — table or empty-state label (swapped via QStackedWidget)
+        self._stack = QStackedWidget()
+
+        self._table = QTableWidget(0, _NCOLS)
+        self._table.setHorizontalHeaderLabels(_HEADERS)
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self._table.horizontalHeader().setStretchLastSection(True)
+        self._table.verticalHeader().setVisible(False)
+
+        self._empty_label = QLabel(
+            "Import an XP statement to see your investments."
+        )
+        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self._stack.addWidget(self._table)        # index 0 — has data
+        self._stack.addWidget(self._empty_label)  # index 1 — empty
+        root.addWidget(self._stack, stretch=1)
+
+        # Bottom — action buttons
+        bottom = QHBoxLayout()
+        self._project_btn = QPushButton("Project as of today")
+        self._project_btn.clicked.connect(self._on_project_clicked)
+        self._export_btn = QPushButton("Export calendar…")
+        self._export_btn.clicked.connect(self._on_export_clicked)
+        bottom.addStretch()
+        bottom.addWidget(self._project_btn)
+        bottom.addWidget(self._export_btn)
+        root.addLayout(bottom)
+
+        self.setStatusBar(QStatusBar())
+
+    # ── Busy state ────────────────────────────────────────────────────────────
+
+    def _set_busy(self, busy: bool) -> None:
+        """Disable all action buttons while any background worker is running.
+
+        Prevents overlapping operations that would corrupt table state.
+        On un-busy, delegates project/export enable state to
+        _update_button_states() so data-driven rules (needs investments,
+        needs a future maturity) are re-evaluated against the current list.
+        """
+        self._import_btn.setEnabled(not busy)
+        if busy:
+            self._project_btn.setEnabled(False)
+            self._export_btn.setEnabled(False)
+        else:
+            self._update_button_states()
+
+    # ── Table ─────────────────────────────────────────────────────────────────
+
+    def _refresh_table(self) -> None:
+        """Reload all investments from DB and repopulate the table."""
+        self._investments = self._repo.list_all()
+        self._table.setRowCount(len(self._investments))
+        for row, inv in enumerate(self._investments):
+            self._populate_row(row, inv, current_value=None, fgc_status=None)
+        self._stack.setCurrentIndex(0 if self._investments else 1)
+        self._update_button_states()
+
+    def _populate_row(
+        self,
+        row: int,
+        inv,
+        *,
+        current_value: Money | None,
+        fgc_status: ExposureStatus | None,
+    ) -> None:
+        self._cell(row, _COL_ISSUER, inv.issuer.name)
+
+        # Conglomerate — gray italic when [unverified]
+        cong = inv.issuer.conglomerate
+        cong_item = QTableWidgetItem(cong)
+        if cong.startswith(UNVERIFIED_CONGLOMERATE_PREFIX):
+            font = cong_item.font()
+            font.setItalic(True)
+            cong_item.setFont(font)
+            cong_item.setForeground(QColor("#888888"))
+        self._table.setItem(row, _COL_CONGLOMERATE, cong_item)
+
+        self._cell(row, _COL_PRODUCT, rules_for(inv.product).display_name)
+        self._cell(row, _COL_PRINCIPAL, inv.principal.to_display())
+
+        d = inv.maturity_date
+        self._cell(
+            row, _COL_MATURITY,
+            _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat),
+        )
+
+        self._cell(row, _COL_CURRENT, current_value.to_display() if current_value else "")
+
+        # FGC badge
+        if inv.issuer.kind == IssuerKind.TREASURY:
+            badge = QTableWidgetItem("N/A — Tesouro")
+            badge.setForeground(QColor("#aaaaaa"))
+        elif fgc_status is None:
+            badge = QTableWidgetItem("—")
+        else:
+            color, label = _FGC_COLORS[fgc_status]
+            badge = QTableWidgetItem(label)
+            badge.setForeground(color)
+        badge.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._table.setItem(row, _COL_FGC, badge)
+
+    def _cell(self, row: int, col: int, text: str) -> None:
+        self._table.setItem(row, col, QTableWidgetItem(text))
+
+    def _update_button_states(self) -> None:
+        today = date.today()
+        self._project_btn.setEnabled(bool(self._investments))
+        self._export_btn.setEnabled(
+            any(inv.maturity_date >= today for inv in self._investments)
+        )
+
+    # ── Import ────────────────────────────────────────────────────────────────
+
+    def _on_import_clicked(self) -> None:
+        dirs = QStandardPaths.standardLocations(
+            QStandardPaths.StandardLocation.DownloadLocation
+        )
+        path_str, _ = QFileDialog.getOpenFileName(
+            self, "Import XP statement",
+            dirs[0] if dirs else "",
+            "Excel files (*.xlsx)",
+        )
+        if not path_str:
+            return
+
+        self._set_busy(True)
+        self._status_label.setText(f"Loading {Path(path_str).name}…")
+
+        self._worker = _ImportWorker(Path(path_str), self._session_factory)
+        self._worker.finished.connect(self._on_import_done)
+        self._worker.error.connect(self._on_import_error)
+        self._worker.start()
+
+    def _on_import_done(self, result: LoadResult) -> None:
+        self._set_busy(False)
+        self._status_label.setText(
+            f"Loaded {result.inserted + result.skipped} investments "
+            f"({result.inserted} new, {result.skipped} unchanged)."
+        )
+        self._refresh_table()
+
+    def _on_import_error(self, message: str) -> None:
+        # _investments unchanged — failed import did not reach _refresh_table().
+        self._set_busy(False)
+        self._status_label.setText("Ready.")
+        QMessageBox.critical(self, "Import failed", message)
+
+    # ── Project ───────────────────────────────────────────────────────────────
+
+    def _on_project_clicked(self) -> None:
+        self._set_busy(True)
+
+        self._worker = _ProjectWorker(self._investments)
+        self._worker.finished.connect(self._on_project_done)
+        self._worker.error.connect(self._on_project_error)
+        self._worker.start()
+
+    def _on_project_done(self, results: list, fgc_report: FGCReport) -> None:
+        self._set_busy(False)
+        status_map = {
+            c.conglomerate_name: c.current_status
+            for c in fgc_report.conglomerates
+        }
+        for row, result in enumerate(results):
+            inv = result.investment
+            self._populate_row(
+                row, inv,
+                current_value=result.current_value,
+                fgc_status=status_map.get(inv.issuer.conglomerate),
+            )
+        self.statusBar().showMessage(
+            f"Projected {len(results)} investments as of {date.today():%d/%m/%Y}.", 6000
+        )
+
+    def _on_project_error(self, message: str) -> None:
+        self._set_busy(False)
+        QMessageBox.critical(self, "Projection failed", message)
+
+    # ── Calendar export ───────────────────────────────────────────────────────
+
+    def _on_export_clicked(self) -> None:
+        path_str, _ = QFileDialog.getSaveFileName(
+            self, "Export maturity calendar",
+            "justfixed-maturities.ics",
+            "iCalendar files (*.ics)",
+        )
+        if not path_str:
+            return
+        try:
+            ics = export_maturity_calendar(
+                self._investments, as_of=date.today(), assumed_cdi=_ASSUMED_CDI
+            )
+            Path(path_str).write_bytes(ics)
+            self.statusBar().showMessage(f"Calendar exported to {path_str}.", 8000)
+        except Exception as exc:
+            QMessageBox.critical(self, "Export failed", str(exc))
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+def main() -> None:
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
