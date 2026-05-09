@@ -21,7 +21,7 @@ from justfixed.domain.investment import Investment
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import ProductType
-from justfixed.domain.rates import Prefixed
+from justfixed.domain.rates import PostFixedIPCA, Prefixed
 from justfixed.engine.fgc import (
     ConglomerateExposure,
     ExposureStatus,
@@ -29,6 +29,7 @@ from justfixed.engine.fgc import (
     InvestmentExposure,
     fgc_concentration_report,
 )
+from justfixed.engine.projection import project
 
 # ── Shared constants ─────────────────────────────────────────────────────────
 
@@ -257,3 +258,46 @@ def test_unverified_conglomerate_flagged() -> None:
     assert len(unverified) == 2
     assert len(verified) == 1
     assert verified[0].conglomerate_name == "Banco XP S.A."
+
+
+# ── Group F: Rate type propagation ───────────────────────────────────────────
+
+def test_fgc_concentration_report_propagates_assumed_ipca() -> None:
+    # Regression for commit 6dc9b4f: fgc_concentration_report must thread
+    # assumed_ipca through to project() so IPCA-linked investments accrue
+    # correctly instead of crashing or silently using a wrong rate.
+    #
+    # Verification strategy: call project() directly with the same inputs and
+    # assert that the FGC report's current_exposure matches. No hardcoded
+    # decimal — if the accrual math ever changes, the test stays valid.
+    issuer = _bank("Banco IPCA Test", "GRUPO IPCA")
+    investment = Investment.create(
+        issuer=issuer,
+        product=ProductType.CDB,
+        principal=Money.from_reais("50000"),
+        purchase_date=PURCHASE,
+        maturity_date=date(2027, 1, 2),
+        rate=PostFixedIPCA.from_percent("5.5"),
+    )
+    as_of = date(2025, 7, 2)   # ~6 months after purchase, mid-life
+    assumed_cdi = Decimal("0.14")
+    assumed_ipca = Decimal("0.04")
+
+    direct = project(
+        investment,
+        as_of=as_of,
+        assumed_cdi=assumed_cdi,
+        assumed_ipca=assumed_ipca,
+    )
+
+    report = fgc_concentration_report(
+        [investment],
+        as_of=as_of,
+        assumed_cdi=assumed_cdi,
+        assumed_ipca=assumed_ipca,
+    )
+
+    assert len(report.conglomerates) == 1
+    exposure = report.conglomerates[0]
+    assert exposure.conglomerate_name == "GRUPO IPCA"
+    assert exposure.current_exposure == direct.current_value
