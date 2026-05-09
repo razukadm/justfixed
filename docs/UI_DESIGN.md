@@ -181,12 +181,14 @@ consistent.
    status per conglomerate.
 3. The "Current value" column populates. FGC status badges update.
 4. Button re-enables.
-5. If the projection requires `assumed_cdi` for postfixed investments
-   (which it will), use a sensible hardcoded default for this milestone
-   — e.g., the most recent published CDI value, written as a constant
-   in the UI module with a comment. Making it user-editable is
-   deferred. Note this as a known limitation in the project's docs;
-   real CDI fetching is backlog item B10.
+5. The projection engine requires `assumed_cdi` for CDI-linked rates
+   and `assumed_ipca` for IPCA-linked rates. Both come from hardcoded
+   constants in the UI module (`_ASSUMED_CDI`, `_ASSUMED_IPCA`) with
+   comments documenting the source values and the rebuild-time verify
+   discipline. Making either user-editable is deferred to backlog
+   B10 (real index data fetching). When future rate types are added
+   to the projection engine — any new `PostFixed*` variant — they'll
+   require their own assumed-rate constant on the same pattern.
 
 ### Calendar export flow
 
@@ -265,10 +267,12 @@ Specifically:
 - **Reading investments for the table:** `InvestmentRepository.list_all()`
   (or whatever the existing accessor is — match what's there).
 - **Loader trigger:** `load_xp_statement(path, session_factory)`.
-- **Projection:** `engine/projection.project(investment, as_of, assumed_cdi)`
-  per row, OR a batch helper if one exists.
-- **FGC:** `engine/fgc.fgc_concentration_report(investments, as_of, assumed_cdi)`
-  once, then look up each row's conglomerate in the report.
+- **Projection:** `engine/projection.project(investment, as_of, assumed_cdi, assumed_ipca)`
+  per row. Both assumed-rate kwargs are required when the portfolio
+  contains the corresponding rate types.
+- **FGC:** `engine/fgc.fgc_concentration_report(investments, as_of, assumed_cdi, assumed_ipca)`
+  once, then look up each row's conglomerate in the report. Both
+  assumed-rate kwargs forward to the internal projection calls.
 - **Calendar export:** `exports/calendar.export(...)` (signature per
   `exports/calendar.py`).
 
@@ -340,13 +344,43 @@ muscle memory. Don't try to remember the last-used path between
 sessions in A′ (would require persisting UI state, which we
 deferred). A future milestone can add path memory if it's annoying.
 
-### CDI default for postfixed projection
+### Assumed-rate parameters for projection
 
-What hardcoded `assumed_cdi` does A′ use? Pick the most recent
-published value at build time (something like `Decimal("0.1265")`
-for 12.65%, but check the current Selic / CDI publication on
-build day). Comment the constant clearly: "Hardcoded for milestone
-A′; user-editable CDI deferred (see ROADMAP B10)."
+The projection engine accepts assumed-rate kwargs corresponding to
+each `PostFixed*` rate variant the domain models. As of milestone
+A′ that's two: `assumed_cdi` (CDI-linked rates) and `assumed_ipca`
+(IPCA-linked rates). Both are required for portfolios containing
+the corresponding investments; the engine raises a clear error if
+they're missing.
+
+The UI keeps both as hardcoded module-level constants in
+`ui/main.py`:
+
+- `_ASSUMED_CDI` — sourced from the most recent Banco Central Selic
+  decision minus typical 0.10 p.p. CDI spread. Verify at every
+  rebuild against the current Copom publication.
+- `_ASSUMED_IPCA` — sourced from the most recent IBGE IPCA acumulado
+  12 meses release. Verify at every rebuild against IBGE.
+
+Each constant's source attribution lives in the comment header
+above its definition. Making either user-editable is deferred to
+backlog B10 (real index data fetching from B3 for CDI and IBGE for
+IPCA).
+
+**Lesson recorded from commit `6dc9b4f`:** This subsection originally
+covered only `assumed_cdi`, scoping the question by the most
+user-visible parameter. That framing missed `assumed_ipca` because
+no UI surface specifically discusses IPCA — but the projection
+engine's typed-rate dispatch does, and the first IPCA-linked
+investment in a real portfolio crashed Project and Export.
+
+When future rate types are added to the projection engine (any new
+`PostFixed*` variant — e.g. a hypothetical `PostFixedSelic`), the
+spec for any UI work that calls `project()` or
+`fgc_concentration_report()` should enumerate **every** assumed-rate
+kwarg the engine accepts, not just the most-common one. The
+right framing is "what does every code path need," not "what does
+the user see."
 
 ### Threading model
 
