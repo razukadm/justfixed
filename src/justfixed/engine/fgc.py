@@ -111,6 +111,7 @@ def fgc_concentration_report(
     investments: list[Investment],
     as_of: date,
     assumed_cdi: Decimal,
+    assumed_ipca: Decimal | None = None,
 ) -> FGCReport:
     """Compute FGC concentration exposure across the portfolio.
 
@@ -146,7 +147,7 @@ def fgc_concentration_report(
     # One call per investment suffices; no second call with as_of=maturity_date
     # is needed because both values live on the same ProjectionResult.
     projections: list[ProjectionResult] = [
-        project(inv, as_of=as_of, assumed_cdi=assumed_cdi)
+        project(inv, as_of=as_of, assumed_cdi=assumed_cdi, assumed_ipca=assumed_ipca)
         for inv in fgc_investments
     ]
 

@@ -47,6 +47,12 @@ from justfixed.persistence.repositories import InvestmentRepository
 # (real index data fetching) is implemented.
 _ASSUMED_CDI = Decimal("0.144")
 
+# Hardcoded IPCA assumption for milestone A′.
+# Built 2026-05-08. Source: IPCA acumulado 12 meses March 2026 = 4.14%
+# (IBGE, confirmed via investidor10.com.br). Verify and update at each
+# rebuild until ROADMAP B10 (real index data fetching) is implemented.
+_ASSUMED_IPCA = Decimal("0.0414")
+
 _COL_ISSUER       = 0
 _COL_CONGLOMERATE = 1
 _COL_PRODUCT      = 2
@@ -100,11 +106,11 @@ class _ProjectWorker(QThread):
         try:
             today = date.today()
             results = [
-                project(inv, as_of=today, assumed_cdi=_ASSUMED_CDI)
+                project(inv, as_of=today, assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA)
                 for inv in self._investments
             ]
             fgc_report = fgc_concentration_report(
-                self._investments, as_of=today, assumed_cdi=_ASSUMED_CDI
+                self._investments, as_of=today, assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA
             )
             self.finished.emit(results, fgc_report)
         except Exception as exc:
@@ -348,7 +354,7 @@ class MainWindow(QMainWindow):
             return
         try:
             ics = export_maturity_calendar(
-                self._investments, as_of=date.today(), assumed_cdi=_ASSUMED_CDI
+                self._investments, as_of=date.today(), assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA
             )
             Path(path_str).write_bytes(ics)
             self.statusBar().showMessage(f"Calendar exported to {path_str}.", 8000)
