@@ -53,6 +53,15 @@ RENDA_FIXA_COLS = 13
 _SECTION_RE = re.compile(r"^\s*\d+(?:,\d+)?%\s*\|\s*(.+?)\s*$")
 
 
+# Parser hardcoded knowledge: section headers that mark the end of the
+# Renda Fixa section. Match by exact string. Add entries as real broker
+# data surfaces new ones, per the audit-when-it-crashes rule in CLAUDE.md.
+_RENDA_FIXA_TERMINATORS: frozenset[str] = frozenset({
+    "Dividendos, proventos e outras distribuições",
+    "Custódia Remunerada",
+})
+
+
 # Top-level groups in the file. Only "Renda Fixa" is in scope.
 # Others must be SKIPPED — but the file order is fixed, so once we
 # enter Renda Fixa we don't expect to leave it.
@@ -155,6 +164,10 @@ def _iter_rows(worksheet) -> list[XPRow]:
         # Inside Renda Fixa now. Skip blank/separator rows.
         if not cell_a:
             continue
+
+        # Stop reading if we've reached a known non-Renda-Fixa section.
+        if cell_a in _RENDA_FIXA_TERMINATORS:
+            break
 
         # Check for a rate-section header.
         section_match = _SECTION_RE.match(cell_a)

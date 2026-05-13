@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import openpyxl
 import pytest
 
 from justfixed.importers.xp import (
@@ -28,6 +29,31 @@ from justfixed.importers.xp import (
 FIXTURE_PATH = (
     Path(__file__).parent / "fixtures" / "synthetic_xp_statement.xlsx"
 )
+
+
+def _build_test_xlsx(path: Path, rows: list[list]) -> None:
+    """Write a minimal xlsx with the given rows to path."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Sua carteira"
+    for row in rows:
+        ws.append(row)
+    wb.save(path)
+
+
+_SAMPLE_DATA_ROW = [
+    "LCA SICREDI - NOV/2029", "R$ 100.000,00", "10,00%",
+    "R$ 90.000,00", "R$ 90.000,00", "+12,00%",
+    "01/01/2024", "01/01/2026", "1",
+    "R$ 100.000,00", "R$ 0,00", "R$ 0,00", "R$ 100.000,00",
+]
+
+_ANOTHER_DATA_ROW = [
+    "CDB BMG - JUL/2027", "R$ 50.000,00", "5,00%",
+    "R$ 45.000,00", "R$ 45.000,00", "95,50% CDI",
+    "01/06/2024", "01/07/2027", "1",
+    "R$ 50.000,00", "R$ 0,00", "R$ 0,00", "R$ 50.000,00",
+]
 
 
 # ---------- Fixture sanity ----------
@@ -203,3 +229,51 @@ class TestXPRowImmutability:
         first = rows[0]
         with pytest.raises((AttributeError, Exception)):
             first.description = "tampered"  # type: ignore[misc]
+
+
+# ---------- Section terminators ----------
+
+
+class TestTerminators:
+    """The parser stops at known non-Renda-Fixa section headers."""
+
+    def test_stops_at_dividendos_terminator(self, tmp_path: Path) -> None:
+        xlsx = tmp_path / "test.xlsx"
+        _build_test_xlsx(xlsx, [
+            ["Renda Fixa"],
+            ["10,0% | Prefixado"],
+            _SAMPLE_DATA_ROW,
+            [None],
+            ["Dividendos, proventos e outras distribuições"],
+            _ANOTHER_DATA_ROW,
+        ])
+        rows = read_renda_fixa_rows(xlsx)
+        assert len(rows) == 1
+
+    def test_stops_at_custodia_terminator(self, tmp_path: Path) -> None:
+        xlsx = tmp_path / "test.xlsx"
+        _build_test_xlsx(xlsx, [
+            ["Renda Fixa"],
+            ["10,0% | Prefixado"],
+            _SAMPLE_DATA_ROW,
+            [None],
+            ["Custódia Remunerada"],
+            _ANOTHER_DATA_ROW,
+        ])
+        rows = read_renda_fixa_rows(xlsx)
+        assert len(rows) == 1
+
+    def test_does_not_stop_on_subsection_header(self, tmp_path: Path) -> None:
+        """Regression: multiple rate sub-sections inside Renda Fixa must all
+        be collected; only top-level terminators end the loop."""
+        xlsx = tmp_path / "test.xlsx"
+        _build_test_xlsx(xlsx, [
+            ["Renda Fixa"],
+            ["10,0% | Prefixado"],
+            _SAMPLE_DATA_ROW,
+            [None],
+            ["50,0% | Pós-Fixado"],
+            _ANOTHER_DATA_ROW,
+        ])
+        rows = read_renda_fixa_rows(xlsx)
+        assert len(rows) == 2
