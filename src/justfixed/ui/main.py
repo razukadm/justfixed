@@ -59,12 +59,13 @@ _COL_PRODUCT      = 2
 _COL_PRINCIPAL    = 3
 _COL_MATURITY     = 4
 _COL_CURRENT      = 5
-_COL_FGC          = 6
-_NCOLS            = 7
+_COL_PROJECTED    = 6
+_COL_FGC          = 7
+_NCOLS            = 8
 
 _HEADERS = [
     "Issuer", "Conglomerate", "Product",
-    "Principal", "Maturity", "Current value", "FGC",
+    "Principal", "Maturity", "Current value", "Projected value", "FGC",
 ]
 
 _PT_BR = QLocale(QLocale.Language.Portuguese, QLocale.Country.Brazil)
@@ -217,7 +218,7 @@ class MainWindow(QMainWindow):
         self._investments = self._repo.list_all()
         self._table.setRowCount(len(self._investments))
         for row, inv in enumerate(self._investments):
-            self._populate_row(row, inv, current_value=None, fgc_status=None)
+            self._populate_row(row, inv, current_value=None, projected_value=None, fgc_status=None)
         self._stack.setCurrentIndex(0 if self._investments else 1)
         self._update_button_states()
 
@@ -227,6 +228,7 @@ class MainWindow(QMainWindow):
         inv,
         *,
         current_value: Money | None,
+        projected_value: Money | None,
         fgc_status: ExposureStatus | None,
     ) -> None:
         self._cell(row, _COL_ISSUER, inv.issuer.name)
@@ -251,6 +253,7 @@ class MainWindow(QMainWindow):
         )
 
         self._cell(row, _COL_CURRENT, current_value.to_display() if current_value else "")
+        self._cell(row, _COL_PROJECTED, projected_value.to_display() if projected_value else "")
 
         # FGC badge
         if inv.issuer.kind == IssuerKind.TREASURY:
@@ -332,6 +335,7 @@ class MainWindow(QMainWindow):
             self._populate_row(
                 row, inv,
                 current_value=result.current_value,
+                projected_value=result.net_at_maturity,
                 fgc_status=status_map.get(inv.issuer.conglomerate),
             )
         self.statusBar().showMessage(
