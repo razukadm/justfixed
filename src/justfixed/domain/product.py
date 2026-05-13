@@ -56,7 +56,7 @@ class ProductRule:
     (tax computation, FGC concentration). Single source of truth.
     """
 
-    required_issuer_kind: IssuerKind
+    allowed_issuer_kinds: frozenset[IssuerKind]
     fgc_covered: bool
     tax_treatment: TaxTreatment
     allowed_coupons: frozenset[CouponFrequency]
@@ -69,21 +69,21 @@ class ProductRule:
 # at the domain level; it is not a market-typical-term.
 PRODUCT_RULES: dict[ProductType, ProductRule] = {
     ProductType.CDB: ProductRule(
-        required_issuer_kind=IssuerKind.COMMERCIAL_BANK,
+        allowed_issuer_kinds=frozenset({IssuerKind.COMMERCIAL_BANK}),
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_REGRESSIVE,
         allowed_coupons=frozenset(CouponFrequency),  # any
         display_name="CDB",
     ),
     ProductType.LCI: ProductRule(
-        required_issuer_kind=IssuerKind.COMMERCIAL_BANK,
+        allowed_issuer_kinds=frozenset({IssuerKind.COMMERCIAL_BANK}),
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_EXEMPT,
         allowed_coupons=frozenset({CouponFrequency.NONE}),
         display_name="LCI",
     ),
     ProductType.LCA: ProductRule(
-        required_issuer_kind=IssuerKind.COMMERCIAL_BANK,
+        allowed_issuer_kinds=frozenset({IssuerKind.COMMERCIAL_BANK}),
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_EXEMPT,
         # LCAs are commonly issued with monthly coupons in the Brazilian
@@ -95,14 +95,14 @@ PRODUCT_RULES: dict[ProductType, ProductRule] = {
         display_name="LCA",
     ),
     ProductType.LC: ProductRule(
-        required_issuer_kind=IssuerKind.COMMERCIAL_BANK,
+        allowed_issuer_kinds=frozenset({IssuerKind.COMMERCIAL_BANK}),
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_REGRESSIVE,
         allowed_coupons=frozenset(CouponFrequency),
         display_name="Letra de Câmbio",
     ),
     ProductType.LCD: ProductRule(
-        required_issuer_kind=IssuerKind.DEVELOPMENT_BANK,
+        allowed_issuer_kinds=frozenset({IssuerKind.DEVELOPMENT_BANK}),
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_EXEMPT,
         allowed_coupons=frozenset({CouponFrequency.NONE}),
@@ -110,21 +110,21 @@ PRODUCT_RULES: dict[ProductType, ProductRule] = {
         display_name="LCD",
     ),
     ProductType.TESOURO_SELIC: ProductRule(
-        required_issuer_kind=IssuerKind.TREASURY,
+        allowed_issuer_kinds=frozenset({IssuerKind.TREASURY}),
         fgc_covered=False,
         tax_treatment=TaxTreatment.IR_REGRESSIVE,
         allowed_coupons=frozenset({CouponFrequency.NONE}),
         display_name="Tesouro Selic",
     ),
     ProductType.TESOURO_PREFIXADO: ProductRule(
-        required_issuer_kind=IssuerKind.TREASURY,
+        allowed_issuer_kinds=frozenset({IssuerKind.TREASURY}),
         fgc_covered=False,
         tax_treatment=TaxTreatment.IR_REGRESSIVE,
         allowed_coupons=frozenset({CouponFrequency.NONE, CouponFrequency.SEMI_ANNUAL}),
         display_name="Tesouro Prefixado",
     ),
     ProductType.TESOURO_IPCA: ProductRule(
-        required_issuer_kind=IssuerKind.TREASURY,
+        allowed_issuer_kinds=frozenset({IssuerKind.TREASURY}),
         fgc_covered=False,
         tax_treatment=TaxTreatment.IR_REGRESSIVE,
         allowed_coupons=frozenset({CouponFrequency.NONE, CouponFrequency.SEMI_ANNUAL}),

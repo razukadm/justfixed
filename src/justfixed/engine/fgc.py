@@ -131,7 +131,7 @@ def fgc_concentration_report(
     # Step 1 — Filter to FGC-covered investments.
     # Filter on issuer.kind, not product type: the issuer is the authoritative
     # signal for FGC coverage. (Investment.__post_init__ ensures issuer.kind
-    # matches product.required_issuer_kind, so either would work in practice,
+    # is in product.allowed_issuer_kinds, so either would work in practice,
     # but the issuer kind is the conceptually correct predicate.)
     fgc_investments = [
         inv for inv in investments

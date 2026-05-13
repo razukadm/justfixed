@@ -18,7 +18,7 @@ Validation rules enforced:
   1. principal must be positive
   2. maturity_date must be strictly after both issue_date and purchase_date
   3. purchase_date must be on or after issue_date
-  4. issuer.kind must match the product's required_issuer_kind
+  4. issuer.kind must be in the product's allowed_issuer_kinds
   5. coupon_frequency must be in the product's allowed_coupons
   6. (maturity_date - issue_date) >= product's minimum_term_days
 """
@@ -94,11 +94,12 @@ class Investment:
         # Lookup product rules for the remaining checks.
         rule = rules_for(self.product)
 
-        # 4. issuer kind must match product
-        if self.issuer.kind != rule.required_issuer_kind:
+        # 4. issuer kind must be in the product's allowed set
+        if self.issuer.kind not in rule.allowed_issuer_kinds:
+            allowed_kinds = ", ".join(sorted(k.value for k in rule.allowed_issuer_kinds))
             raise ValueError(
-                f"{rule.display_name} requires issuer kind "
-                f"{rule.required_issuer_kind.value}; got {self.issuer.kind.value}"
+                f"{rule.display_name} requires issuer kind one of: "
+                f"{allowed_kinds}; got {self.issuer.kind.value}"
             )
 
         # 5. coupon frequency must be allowed for this product
