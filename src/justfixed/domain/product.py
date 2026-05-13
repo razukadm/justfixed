@@ -83,7 +83,7 @@ PRODUCT_RULES: dict[ProductType, ProductRule] = {
         display_name="LCI",
     ),
     ProductType.LCA: ProductRule(
-        allowed_issuer_kinds=frozenset({IssuerKind.COMMERCIAL_BANK}),
+        allowed_issuer_kinds=frozenset({IssuerKind.COMMERCIAL_BANK, IssuerKind.DEVELOPMENT_BANK}),
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_EXEMPT,
         # LCAs are commonly issued with monthly coupons in the Brazilian

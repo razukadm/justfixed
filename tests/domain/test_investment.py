@@ -169,6 +169,28 @@ class TestIssuerKindMatching:
         )
         assert inv.product == ProductType.LCD
 
+    def test_lca_with_commercial_bank_ok(self) -> None:
+        inv = Investment.create(
+            product=ProductType.LCA,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("96"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+        )
+        assert inv.product == ProductType.LCA
+
+    def test_lca_with_development_bank_ok(self) -> None:
+        inv = Investment.create(
+            product=ProductType.LCA,
+            issuer=development_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("96"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+        )
+        assert inv.product == ProductType.LCA
+
     def test_tesouro_with_commercial_bank_rejected(self) -> None:
         with pytest.raises(ValueError, match="requires issuer kind"):
             Investment.create(
