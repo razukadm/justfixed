@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from PySide6.QtCore import QDate, QLocale, QStandardPaths, Qt, QThread, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -139,6 +139,8 @@ class MainWindow(QMainWindow):
         # error handlers, so a failed import/project leaves the previous
         # list intact and _set_busy(False) re-enables buttons correctly.
         self._investments: list = []
+        self._hide_matured: bool = True
+        self._has_projected: bool = False
         self._worker: QThread | None = None  # keeps worker alive during run
 
         self._build_ui()
@@ -194,6 +196,16 @@ class MainWindow(QMainWindow):
 
         self.setStatusBar(QStatusBar())
 
+        # Menu bar — File (empty, scaffolded for feature 3) + View
+        menu_bar = self.menuBar()
+        menu_bar.addMenu("File")
+        view_menu = menu_bar.addMenu("View")
+        self._hide_matured_action = QAction("Hide matured investments", self)
+        self._hide_matured_action.setCheckable(True)
+        self._hide_matured_action.setChecked(True)
+        self._hide_matured_action.triggered.connect(self._on_hide_matured_toggled)
+        view_menu.addAction(self._hide_matured_action)
+
     # ── Busy state ────────────────────────────────────────────────────────────
 
     def _set_busy(self, busy: bool) -> None:
@@ -216,11 +228,18 @@ class MainWindow(QMainWindow):
     def _refresh_table(self) -> None:
         """Reload all investments from DB and repopulate the table."""
         self._investments = self._repo.list_all()
-        self._table.setRowCount(len(self._investments))
-        for row, inv in enumerate(self._investments):
+        visible = self._visible_investments()
+        self._table.setRowCount(len(visible))
+        for row, inv in enumerate(visible):
             self._populate_row(row, inv, current_value=None, projected_value=None, fgc_status=None)
         self._stack.setCurrentIndex(0 if self._investments else 1)
         self._update_button_states()
+
+    def _visible_investments(self) -> list:
+        if not self._hide_matured:
+            return self._investments
+        today = date.today()
+        return [i for i in self._investments if i.maturity_date > today]
 
     def _populate_row(
         self,
@@ -278,6 +297,12 @@ class MainWindow(QMainWindow):
             any(inv.maturity_date >= today for inv in self._investments)
         )
 
+    def _on_hide_matured_toggled(self, checked: bool) -> None:
+        self._hide_matured = checked
+        self._refresh_table()
+        if self._has_projected:
+            self._on_project_clicked()
+
     # ── Import ────────────────────────────────────────────────────────────────
 
     def _on_import_clicked(self) -> None:
@@ -306,6 +331,7 @@ class MainWindow(QMainWindow):
             f"Loaded {result.inserted + result.skipped} investments "
             f"({result.inserted} new, {result.skipped} unchanged)."
         )
+        self._has_projected = False
         self._refresh_table()
 
     def _on_import_error(self, message: str) -> None:
@@ -319,7 +345,7 @@ class MainWindow(QMainWindow):
     def _on_project_clicked(self) -> None:
         self._set_busy(True)
 
-        self._worker = _ProjectWorker(self._investments)
+        self._worker = _ProjectWorker(self._visible_investments())
         self._worker.finished.connect(self._on_project_done)
         self._worker.error.connect(self._on_project_error)
         self._worker.start()
@@ -341,6 +367,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             f"Projected {len(results)} investments as of {date.today():%d/%m/%Y}.", 6000
         )
+        self._has_projected = True
 
     def _on_project_error(self, message: str) -> None:
         self._set_busy(False)
