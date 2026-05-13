@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from datetime import date
 from decimal import Decimal
@@ -196,9 +197,13 @@ class MainWindow(QMainWindow):
 
         self.setStatusBar(QStatusBar())
 
-        # Menu bar — File (empty, scaffolded for feature 3) + View
+        # Menu bar — File (Clear DB when JUSTFIXED_DEV set) + View
         menu_bar = self.menuBar()
-        menu_bar.addMenu("File")
+        file_menu = menu_bar.addMenu("File")
+        if os.environ.get("JUSTFIXED_DEV"):
+            clear_db_action = QAction("Clear Database…", self)
+            clear_db_action.triggered.connect(self._on_clear_db_clicked)
+            file_menu.addAction(clear_db_action)
         view_menu = menu_bar.addMenu("View")
         self._hide_matured_action = QAction("Hide matured investments", self)
         self._hide_matured_action.setCheckable(True)
@@ -302,6 +307,26 @@ class MainWindow(QMainWindow):
         self._refresh_table()
         if self._has_projected:
             self._on_project_clicked()
+
+    def _on_clear_db_clicked(self) -> None:
+        count = len(self._investments)
+        if count == 0:
+            self.statusBar().showMessage("Database is already empty.", 6000)
+            return
+        reply = QMessageBox.question(
+            self,
+            "Clear Database",
+            f"Clear all {count} investments from the database? "
+            "This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        deleted_investments, _ = self._repo.delete_all()
+        self._has_projected = False
+        self._refresh_table()
+        self.statusBar().showMessage(f"Cleared {deleted_investments} investments.", 6000)
 
     # ── Import ────────────────────────────────────────────────────────────────
 

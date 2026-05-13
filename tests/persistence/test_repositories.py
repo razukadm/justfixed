@@ -484,6 +484,58 @@ class TestInvestmentDelete:
         investment_repo.delete(uuid.uuid4())
 
 
+class TestInvestmentDeleteAll:
+    def test_delete_all_returns_counts(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        a = make_issuer("Banco Alpha")
+        b = make_issuer("Banco Beta")
+        issuer_repo.save(a)
+        issuer_repo.save(b)
+        investment_repo.save(make_investment(a, maturity_date=date(2026, 6, 1)))
+        investment_repo.save(make_investment(b, maturity_date=date(2027, 1, 15)))
+        investment_repo.save(make_investment(b, maturity_date=date(2028, 3, 1)))
+
+        assert investment_repo.delete_all() == (3, 2)
+
+    def test_delete_all_empties_both_repos(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        a = make_issuer("Banco Alpha")
+        b = make_issuer("Banco Beta")
+        issuer_repo.save(a)
+        issuer_repo.save(b)
+        investment_repo.save(make_investment(a, maturity_date=date(2026, 6, 1)))
+        investment_repo.save(make_investment(b, maturity_date=date(2027, 1, 15)))
+        investment_repo.save(make_investment(b, maturity_date=date(2028, 3, 1)))
+
+        investment_repo.delete_all()
+
+        assert investment_repo.list_all() == []
+        assert issuer_repo.list_all() == []
+
+    def test_delete_all_on_empty_db(self, investment_repo) -> None:
+        # Exercises the empty-orphan-list guard in delete_all.
+        assert investment_repo.delete_all() == (0, 0)
+
+    def test_save_works_after_delete_all(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        a = make_issuer("Banco Alpha")
+        issuer_repo.save(a)
+        investment_repo.save(make_investment(a))
+        investment_repo.delete_all()
+
+        b = make_issuer("Banco Beta")
+        issuer_repo.save(b)
+        inv = make_investment(b)
+        investment_repo.save(inv)
+
+        loaded = investment_repo.list_all()
+        assert len(loaded) == 1
+        assert loaded[0].id == inv.id
+
+
 # ---------- End-to-end realistic scenario ----------
 
 

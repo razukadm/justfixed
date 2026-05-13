@@ -26,6 +26,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
+from sqlalchemy import exists
 from sqlalchemy.orm import Session, sessionmaker
 
 from justfixed.domain.investment import Investment
@@ -211,3 +212,23 @@ class InvestmentRepository:
             row = session.get(InvestmentRow, investment_id)
             if row is not None:
                 session.delete(row)
+
+    def delete_all(self) -> tuple[int, int]:
+        """Delete every investment and any issuers left orphaned.
+
+        Returns (investments_deleted, issuers_deleted).
+        """
+        with session_scope(self._factory) as session:
+            investment_count = session.query(InvestmentRow).delete()
+            orphan_ids = [
+                row.id for row in session.query(IssuerRow.id).filter(
+                    ~exists().where(InvestmentRow.issuer_id == IssuerRow.id)
+                )
+            ]
+            issuer_count = (
+                session.query(IssuerRow)
+                .filter(IssuerRow.id.in_(orphan_ids))
+                .delete(synchronize_session=False)
+                if orphan_ids else 0
+            )
+        return investment_count, issuer_count
