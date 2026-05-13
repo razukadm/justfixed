@@ -16,10 +16,10 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Importer (parser, mapper) | Complete | 77 |
 | Importer (loader / DB persistence) | Complete | 9 |
 | UI (PySide6) | Milestone A′ complete (read-only) | 0 |
-| FGC concentration check | Complete | 12 |
+| FGC concentration check | Complete | 13 |
 | Exports (calendar / ICS) | Complete | 9 |
 
-450 tests pass in ~2 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+451 tests pass in ~2 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -361,7 +361,7 @@ See `docs/UI_DESIGN.md` for the design rationale, milestone A′ scope, and the 
 
 ## Test discipline
 
-**450 tests, ~2 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**451 tests, ~2 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 

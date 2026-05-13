@@ -315,28 +315,6 @@ identified as needs.
 **Trigger to revisit:** If a user starts asking portfolio-construction
 questions JustFixed can't answer.
 
-### B16. Engine — IPCA-path regression test for fgc_concentration_report
-
-**Source:** IPCA crash bug fix (commit `6dc9b4f`).
-
-**Why it exists:** `fgc_concentration_report` calls `project()`
-internally for each investment. When `project()` was updated to
-require `assumed_ipca` for IPCA-linked rates, neither
-`fgc_concentration_report`'s signature nor the UI's call sites were
-updated until real data hit the path. The bug surfaced only because
-a real portfolio contained IPCA-linked investments; no test covered
-the path.
-
-**What this is:** A regression test in `tests/engine/test_fgc.py`
-that builds a fixture with at least one IPCA-linked investment, calls
-`fgc_concentration_report(...)` with a non-`None` `assumed_ipca`, and
-asserts the report includes that investment in the right
-conglomerate's exposure. Small, fixture-based, ~15 minutes.
-
-**Trigger to revisit:** Should be done before milestone B′ work
-starts. The dual-tool rhythm typically opens a session with small
-warmup tasks; this fits that role.
-
 ---
 
 ## Part 3 — Open questions
