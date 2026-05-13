@@ -29,19 +29,29 @@ careful pace this project uses (2–4 hours each).
 
 **A′ — shipped.** One-window read-only app: import XP statement,
 investment table with per-row FGC badges, project as of today,
-export maturity calendar to .ics. Manual-entry form, projection
-detail view, and conglomerate curation deliberately deferred.
+export maturity calendar to .ics.
 
-**B′ — next (~2-3 sessions).** Extend the existing window with
-inline conglomerate editing and autocomplete. Resolves the
-`[unverified]` curation contract. Conglomerate model decision
-already recorded in `docs/UI_DESIGN.md` (string-based, no entity).
+**A′-plus — tight scope (next, ~1 session).** Three small
+additions surfaced by real usage: Clear DB button (dev-flag
+gated), Projected Value column (net at maturity), Hide matured
+toggle. See `docs/UI_DESIGN.md` § "Deferred from A′" for specs.
 
-**C′ — later (~3-4 sessions).** Manual-entry form for non-XP
-investments, per-investment detail view with accrual breakdown
-and IR tax.
+**B′ — curation (~2-3 sessions).** Inline conglomerate editing
+with autocomplete. Model: string editing only, no verified flag.
+Autocomplete filtered to verified-only. Immediate FGC refresh on
+every edit. See `docs/UI_DESIGN.md` § "Deferred from A′" for
+specs.
 
-**Risks worth keeping in mind for B′/C′:**
+**B′ companion — filter and totals (~1-2 sessions).** Filter by
+issuer/conglomerate, totals panel. Depends on B′ being shipped
+(filtering by conglomerate is much less useful while
+`[unverified]` rows pollute the namespace).
+
+**C′ — manual entry and detail view (~3-4 sessions, deferred).**
+Manual-entry form for non-XP investments, per-investment detail
+view with accrual breakdown and IR tax.
+
+**Risks worth keeping in mind for B′:**
 - PySide6 changes between minor versions. Verify against current
   docs at build time, not from training-time memory.
 - UI bugs are visual; the feedback loop stays "run the app, look

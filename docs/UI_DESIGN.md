@@ -402,6 +402,97 @@ make sure it still renders sensibly.
 
 ---
 
+## Deferred from A′ — milestone plan
+
+A′ shipped as a read-only viewer. Real usage (May 2026) surfaced
+gaps that split into three follow-on milestones, each shippable
+independently. Decisions captured here so the next build session
+has a concrete spec.
+
+### Tight scope (next session)
+
+Three small additions that make A′ more usable for ongoing
+testing without expanding the data model.
+
+**Clear DB button.** A menu item under File → "Clear Database…"
+that empties all investments from the DB. Confirmation dialog
+shows the actual count ("Clear all 12 investments from the
+database? This cannot be undone."). Gated by environment variable:
+`if os.environ.get("JUSTFIXED_DEV"): show the menu item`.
+Invisible to non-developer users by default; available on-demand
+for testing by running with `JUSTFIXED_DEV=1`.
+
+**Projected Value column.** New column in the investment table
+showing `ProjectionResult.net_at_maturity` (post-IR-tax value at
+maturity). Position: after "Current value", before "FGC".
+Formatted as Money via existing `to_display()`. Populated by the
+Project flow alongside Current value.
+
+**Hide matured toggle.** A button or menu item that toggles
+visibility of investments where `maturity_date <= today`.
+Maturity-day investments are considered already-paid by the
+issuer; they hide together with strictly-past-maturity ones.
+When hidden:
+- Rows do not appear in the table.
+- Hidden investments are excluded from all totals (when those
+  exist) and from the FGC concentration calculation.
+- The toggle state does not persist between app launches (default:
+  hidden, since the testing pattern is "look at current
+  portfolio").
+
+### Curation — milestone B′
+
+Inline conglomerate editing. Model: **string editing only, no
+verified flag.** The `[unverified]` prefix is the verification
+state — its presence or absence in the conglomerate string is the
+truth. To verify a row, the user edits the string and removes the
+prefix (or types a completely new value, which has no prefix).
+
+**Interaction.**
+1. User clicks a conglomerate cell. Cell becomes editable.
+2. As they type, autocomplete shows existing conglomerate strings
+   in the DB, **filtered to verified-only** (strings without the
+   `[unverified] ` prefix). User can pick from the dropdown or
+   type a brand-new string (strict autocomplete with new-value
+   fallback).
+3. On Enter or focus-loss, the new value is saved to
+   `issuer.conglomerate`. The row's visual marker updates: if the
+   new string has no `[unverified] ` prefix, the row is no longer
+   gray-italic.
+4. FGC re-computation runs immediately on every save. Badges
+   refresh to reflect new conglomerate groupings.
+
+**Autocomplete rationale.** Showing only verified strings prevents
+the failure mode of merging into another unverified string and
+propagating the prefix. To merge two unverified entries, the user
+types the canonical name once and picks it from autocomplete the
+second time.
+
+**FGC refresh rationale.** Immediate refresh on every edit
+prioritizes discoverability over perf. For portfolio sizes
+expected in this app, recomputation is fast enough that the
+"feels reactive" win outweighs the "batch on Project click" win.
+
+### Filter and totals — milestone B′ companion
+
+After curation lands, the conglomerate namespace is clean enough
+to support filtering and aggregation.
+
+**Filter.** A text field at the top of the table that narrows
+visible rows by issuer name or conglomerate name (substring match,
+case-insensitive). Hidden-matured filter and this text filter
+combine (AND).
+
+**Totals panel.** A separate panel (not a table row — see
+discussion in the design conversation) showing aggregate values
+across the currently-visible investments:
+- Total principal.
+- Total current value.
+- Total projected value (net at maturity).
+The panel updates as filter narrows the visible set. FGC badges
+do not appear in the panel (they're per-conglomerate, not
+aggregate).
+
 ## What this document is not
 
 This is a scope and structure spec. It is intentionally silent on:
