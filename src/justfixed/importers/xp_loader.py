@@ -32,6 +32,11 @@ from justfixed.persistence.repositories import (
     IssuerRepository,
 )
 
+# Loader hardcoded knowledge: which issuer names map to development banks.
+# Stored as normalized names (Issuer.normalize_name: uppercased, whitespace-
+# collapsed). Add entries as real broker data surfaces development-bank
+# issuers, per the audit-when-it-crashes rule in CLAUDE.md.
+_DEVELOPMENT_BANK_NAMES: frozenset[str] = frozenset({"BDMG"})
 
 
 @dataclass(frozen=True)
@@ -159,6 +164,12 @@ def _resolve_issuer(
 
     if parsed_name == "Tesouro Nacional":
         new_issuer = Issuer.treasury()
+    elif Issuer.normalize_name(parsed_name) in _DEVELOPMENT_BANK_NAMES:
+        new_issuer = Issuer.create(
+            name=parsed_name,
+            conglomerate=f"{UNVERIFIED_CONGLOMERATE_PREFIX}{parsed_name}",
+            kind=IssuerKind.DEVELOPMENT_BANK,
+        )
     else:
         new_issuer = Issuer.create(
             name=parsed_name,

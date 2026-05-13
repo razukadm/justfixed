@@ -31,6 +31,7 @@ from justfixed.domain.rates import (
 from justfixed.importers.xp_loader import (
     UNVERIFIED_CONGLOMERATE_PREFIX,
     LoadResult,
+    _resolve_issuer,
     load_xp_statement,
 )
 from justfixed.persistence.database import Base, make_engine, make_session_factory
@@ -211,6 +212,21 @@ class TestIssuerCreation:
         ]
         assert len(inter_matches) == 1
         assert inter_matches[0].id == existing.id
+
+
+# ---------- Development-bank classification ----------
+
+
+class TestDevelopmentBankClassification:
+    def test_resolves_bdmg_as_development_bank(self, issuer_repo) -> None:
+        issuer, was_created = _resolve_issuer("BDMG", issuer_repo)
+        assert was_created is True
+        assert issuer.kind == IssuerKind.DEVELOPMENT_BANK
+
+    def test_resolves_unknown_issuer_as_commercial_bank(self, issuer_repo) -> None:
+        issuer, was_created = _resolve_issuer("Banco Foo", issuer_repo)
+        assert was_created is True
+        assert issuer.kind == IssuerKind.COMMERCIAL_BANK
 
 
 # ---------- Investment field coverage ----------
