@@ -8,18 +8,21 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QLocale, QStandardPaths, Qt, QThread, Signal
+from PySide6.QtCore import QDate, QLocale, QStandardPaths, QStringListModel, Qt, QThread, Signal
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication,
+    QCompleter,
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
     QStackedWidget,
     QStatusBar,
+    QStyledItemDelegate,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -39,7 +42,11 @@ from justfixed.persistence.database import (
     make_engine,
     make_session_factory,
 )
-from justfixed.persistence.repositories import InvestmentRepository
+from justfixed.persistence.repositories import (
+    CurationMemoryRepository,
+    InvestmentRepository,
+    IssuerRepository,
+)
 
 # Hardcoded CDI assumption for milestone A′.
 # Built 2026-05-08. Source: Selic at 14.50%/year per Copom decision
@@ -117,6 +124,81 @@ class _ProjectWorker(QThread):
             self.finished.emit(results, fgc_report)
         except Exception as exc:
             self.error.emit(str(exc))
+
+
+# ── Delegate ──────────────────────────────────────────────────────────────────
+
+class ConglomerateEditDelegate(QStyledItemDelegate):
+    """Inline editor for the Conglomerate column (column 1).
+
+    Double-click opens a QLineEdit with autocomplete from the union of
+    verified in-use conglomerates and all curation memory entries. On
+    commit, the new value is validated, written to the issuer and curation
+    memory, then the table refreshes.
+    """
+
+    def __init__(self, main_window, session_factory) -> None:
+        super().__init__()  # No Qt parent — MainWindow holds self._delegate
+        self._main_window = main_window
+        self._session_factory = session_factory
+
+    def createEditor(self, parent, option, index):
+        editor = QLineEdit(parent)
+
+        issuer_repo = IssuerRepository(self._session_factory)
+        curation_repo = CurationMemoryRepository(self._session_factory)
+
+        # Verified in-use conglomerate strings (no [unverified] prefix)
+        verified = {
+            i.conglomerate
+            for i in issuer_repo.list_all()
+            if not i.conglomerate.startswith(UNVERIFIED_CONGLOMERATE_PREFIX)
+        }
+        # All curation memory entries; curation wins on canonical case
+        curation = curation_repo.list_all()
+
+        seen_lower: dict[str, str] = {}
+        for cong in verified:
+            seen_lower[cong.lower()] = cong
+        for cong in curation.values():
+            seen_lower[cong.lower()] = cong
+
+        completer_model = QStringListModel(sorted(seen_lower.values()), editor)
+        completer = QCompleter(completer_model, editor)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        editor.setCompleter(completer)
+        return editor
+
+    def setEditorData(self, editor, index) -> None:
+        editor.setText(index.data() or "")
+
+    def setModelData(self, editor, model, index) -> None:
+        text = editor.text().strip()
+
+        if not text:
+            self._main_window.statusBar().showMessage(
+                "Conglomerate cannot be empty.", 4000
+            )
+            return
+
+        if len(text) > 100:
+            self._main_window.statusBar().showMessage(
+                "Conglomerate too long (max 100 characters).", 4000
+            )
+            return
+
+        if text.startswith(UNVERIFIED_CONGLOMERATE_PREFIX):
+            self._main_window.statusBar().showMessage(
+                "The [unverified] prefix is reserved — use the conglomerate name without it.",
+                4000,
+            )
+            return
+
+        # Save logic added in Stage B.
+
+    def updateEditorGeometry(self, editor, option, index) -> None:
+        editor.setGeometry(option.rect)
 
 
 # ── Main window ───────────────────────────────────────────────────────────────
