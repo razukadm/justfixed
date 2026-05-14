@@ -28,6 +28,7 @@ from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_
 from justfixed.importers.xp import read_renda_fixa_rows
 from justfixed.importers.xp_mapper import parse_row
 from justfixed.persistence.repositories import (
+    CurationMemoryRepository,
     InvestmentRepository,
     IssuerRepository,
 )
@@ -84,6 +85,7 @@ def load_xp_statement(
     """
     issuer_repo = IssuerRepository(session_factory)
     investment_repo = InvestmentRepository(session_factory)
+    curation_repo = CurationMemoryRepository(session_factory)
 
     inserted = 0
     skipped = 0
@@ -94,7 +96,7 @@ def load_xp_statement(
     for raw in raw_rows:
         parsed = parse_row(raw)
 
-        issuer, was_created = _resolve_issuer(parsed.issuer_name, issuer_repo)
+        issuer, was_created = _resolve_issuer(parsed.issuer_name, issuer_repo, curation_repo)
         if was_created:
             issuers_created += 1
         else:
@@ -138,21 +140,26 @@ def load_xp_statement(
     )
 
 def _resolve_issuer(
-    parsed_name: str, issuer_repo: IssuerRepository
+    parsed_name: str,
+    issuer_repo: IssuerRepository,
+    curation_repo: CurationMemoryRepository,
 ) -> tuple[Issuer, bool]:
     """Resolve a parsed issuer name to an existing or newly-created Issuer.
 
     Treasury (parsed name "Tesouro Nacional") routes to Issuer.treasury(),
     which carries the canonical CNPJ and TREASURY kind. Everything else
-    is created as COMMERCIAL_BANK with conglomerate marked unverified —
-    no human has reviewed the conglomerate grouping yet, and the FGC
-    layer (when built) will surface this for review.
+    is created with conglomerate drawn from curation memory if a curated
+    entry exists, falling back to the [unverified] prefix otherwise.
+    Development banks (per _DEVELOPMENT_BANK_NAMES) receive
+    IssuerKind.DEVELOPMENT_BANK; other non-treasury issuers receive
+    IssuerKind.COMMERCIAL_BANK.
 
     Args:
         parsed_name: Issuer name as emitted by xp_mapper.parse_issuer_name.
                      "Tesouro Nacional" for treasuries; otherwise the bank's
                      short code (e.g. "BMG", "CEF", "BANCO INTER").
         issuer_repo: Repository for lookup and persistence.
+        curation_repo: Repository for curated conglomerate lookups.
 
     Returns:
         A tuple (issuer, was_created) where was_created is True if this
@@ -164,18 +171,25 @@ def _resolve_issuer(
 
     if parsed_name == "Tesouro Nacional":
         new_issuer = Issuer.treasury()
-    elif Issuer.normalize_name(parsed_name) in _DEVELOPMENT_BANK_NAMES:
-        new_issuer = Issuer.create(
-            name=parsed_name,
-            conglomerate=f"{UNVERIFIED_CONGLOMERATE_PREFIX}{parsed_name}",
-            kind=IssuerKind.DEVELOPMENT_BANK,
-        )
     else:
-        new_issuer = Issuer.create(
-            name=parsed_name,
-            conglomerate=f"{UNVERIFIED_CONGLOMERATE_PREFIX}{parsed_name}",
-            kind=IssuerKind.COMMERCIAL_BANK,
+        normalized = Issuer.normalize_name(parsed_name)
+        curated = curation_repo.get(normalized)
+        conglomerate = (
+            curated if curated is not None
+            else f"{UNVERIFIED_CONGLOMERATE_PREFIX}{parsed_name}"
         )
+        if normalized in _DEVELOPMENT_BANK_NAMES:
+            new_issuer = Issuer.create(
+                name=parsed_name,
+                conglomerate=conglomerate,
+                kind=IssuerKind.DEVELOPMENT_BANK,
+            )
+        else:
+            new_issuer = Issuer.create(
+                name=parsed_name,
+                conglomerate=conglomerate,
+                kind=IssuerKind.COMMERCIAL_BANK,
+            )
 
     issuer_repo.save(new_issuer)
     return new_issuer, True

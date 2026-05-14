@@ -36,6 +36,7 @@ from justfixed.importers.xp_loader import (
 )
 from justfixed.persistence.database import Base, make_engine, make_session_factory
 from justfixed.persistence.repositories import (
+    CurationMemoryRepository,
     InvestmentRepository,
     IssuerRepository,
 )
@@ -66,6 +67,11 @@ def issuer_repo(factory):
 @pytest.fixture
 def investment_repo(factory):
     return InvestmentRepository(factory)
+
+
+@pytest.fixture
+def curation_repo(factory):
+    return CurationMemoryRepository(factory)
 
 
 # ---------- Fixture sanity ----------
@@ -218,15 +224,72 @@ class TestIssuerCreation:
 
 
 class TestDevelopmentBankClassification:
-    def test_resolves_bdmg_as_development_bank(self, issuer_repo) -> None:
-        issuer, was_created = _resolve_issuer("BDMG", issuer_repo)
+    def test_resolves_bdmg_as_development_bank(
+        self, issuer_repo, curation_repo
+    ) -> None:
+        # curation_repo unused here; required by _resolve_issuer signature
+        issuer, was_created = _resolve_issuer("BDMG", issuer_repo, curation_repo)
         assert was_created is True
         assert issuer.kind == IssuerKind.DEVELOPMENT_BANK
 
-    def test_resolves_unknown_issuer_as_commercial_bank(self, issuer_repo) -> None:
-        issuer, was_created = _resolve_issuer("Banco Foo", issuer_repo)
+    def test_resolves_unknown_issuer_as_commercial_bank(
+        self, issuer_repo, curation_repo
+    ) -> None:
+        # curation_repo unused here; required by _resolve_issuer signature
+        issuer, was_created = _resolve_issuer("Banco Foo", issuer_repo, curation_repo)
         assert was_created is True
         assert issuer.kind == IssuerKind.COMMERCIAL_BANK
+
+
+# ---------- Curation memory integration ----------
+
+
+class TestCurationMemoryIntegration:
+    def test_curated_conglomerate_applied_on_create(
+        self, issuer_repo, curation_repo
+    ) -> None:
+        # Pre-seed curation for BMG. The create branch must pick it up
+        # instead of falling back to [unverified].
+        curation_repo.set("BMG", "BMG Participações S.A.")
+
+        issuer, was_created = _resolve_issuer("BMG", issuer_repo, curation_repo)
+
+        assert was_created is True
+        assert issuer.conglomerate == "BMG Participações S.A."
+
+    def test_find_branch_ignores_curation(
+        self, issuer_repo, curation_repo
+    ) -> None:
+        # Pre-seed an existing issuer with a known conglomerate, then seed
+        # curation with a different value for the same normalized name.
+        # The find branch must return the existing record untouched —
+        # curation memory must not overwrite a persisted conglomerate.
+        existing = Issuer.create(
+            name="BMG",
+            conglomerate="Original Conglomerate",
+            kind=IssuerKind.COMMERCIAL_BANK,
+        )
+        issuer_repo.save(existing)
+        curation_repo.set("BMG", "Curated Conglomerate")
+
+        issuer, was_created = _resolve_issuer("BMG", issuer_repo, curation_repo)
+
+        assert was_created is False
+        assert issuer.id == existing.id
+        assert issuer.conglomerate == "Original Conglomerate"
+
+    def test_fallback_to_unverified_when_no_curation(
+        self, issuer_repo, curation_repo
+    ) -> None:
+        # Curation memory is empty. The create branch must produce the
+        # [unverified] prefix — same behavior as before curation was added.
+        # Covered at integration level by test_creates_commercial_bank_issuers_
+        # with_unverified_conglomerate; this confirms the specific conglomerate
+        # value via direct _resolve_issuer call.
+        issuer, was_created = _resolve_issuer("Banco Foo", issuer_repo, curation_repo)
+
+        assert was_created is True
+        assert issuer.conglomerate == f"{UNVERIFIED_CONGLOMERATE_PREFIX}Banco Foo"
 
 
 # ---------- Investment field coverage ----------
