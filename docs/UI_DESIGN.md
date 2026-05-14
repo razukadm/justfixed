@@ -465,9 +465,12 @@ prefix (or types a completely new value, which has no prefix).
 
 **Interaction.**
 1. User clicks a conglomerate cell. Cell becomes editable.
-2. As they type, autocomplete shows existing conglomerate strings
-   in the DB, **filtered to verified-only** (strings without the
-   `[unverified] ` prefix). User can pick from the dropdown or
+2. As they type, autocomplete shows the union of (a) verified
+   conglomerate strings currently in use on any issuer in the DB,
+   and (b) all entries in curation memory. Strings are deduplicated
+   case-insensitively; canonical case comes from curation memory
+   when present, otherwise from the in-use spelling. `[unverified] `-prefixed
+   strings are never shown. User can pick from the dropdown or
    type a brand-new string (strict autocomplete with new-value
    fallback).
 3. On Enter or focus-loss, the new value is saved to
@@ -477,16 +480,30 @@ prefix (or types a completely new value, which has no prefix).
 4. FGC re-computation runs immediately on every save. Badges
    refresh to reflect new conglomerate groupings.
 
-**Autocomplete rationale.** Showing only verified strings prevents
-the failure mode of merging into another unverified string and
-propagating the prefix. To merge two unverified entries, the user
-types the canonical name once and picks it from autocomplete the
-second time.
+**Autocomplete rationale.** Two failure modes to suppress. First,
+showing `[unverified] `-prefixed strings would let the user merge
+into another unverified entry and propagate the prefix — so
+unverified strings are excluded. Second, sourcing only from
+currently-in-use strings would mean a brand-new issuer can't see
+a previously-curated spelling, leading to duplicates like `"itau"`
+vs. `"Itaú"` when the same conglomerate is curated at different
+times — so curation memory is also included. Curation memory is
+also what makes pre-seeded conglomerates (future B20) show up in
+the dropdown on day one, before any issuer currently carries them.
 
 **FGC refresh rationale.** Immediate refresh on every edit
-prioritizes discoverability over perf. For portfolio sizes
-expected in this app, recomputation is fast enough that the
-"feels reactive" win outweighs the "batch on Project click" win.
+prioritizes discoverability. Implementation: the UI controller
+caches the last `ProjectionResults`; on conglomerate save, FGC
+re-aggregates over the cached results (a pure function over
+investments and the projection cache), bypassing re-projection.
+The cache is invalidated on projection-affecting events: new
+projection completion, Hide matured toggle, new import, Clear DB,
+investment add/edit/delete (when those exist), assumed-CDI change
+(when user-configurable). Conglomerate edits are *not* in that list
+— they don't affect projections, only aggregation. If projection
+over a real portfolio measures under ~50ms, the cache may be
+dropped and full re-run used instead; the choice is a measurement
+decision, not a design one.
 
 ### Filter and totals — milestone B′ companion
 
