@@ -283,6 +283,9 @@ class MainWindow(QMainWindow):
         self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.verticalHeader().setVisible(False)
+        self._delegate = ConglomerateEditDelegate(self, self._session_factory)
+        self._table.setItemDelegateForColumn(_COL_CONGLOMERATE, self._delegate)
+        self._table.cellDoubleClicked.connect(self._on_cell_double_clicked)
 
         self._empty_label = QLabel(
             "Import an XP statement to see your investments."
@@ -436,6 +439,10 @@ class MainWindow(QMainWindow):
         self._has_projected = False
         self._refresh_table()
         self.statusBar().showMessage(f"Cleared {deleted_investments} investments.", 6000)
+
+    def _on_cell_double_clicked(self, row: int, column: int) -> None:
+        if column == _COL_CONGLOMERATE:
+            self._table.editItem(self._table.item(row, column))
 
     # ── Import ────────────────────────────────────────────────────────────────
 
