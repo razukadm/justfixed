@@ -661,3 +661,22 @@ class TestCurationMemoryRepository:
     def test_delete_on_unknown_returns_false(self, curation_repo) -> None:
         result = curation_repo.delete("BANCO INTER")
         assert result is False
+
+    def test_list_all_empty_returns_empty_dict(self, curation_repo) -> None:
+        assert curation_repo.list_all() == {}
+
+    def test_list_all_returns_all_entries(self, curation_repo) -> None:
+        curation_repo.set("BANCO INTER", "Banco Inter S.A.")
+        curation_repo.set("ITAU", "Itaú Unibanco Holding")
+        result = curation_repo.list_all()
+        assert result == {
+            "BANCO INTER": "Banco Inter S.A.",
+            "ITAU": "Itaú Unibanco Holding",
+        }
+
+    def test_list_all_reflects_deletes(self, curation_repo) -> None:
+        curation_repo.set("BANCO INTER", "Banco Inter S.A.")
+        curation_repo.set("ITAU", "Itaú Unibanco Holding")
+        curation_repo.delete("BANCO INTER")
+        result = curation_repo.list_all()
+        assert result == {"ITAU": "Itaú Unibanco Holding"}

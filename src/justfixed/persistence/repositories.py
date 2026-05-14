@@ -261,6 +261,15 @@ class CurationMemoryRepository:
         with session_scope(self._factory) as session:
             session.merge(row)
 
+    def list_all(self) -> dict[str, str]:
+        """Return all curated entries as {normalized_name: conglomerate}.
+
+        Returns an empty dict when curation memory has no entries.
+        """
+        with session_scope(self._factory) as session:
+            rows = session.query(CurationMemoryRow).all()
+            return {row.normalized_issuer_name: row.conglomerate for row in rows}
+
     def delete(self, normalized_name: str) -> bool:
         """Remove the entry for this normalized name.
 
