@@ -193,7 +193,7 @@ class ConglomerateEditDelegate(QStyledItemDelegate):
             )
             return
 
-        if text.startswith(UNVERIFIED_CONGLOMERATE_PREFIX):
+        if text.startswith(UNVERIFIED_CONGLOMERATE_PREFIX.rstrip()):
             QMessageBox.warning(
                 self._main_window,
                 "Invalid conglomerate",

@@ -78,6 +78,22 @@ class TestConglomerateEditDelegateValidation:
             "Please enter the conglomerate name without it.",
         )
 
+    def test_rejects_bare_unverified_prefix(self, delegate) -> None:
+        with patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warning:
+            delegate.setModelData(
+                _mock_editor("[unverified]"),
+                MagicMock(),
+                MagicMock(),
+            )
+
+        delegate._session_factory.assert_not_called()
+        mock_warning.assert_called_once_with(
+            delegate._main_window,
+            "Invalid conglomerate",
+            "The [unverified] prefix is reserved for system use. "
+            "Please enter the conglomerate name without it.",
+        )
+
 
 # ---------- Save ----------
 
