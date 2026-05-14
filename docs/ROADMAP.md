@@ -328,18 +328,16 @@ identified as needs.
 **Trigger to revisit:** If a user starts asking portfolio-construction
 questions JustFixed can't answer.
 
-### B16. Investigate parser LCD-iteration inconsistency
+### B16. Investigate parser LCD-iteration inconsistency — CLOSED
 
-**Source:** A′-plus debugging session. Two parser diagnostic runs over
-the same `PosicaoDetalhada.xlsx` returned different results — one
-found the LCD row, one didn't. The inconsistency was immaterial to the
-fix that landed (parser section terminators, commit `1582ee5`) and was
-not reproduced under controlled conditions.
-
-**Why deferred:** Immaterial to the current fix. Root cause unknown.
-
-**Trigger to revisit:** If the inconsistency recurs or if an LCD
-position is silently dropped on a re-import.
+**Closed:** Not reproduced. Both wide (parser + mapper) and narrow
+(parser only) diagnostics run against the current `PosicaoDetalhada.xlsx`
+return the same single LCD record (`LCD BDMG - JUN/2029`). The original
+report of an inconsistency is not reproducible. Each Claude Code session
+is amnesiac about prior sessions, so the exact original diagnostic code
+and its output cannot be recovered. We can verify behavior against
+current code only, not behavior against prior code. B16 closes as not
+reproduced.
 
 ### B17. Calendar export should respect Hide matured filter
 
