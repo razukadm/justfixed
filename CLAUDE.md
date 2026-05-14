@@ -34,7 +34,7 @@ Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 - **Domain types validate in `__post_init__`.** Corrupt data fails to load with a
   clear `ValueError`. The domain is the gatekeeper for invariants.
 - **Tests are the spec.** If behavior changes, the test changes first. Currently
-  451 tests, ~2 second runtime, no skips. Tests pass on every commit.
+  462 tests, ~5 second runtime, no skips. Tests pass on every commit.
 - **Hand-compute financial test expected values.** Show all decimals; don't approximate.
   Approximation has been a real source of bugs.
 - **Repositories are the only public access to persistence.** Engine, UI, and importers
@@ -89,6 +89,24 @@ The crash is the signal; absence of crash means the rule is currently fine.
 (Already discovered: LCAs do allow monthly coupons in real issuances; the rule was
 relaxed. LCI is still bullet-only and stays that way until a real LCI-with-coupons
 crashes the loader.)
+
+## Loader and parser hardcoded knowledge
+
+Three small hardcoded sets live in the importers, each recognizing things the
+importer needs to know about specific Brazilian financial entities or document
+structures:
+
+- **Conglomerate-name lookup** (xp_loader.py): when the loader sees a known issuer
+  name, it assigns the canonical conglomerate string instead of the `[unverified]`
+  default.
+- **Development-bank set** (xp_loader.py `_DEVELOPMENT_BANK_NAMES`): issuers in this
+  set get `IssuerKind.DEVELOPMENT_BANK` instead of the `COMMERCIAL_BANK` default.
+- **Section-terminator set** (xp.py `_RENDA_FIXA_TERMINATORS`): row text matching
+  these strings ends the Renda Fixa reading loop, preventing the parser from reading
+  into subsequent non-fixed-income sections.
+
+Entries are added per the audit-when-it-crashes rule: a real XP statement crashes
+the importer, one entry is added with a focused test, ship.
 
 ## Working style preferences
 

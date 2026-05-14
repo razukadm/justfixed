@@ -31,10 +31,13 @@ careful pace this project uses (2–4 hours each).
 investment table with per-row FGC badges, project as of today,
 export maturity calendar to .ics.
 
-**A′-plus — tight scope (next, ~1 session).** Three small
-additions surfaced by real usage: Clear DB button (dev-flag
-gated), Projected Value column (net at maturity), Hide matured
-toggle. See `docs/UI_DESIGN.md` § "Deferred from A′" for specs.
+**A′-plus — shipped** (commits `27541bb`, `6d26697`, `28becc8`,
+`0099c02`, `897e66e`, `f975aad`, `1582ee5`). Three UI additions:
+Clear DB button (dev-flag gated), Projected Value column (net at
+maturity), Hide matured toggle. Plus four loader/domain/parser
+fixes surfaced during testing (BDMG issuer kind, LCA-from-dev-bank
+rule, ProductRule generalization, parser section terminators).
+See `docs/UI_DESIGN.md` § "Deferred from A′" for specs.
 
 **B′ — curation (~2-3 sessions).** Inline conglomerate editing
 with autocomplete. Model: string editing only, no verified flag.
@@ -324,6 +327,46 @@ identified as needs.
 
 **Trigger to revisit:** If a user starts asking portfolio-construction
 questions JustFixed can't answer.
+
+### B16. Investigate parser LCD-iteration inconsistency
+
+**Source:** A′-plus debugging session. Two parser diagnostic runs over
+the same `PosicaoDetalhada.xlsx` returned different results — one
+found the LCD row, one didn't. The inconsistency was immaterial to the
+fix that landed (parser section terminators, commit `1582ee5`) and was
+not reproduced under controlled conditions.
+
+**Why deferred:** Immaterial to the current fix. Root cause unknown.
+
+**Trigger to revisit:** If the inconsistency recurs or if an LCD
+position is silently dropped on a re-import.
+
+### B17. Calendar export should respect Hide matured filter
+
+**Source:** A′-plus testing. The calendar export currently includes all
+investments, including matured ones, regardless of the Hide matured
+toggle state. Pre-existing behavior since A′.
+
+**Why deferred:** May be intentional — a maturity calendar is about
+events that happened, not just future events. Worth a deliberate design
+pass before assuming it's a bug.
+
+**Trigger to revisit:** When a user finds stale matured events in their
+exported calendar and asks for them to be excluded.
+
+### B18. Clear DB removes issuers, losing any in-DB curation
+
+**Source:** A′-plus. The Clear Database action deletes all investments
+and their issuers. If the user had manually curated any conglomerate
+strings (in B′), those edits are lost on Clear DB + reimport.
+
+**Why deferred:** Clear DB is a developer-only action (gated by
+`JUSTFIXED_DEV`). Curation (B′) isn't built yet.
+
+**Trigger to revisit:** When B′ ships and Clear DB becomes a real
+user-facing workflow. At that point, consider a "delete investments
+only, preserve issuers" alternative, or surface the side effect in
+user guidance.
 
 ---
 

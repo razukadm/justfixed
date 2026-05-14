@@ -411,6 +411,8 @@ has a concrete spec.
 
 ### Tight scope (next session)
 
+Shipped (commits `27541bb`, `6d26697`, `28becc8`).
+
 Three small additions that make A′ more usable for ongoing
 testing without expanding the data model.
 
@@ -439,6 +441,18 @@ When hidden:
 - The toggle state does not persist between app launches (default:
   hidden, since the testing pattern is "look at current
   portfolio").
+
+**Known minor follow-ups (deferred).** Two inconsistencies
+deliberately left for a future polish pass:
+
+- Calendar export currently includes matured investments regardless
+  of the Hide matured toggle. Pre-existing behavior since A′. Not a
+  feature-3 bug; flagged for a future pass.
+- The Project button stays enabled when the Hide matured filter would
+  leave zero visible investments. Clicking produces a "Projected 0
+  investments" status message, which is the user-recoverable signal.
+  Deliberate: buttons reflect DB state, the filter reflects view
+  state.
 
 ### Curation — milestone B′
 

@@ -15,11 +15,11 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Engine | Complete | 119 |
 | Importer (parser, mapper) | Complete | 77 |
 | Importer (loader / DB persistence) | Complete | 9 |
-| UI (PySide6) | Milestone A′ complete (read-only) | 0 |
+| UI (PySide6) | A′-plus complete (read-only viewer + dev tooling) | 0 |
 | FGC concentration check | Complete | 13 |
 | Exports (calendar / ICS) | Complete | 9 |
 
-451 tests pass in ~2 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+462 tests pass in ~5 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -305,6 +305,12 @@ There is **no unique constraint** on this key in the database. A user can legiti
 
 The synthetic fixture (6 rows, all 4 rate types) is not enough. Running against a real `PosicaoDetalhada.xlsx` (~94 positions) immediately surfaced one over-strict rule: the domain rejected LCAs with monthly coupons, but real LCAs in the Brazilian market commonly pay monthly. The fix was a one-line domain change (`allowed_coupons=frozenset(CouponFrequency)` for LCA), discovered only because real data forced it. **Audit when crashes happen, not preemptively.** The rule for LCI is still NONE-only and stays that way until a real LCI-with-coupons crashes the loader.
 
+Further examples from the A′-plus testing cycle (commits `0099c02`, `897e66e`, `f975aad`, `1582ee5`):
+
+- **LCAs from development banks rejected by `ProductRule`.** The issuer-kind constraint was a single value; generalized to a frozenset so both commercial and development banks can issue LCA.
+- **BDMG created as a commercial bank.** BDMG is a development bank; the loader gained an explicit `_DEVELOPMENT_BANK_NAMES` lookup set so known development banks get the right `IssuerKind` at creation time.
+- **Parser read past the Renda Fixa section.** The XLSX has non-investment sections (Dividendos, Custódia Remunerada) after Renda Fixa. The parser gained a `_RENDA_FIXA_TERMINATORS` frozenset; hitting a terminator string breaks the reading loop.
+
 ---
 
 ## Exports (`src/justfixed/exports/`)
@@ -361,7 +367,7 @@ See `docs/UI_DESIGN.md` for the design rationale, milestone A′ scope, and the 
 
 ## Test discipline
 
-**451 tests, ~2 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**462 tests, ~5 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
