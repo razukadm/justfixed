@@ -123,3 +123,37 @@ class InvestmentRow(Base):
             f"InvestmentRow(id={self.id}, product={self.product!r}, "
             f"principal={self.principal_amount} {self.principal_currency})"
         )
+
+
+class CurationMemoryRow(Base):
+    """Row shape for the `curation_memory` table.
+
+    Stores a curated conglomerate string keyed by normalized issuer name.
+    When the loader creates a new issuer, it checks this table first; if
+    a match exists, the curated conglomerate is used instead of the
+    [unverified] default. The primary key is the normalized name so each
+    issuer has at most one curated entry.
+    """
+
+    __tablename__ = "curation_memory"
+
+    normalized_issuer_name: Mapped[str] = mapped_column(
+        String, primary_key=True
+    )
+    conglomerate: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"CurationMemoryRow("
+            f"normalized_issuer_name={self.normalized_issuer_name!r}, "
+            f"conglomerate={self.conglomerate!r})"
+        )
