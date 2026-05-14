@@ -19,7 +19,7 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | FGC concentration check | Complete | 13 |
 | Exports (calendar / ICS) | Complete | 9 |
 
-462 tests pass in ~5 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+471 tests pass in ~5 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -137,6 +137,8 @@ ORM row classes (`IssuerRow`, `InvestmentRow`). These are *not* domain types —
 
 **The polymorphic rate encoding is load-bearing.** Storing rates as `(kind: str, value: Decimal)` means adding `PostFixedCDIPlusSpread` required *zero* schema change and *zero* migration — just a new kind value. If we'd modeled rates as separate columns per type, every new rate would mean a migration.
 
+A third row class, `CurationMemoryRow`, maps normalized issuer names to curated conglomerate strings (table `curation_memory`). The primary key is the normalized name, enforcing at most one curated entry per issuer. The separate table is deliberate: curation is a research artifact (which Brazilian banks roll up to which conglomerates) that should survive Clear DB, so it lives apart from `IssuerRow`.
+
 ### `mappers.py`
 
 Pure functions converting between domain types and ORM rows. **Mappers do no I/O** — they're testable without a database. The repository layer is what actually opens sessions.
@@ -148,6 +150,8 @@ Pure functions converting between domain types and ORM rows. **Mappers do no I/O
 `IssuerRepository` and `InvestmentRepository`. Methods use `session.merge()` for upserts, open short-lived sessions per operation, and order results predictably (issuers by name, investments by maturity).
 
 `InvestmentRepository.save()` requires the issuer to already exist (FK constraint). The "always save the issuer first" workflow is enforced by the database, not by trust.
+
+`CurationMemoryRepository` exposes `get`, `set`, and `delete` against the curation memory table. The same session-handling pattern applies: one short-lived session per method call, `session.merge()` for upserts (so re-curating an existing entry preserves `created_at` while advancing `updated_at`). The repository is consumed by the XP loader on the issuer-create path; future surfaces (the curation UI, the B20 pre-seed feature) will be additional writers.
 
 ### Migrations (`alembic/`)
 
@@ -285,15 +289,21 @@ Issuer matching uses **normalized name** as the key. `Issuer.normalize_name(s)` 
 
 The normalized form is stored on `IssuerRow.normalized_name` with a unique database index. Two issuers cannot share a normalized name; the database enforces this, not application code.
 
-Treasury rows route specially: parsed name `"Tesouro Nacional"` resolves via `Issuer.treasury()` (the canonical factory with the right CNPJ and `IssuerKind.TREASURY`). Everything else creates as `IssuerKind.COMMERCIAL_BANK` with conglomerate marked unverified — see below.
+The loader first looks up by normalized name. If found, the existing issuer is returned untouched — its persisted conglomerate is never overwritten, even if curation memory holds a different value for that name. This is what allows manual conglomerate edits (when the curation UI lands) to survive re-import of the same statement.
+
+If no existing issuer matches, the loader creates one. The create path branches three ways:
+
+- **Treasury** (parsed name `"Tesouro Nacional"`): resolves via `Issuer.treasury()`, the canonical factory with the right CNPJ and `IssuerKind.TREASURY`. Treasury doesn't participate in conglomerate curation — its conglomerate is hardcoded — so curation memory is bypassed here.
+- **Development bank** (normalized name in `_DEVELOPMENT_BANK_NAMES`, currently `{"BDMG"}`): created with `IssuerKind.DEVELOPMENT_BANK`. The conglomerate comes from curation memory if a curated entry exists; otherwise it falls back to the `[unverified]` prefix.
+- **Commercial bank** (everything else): created with `IssuerKind.COMMERCIAL_BANK`. Same curation-memory-then-`[unverified]` logic.
 
 #### The `[unverified]` conglomerate convention
 
 The loader has only one piece of issuer information: the parser-emitted name. It can't know whether `"BMG"` and `"PAN"` belong to the same conglomerate, or whether `"CEF"` is part of a holding company. So new commercial-bank issuers are created with `conglomerate=f"[unverified] {name}"` — a string convention that signals "this needs human review."
 
-The FGC concentration check (when built) will surface these for the user to merge into real conglomerates. Until then, the prefix is honest about what we don't know. This is a string convention, not a schema constraint, so future migration to a nullable conglomerate field is a one-line UPDATE.
+The FGC concentration check (`engine/fgc.py`) surfaces these for the user to merge into real conglomerates. Until that merge happens, the prefix is honest about what we don't know. When the user does merge (via the curation UI, milestone B′ — not yet built), the merge writes to curation memory, and re-importing the same statement preserves the merge. This is a string convention, not a schema constraint, so future migration to a nullable conglomerate field is a one-line UPDATE.
 
-The constant `UNVERIFIED_CONGLOMERATE_PREFIX` is exported from `xp_loader` for callers (notably the FGC layer) to import.
+The constant `UNVERIFIED_CONGLOMERATE_PREFIX` lives in `domain/issuer.py` and is imported by both the loader (writing) and the FGC engine (reading).
 
 #### Investment idempotency
 
@@ -367,7 +377,7 @@ See `docs/UI_DESIGN.md` for the design rationale, milestone A′ scope, and the 
 
 ## Test discipline
 
-**462 tests, ~5 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**471 tests, ~5 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 

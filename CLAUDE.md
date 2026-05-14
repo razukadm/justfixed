@@ -34,7 +34,7 @@ Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 - **Domain types validate in `__post_init__`.** Corrupt data fails to load with a
   clear `ValueError`. The domain is the gatekeeper for invariants.
 - **Tests are the spec.** If behavior changes, the test changes first. Currently
-  462 tests, ~5 second runtime, no skips. Tests pass on every commit.
+  471 tests, ~5 second runtime, no skips. Tests pass on every commit.
 - **Hand-compute financial test expected values.** Show all decimals; don't approximate.
   Approximation has been a real source of bugs.
 - **Repositories are the only public access to persistence.** Engine, UI, and importers
@@ -62,7 +62,9 @@ factory with the right CNPJ and `IssuerKind.TREASURY`), not as a generic commerc
 New commercial-bank issuers from the loader are created with
 `conglomerate=f"[unverified] {name}"`. The loader doesn't know which brands roll up
 into which holdings (Itaú/Unibanco, BTG/Pan, etc.) — that's a curation problem the
-FGC concentration check (engine/fgc.py) surfaces and the future curation UI will resolve.
+FGC concentration check (engine/fgc.py) surfaces. The persistence foundation for
+curation is now live (B′): `CurationMemoryRepository` stores curated values, and the
+loader auto-applies them on the create branch. The curation UI is the next step.
 The prefix signals "human review needed."
 The constant `UNVERIFIED_CONGLOMERATE_PREFIX` lives in `domain/issuer.py` and is consumed
 by both the loader (writing) and the FGC engine (reading).
@@ -92,13 +94,18 @@ crashes the loader.)
 
 ## Loader and parser hardcoded knowledge
 
-Three small hardcoded sets live in the importers, each recognizing things the
+Two small hardcoded sets live in the importers, each recognizing things the
 importer needs to know about specific Brazilian financial entities or document
-structures:
+structures. A third mechanism (curation memory) is database-backed, not hardcoded:
 
-- **Conglomerate-name lookup** (xp_loader.py): when the loader sees a known issuer
-  name, it assigns the canonical conglomerate string instead of the `[unverified]`
-  default.
+- **Curation memory** (`CurationMemoryRepository`, table `curation_memory`): maps
+  normalized issuer names to curated conglomerate strings. The loader consults this
+  on the **create branch only** — if a curated entry exists for the normalized name,
+  the new issuer is created with that conglomerate instead of `[unverified] {name}`.
+  Existing issuers are never overwritten; the find branch ignores curation memory
+  entirely. Entries are populated by future surfaces (B′ UI for user-driven curation;
+  B20 pre-seed for bundled defaults). The repository is also writable directly, which
+  is how tests seed curation memory.
 - **Development-bank set** (xp_loader.py `_DEVELOPMENT_BANK_NAMES`): issuers in this
   set get `IssuerKind.DEVELOPMENT_BANK` instead of the `COMMERCIAL_BANK` default.
 - **Section-terminator set** (xp.py `_RENDA_FIXA_TERMINATORS`): row text matching
