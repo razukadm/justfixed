@@ -446,12 +446,9 @@ When hidden:
   hidden, since the testing pattern is "look at current
   portfolio").
 
-**Known minor follow-ups (deferred).** Two inconsistencies
+**Known minor follow-ups (deferred).** One inconsistency
 deliberately left for a future polish pass:
 
-- Calendar export currently includes matured investments regardless
-  of the Hide matured toggle. Pre-existing behavior since A′. Not a
-  feature-3 bug; flagged for a future pass.
 - The Project button stays enabled when the Hide matured filter would
   leave zero visible investments. Clicking produces a "Projected 0
   investments" status message, which is the user-recoverable signal.
