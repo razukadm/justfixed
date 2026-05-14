@@ -40,7 +40,7 @@ from justfixed.persistence.mappers import (
     issuer_from_row,
     issuer_to_row,
 )
-from justfixed.persistence.models import InvestmentRow, IssuerRow
+from justfixed.persistence.models import CurationMemoryRow, InvestmentRow, IssuerRow
 
 
 class IssuerRepository:
@@ -232,3 +232,44 @@ class InvestmentRepository:
                 if orphan_ids else 0
             )
         return investment_count, issuer_count
+
+
+class CurationMemoryRepository:
+    """Persistence access for curated conglomerate mappings.
+
+    Maps normalized issuer names to curated conglomerate strings. The
+    loader consults this table when creating a new issuer: if a match
+    exists, the curated conglomerate is used instead of the [unverified]
+    default, so re-importing after curation does not reset the value.
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        self._factory = session_factory
+
+    def get(self, normalized_name: str) -> str | None:
+        """Return the curated conglomerate for this normalized name, or None."""
+        with session_scope(self._factory) as session:
+            row = session.get(CurationMemoryRow, normalized_name)
+            return row.conglomerate if row is not None else None
+
+    def set(self, normalized_name: str, conglomerate: str) -> None:
+        """Store or replace the curated conglomerate for this normalized name."""
+        row = CurationMemoryRow(
+            normalized_issuer_name=normalized_name,
+            conglomerate=conglomerate,
+        )
+        with session_scope(self._factory) as session:
+            session.merge(row)
+
+    def delete(self, normalized_name: str) -> bool:
+        """Remove the entry for this normalized name.
+
+        Returns True if an entry existed and was removed, False if there
+        was nothing to remove.
+        """
+        with session_scope(self._factory) as session:
+            row = session.get(CurationMemoryRow, normalized_name)
+            if row is None:
+                return False
+            session.delete(row)
+            return True

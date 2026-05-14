@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import date
 
@@ -17,8 +18,11 @@ from justfixed.persistence.database import (
     Base,
     make_engine,
     make_session_factory,
+    session_scope,
 )
+from justfixed.persistence.models import CurationMemoryRow
 from justfixed.persistence.repositories import (
+    CurationMemoryRepository,
     InvestmentRepository,
     IssuerRepository,
 )
@@ -602,3 +606,58 @@ class TestRealisticScenario:
         assert loaded_lcd is not None
         assert loaded_lcd.is_secondary_market is True
         assert loaded_lcd.security_term_days == 365
+
+
+# ---------- CurationMemoryRepository ----------
+
+
+@pytest.fixture
+def curation_repo(factory):
+    return CurationMemoryRepository(factory)
+
+
+class TestCurationMemoryRepository:
+    def test_get_unknown_name_returns_none(self, curation_repo) -> None:
+        assert curation_repo.get("BANCO INTER") is None
+
+    def test_set_then_get_round_trips(self, curation_repo) -> None:
+        curation_repo.set("BANCO INTER", "Banco Inter S.A.")
+        assert curation_repo.get("BANCO INTER") == "Banco Inter S.A."
+
+    def test_set_on_existing_key_replaces(self, curation_repo) -> None:
+        curation_repo.set("BANCO INTER", "Old Conglomerate")
+        curation_repo.set("BANCO INTER", "New Conglomerate")
+        assert curation_repo.get("BANCO INTER") == "New Conglomerate"
+
+    def test_set_twice_preserves_created_at_advances_updated_at(
+        self, curation_repo, factory
+    ) -> None:
+        key = "BANCO INTER"
+        curation_repo.set(key, "First")
+        with session_scope(factory) as session:
+            row = session.get(CurationMemoryRow, key)
+            created_at_1 = row.created_at
+            updated_at_1 = row.updated_at
+
+        time.sleep(0.02)
+
+        curation_repo.set(key, "Second")
+        with session_scope(factory) as session:
+            row = session.get(CurationMemoryRow, key)
+            created_at_2 = row.created_at
+            updated_at_2 = row.updated_at
+
+        assert created_at_2 == created_at_1
+        assert updated_at_2 > updated_at_1
+
+    def test_delete_on_existing_returns_true_and_clears(
+        self, curation_repo
+    ) -> None:
+        curation_repo.set("BANCO INTER", "Banco Inter S.A.")
+        result = curation_repo.delete("BANCO INTER")
+        assert result is True
+        assert curation_repo.get("BANCO INTER") is None
+
+    def test_delete_on_unknown_returns_false(self, curation_repo) -> None:
+        result = curation_repo.delete("BANCO INTER")
+        assert result is False
