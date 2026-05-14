@@ -10,13 +10,12 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 
 | Layer | Status | Test count |
 |---|---|---|
-| Domain | Complete | 151 |
-| Persistence | Complete | 73 |
-| Engine | Complete | 119 |
-| Importer (parser, mapper) | Complete | 77 |
-| Importer (loader / DB persistence) | Complete | 9 |
+| Domain | Complete | 153 |
+| Persistence | Complete | 83 |
+| Engine | Complete | 132 |
+| Importer (parser, mapper) | Complete | 80 |
+| Importer (loader / DB persistence) | Complete | 14 |
 | UI (PySide6) | A′-plus complete (read-only viewer + dev tooling) | 0 |
-| FGC concentration check | Complete | 13 |
 | Exports (calendar / ICS) | Complete | 9 |
 
 471 tests pass in ~5 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
