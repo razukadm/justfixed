@@ -279,24 +279,16 @@ conglomerate decay over time?"
 **Architectural note:** Engine work is already done. This is purely
 a UI/visualization addition.
 
-### B13. Curated issuer-to-conglomerate lookup table
+### B13. Curated issuer-to-conglomerate lookup table — CLOSED
 
-**Source:** XP loader chat, "decisions worth thinking about" section.
-
-**Why deferred:** The `[unverified]` convention defers the curation
-work to whenever the user reviews FGC concentration. A pre-curated
-lookup table would let the loader produce correct conglomerates from
-day one, but requires hand-maintenance that grows over time.
-
-**Approach if revisited:** Hardcoded mapping in the loader (or a
-separate config file): `"BMG"` → `"Banco BMG"`, `"CEF"` → `"Caixa
-Econômica Federal"`, `"Itaú"` and `"Unibanco"` → `"Itaú Unibanco
-Holding"`, etc. New issuers not in the table fall back to the
-`[unverified]` convention.
-
-**Trigger to revisit:** If the curation workflow (Open Question Q1)
-becomes painful enough that the user wants the loader to handle the
-common cases automatically.
+**Closed:** Superseded by B20. The pre-seeded curation approach
+replaces the loader-side hardcoded mapping. The original B13 proposal
+(loader consults a hardcoded dict and emits non-`[unverified]`
+issuers directly) was correct before curation memory existed; once
+B′ introduces curation memory, seeding that table is the cleaner
+mechanism. The user-facing outcome (new users get most issuers
+already curated from day one) is preserved; the mechanism shifts to
+the post-B′ design.
 
 ### B14. CNPJ / tax_id population for parser-emitted issuers
 
@@ -361,6 +353,78 @@ strings (in B′), those edits are lost on Clear DB + reimport.
 user-facing workflow. At that point, consider a "delete investments
 only, preserve issuers" alternative, or surface the side effect in
 user guidance.
+
+### B19. Issuer edit/delete UI
+
+**Source:** `docs/UI_DESIGN.md` § "Deferred from A′ — milestone plan",
+and the B′ design conversation (this chat).
+
+**Why deferred:** B′ delivers conglomerate curation. Editing or
+deleting the issuer itself is a separate workflow. Today, an issuer
+with a typo'd name can't be corrected without going through Clear DB
++ re-import; an obsolete issuer (no longer exists, e.g., bank failed
+or merged out) has no removal path.
+
+**What it needs:**
+1. Edit issuer name — must migrate the curation-memory row if the
+   natural key changes (open question: key on CNPJ root instead of
+   name to avoid this; see B14).
+2. Delete issuer — only allowed if no investments reference it. The
+   DB schema already enforces this via foreign key, but the UI should
+   surface the constraint clearly ("can't delete; 3 investments still
+   reference this issuer").
+3. Decision: does delete-issuer also remove its curation-memory
+   entry, or preserve it for the case where the issuer is re-imported
+   later? Default to preserve, matching the broader
+   curation-preserve-across-Clear-DB stance.
+
+**Trigger to revisit:** When the user encounters a real misspelling
+they want to correct, or when an issuer becomes obsolete enough to
+need removing.
+
+**Architectural note:** Coupled with B14 (CNPJ/tax_id population).
+If issuers become keyed on a stable CNPJ root rather than name, the
+name-edit case stops needing curation-memory migration entirely.
+Resolving B14 first would simplify B19.
+
+### B20. Pre-seeded issuer/conglomerate table
+
+**Source:** `docs/UI_DESIGN.md` § "Deferred from A′ — milestone plan",
+and the B′ design conversation (this chat).
+
+**Why deferred:** B′ delivers user-driven curation via a
+curation-memory table that survives Clear DB (keyed on issuer natural
+key, not a `Conglomerate` entity — `Issuer.conglomerate` remains a
+free-form string per the UI_DESIGN.md "Conglomerate model" decision).
+The pre-seed feature lets new users skip most of the curation work
+entirely by shipping with cumulative curation knowledge of prior
+users (or the developer).
+
+**What it needs:**
+1. A `seed_curations.json` (or `.yaml`) file in the repo with
+   `{raw_issuer_name: conglomerate}` mappings — e.g., `"BMG"` →
+   `"Banco BMG"`, `"CEF"` → `"Caixa Econômica Federal"`, `"Itaú"`
+   and `"Unibanco"` → `"Itaú Unibanco Holding"`.
+2. First-time DB init reads the seed file and populates the
+   curation-memory table.
+3. Subsequent imports auto-apply via the existing curation-lookup
+   path — no special-case code in the importer.
+4. Decision on the update path: does shipping a new version of the
+   seed file update curation memory in existing installs? Default to
+   no (user's curation is sovereign once installed); a separate
+   "refresh from seed" action could re-merge.
+
+**Trigger to revisit:** After B′ ships and there's accumulated
+curation worth bottling. Or earlier if the curation workflow proves
+painful enough during B′ usage to want the burden lifted.
+
+**Architectural note:** This supersedes the original B13 proposal
+(loader consults a hardcoded dict and emits the conglomerate
+directly). The B′-era design is cleaner: seed the curation-memory
+table, let the existing path handle it. B13 closes when B20 is added.
+This does not introduce a `Conglomerate` entity — pre-seeded
+mappings populate the same string-keyed curation-memory table that
+user-driven curation writes to.
 
 ---
 
