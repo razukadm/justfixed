@@ -178,21 +178,27 @@ class ConglomerateEditDelegate(QStyledItemDelegate):
         text = editor.text().strip()
 
         if not text:
-            self._main_window.statusBar().showMessage(
-                "Conglomerate cannot be empty.", 4000
+            QMessageBox.warning(
+                self._main_window,
+                "Invalid conglomerate",
+                "Conglomerate cannot be empty. Please enter a value.",
             )
             return
 
         if len(text) > 100:
-            self._main_window.statusBar().showMessage(
-                "Conglomerate too long (max 100 characters).", 4000
+            QMessageBox.warning(
+                self._main_window,
+                "Invalid conglomerate",
+                "Conglomerate too long. Please enter 100 characters or fewer.",
             )
             return
 
         if text.startswith(UNVERIFIED_CONGLOMERATE_PREFIX):
-            self._main_window.statusBar().showMessage(
-                "The [unverified] prefix is reserved — use the conglomerate name without it.",
-                4000,
+            QMessageBox.warning(
+                self._main_window,
+                "Invalid conglomerate",
+                "The [unverified] prefix is reserved for system use. "
+                "Please enter the conglomerate name without it.",
             )
             return
 

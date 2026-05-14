@@ -41,38 +41,42 @@ def _mock_editor(text: str) -> MagicMock:
 
 class TestConglomerateEditDelegateValidation:
     def test_rejects_empty_string(self, delegate) -> None:
-        delegate.setModelData(_mock_editor(""), MagicMock(), MagicMock())
+        with patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warning:
+            delegate.setModelData(_mock_editor(""), MagicMock(), MagicMock())
 
         delegate._session_factory.assert_not_called()
-        status_bar = delegate._main_window.statusBar.return_value
-        status_bar.showMessage.assert_called_once()
-        msg, timeout = status_bar.showMessage.call_args[0]
-        assert "empty" in msg.lower()
-        assert timeout == 4000
-
-    def test_rejects_over_100_chars(self, delegate) -> None:
-        delegate.setModelData(_mock_editor("x" * 101), MagicMock(), MagicMock())
-
-        delegate._session_factory.assert_not_called()
-        status_bar = delegate._main_window.statusBar.return_value
-        status_bar.showMessage.assert_called_once()
-        msg, timeout = status_bar.showMessage.call_args[0]
-        assert "100" in msg
-        assert timeout == 4000
-
-    def test_rejects_unverified_prefix(self, delegate) -> None:
-        delegate.setModelData(
-            _mock_editor(f"{UNVERIFIED_CONGLOMERATE_PREFIX}Foo Bank"),
-            MagicMock(),
-            MagicMock(),
+        mock_warning.assert_called_once_with(
+            delegate._main_window,
+            "Invalid conglomerate",
+            "Conglomerate cannot be empty. Please enter a value.",
         )
 
+    def test_rejects_over_100_chars(self, delegate) -> None:
+        with patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warning:
+            delegate.setModelData(_mock_editor("x" * 101), MagicMock(), MagicMock())
+
         delegate._session_factory.assert_not_called()
-        status_bar = delegate._main_window.statusBar.return_value
-        status_bar.showMessage.assert_called_once()
-        msg, timeout = status_bar.showMessage.call_args[0]
-        assert "[unverified]" in msg
-        assert timeout == 4000
+        mock_warning.assert_called_once_with(
+            delegate._main_window,
+            "Invalid conglomerate",
+            "Conglomerate too long. Please enter 100 characters or fewer.",
+        )
+
+    def test_rejects_unverified_prefix(self, delegate) -> None:
+        with patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warning:
+            delegate.setModelData(
+                _mock_editor(f"{UNVERIFIED_CONGLOMERATE_PREFIX}Foo Bank"),
+                MagicMock(),
+                MagicMock(),
+            )
+
+        delegate._session_factory.assert_not_called()
+        mock_warning.assert_called_once_with(
+            delegate._main_window,
+            "Invalid conglomerate",
+            "The [unverified] prefix is reserved for system use. "
+            "Please enter the conglomerate name without it.",
+        )
 
 
 # ---------- Save ----------
