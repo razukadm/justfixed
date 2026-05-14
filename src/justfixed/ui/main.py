@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from datetime import date
@@ -29,7 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from justfixed.domain.issuer import IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
+from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
 from justfixed.engine.fgc import ExposureStatus, FGCReport, fgc_concentration_report
@@ -195,7 +196,33 @@ class ConglomerateEditDelegate(QStyledItemDelegate):
             )
             return
 
-        # Save logic added in Stage B.
+        visible = self._main_window._visible_investments()
+        issuer = visible[index.row()].issuer
+
+        old_string = issuer.conglomerate  # captured for session 2 signal emit
+        issuer.conglomerate = text
+
+        try:
+            IssuerRepository(self._session_factory).save(issuer)
+        except Exception:
+            logging.exception("Failed to save issuer conglomerate")
+            issuer.conglomerate = old_string
+            self._main_window.statusBar().showMessage(
+                "Failed to save issuer; conglomerate unchanged.", 4000
+            )
+            return
+
+        try:
+            CurationMemoryRepository(self._session_factory).set(
+                Issuer.normalize_name(issuer.name), text
+            )
+        except Exception:
+            logging.warning(
+                "Curation memory write failed for %r; issuer save succeeded",
+                issuer.name,
+            )
+
+        self._main_window._refresh_table()
 
     def updateEditorGeometry(self, editor, option, index) -> None:
         editor.setGeometry(option.rect)
