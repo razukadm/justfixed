@@ -410,7 +410,7 @@ class MainWindow(QMainWindow):
             return
         try:
             ics = export_maturity_calendar(
-                self._investments, as_of=date.today(), assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA
+                self._visible_investments(), as_of=date.today(), assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA
             )
             Path(path_str).write_bytes(ics)
             self.statusBar().showMessage(f"Calendar exported to {path_str}.", 8000)

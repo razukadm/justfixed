@@ -339,18 +339,14 @@ and its output cannot be recovered. We can verify behavior against
 current code only, not behavior against prior code. B16 closes as not
 reproduced.
 
-### B17. Calendar export should respect Hide matured filter
+### B17. Calendar export respects Hide matured filter — CLOSED
 
-**Source:** A′-plus testing. The calendar export currently includes all
-investments, including matured ones, regardless of the Hide matured
-toggle state. Pre-existing behavior since A′.
-
-**Why deferred:** May be intentional — a maturity calendar is about
-events that happened, not just future events. Worth a deliberate design
-pass before assuming it's a bug.
-
-**Trigger to revisit:** When a user finds stale matured events in their
-exported calendar and asks for them to be excluded.
+**Closed:** Resolved. Calendar export now passes the visible-investments
+list (filtered by the Hide matured toggle) to `export_maturity_calendar`.
+When the toggle is on (default), matured investments are excluded from
+the `.ics` file. When off, all investments are exported. Single source
+of truth via `_visible_investments()`, shared with the table and Project
+flow.
 
 ### B18. Clear DB removes issuers, losing any in-DB curation
 

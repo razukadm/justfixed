@@ -197,8 +197,12 @@ consistent.
 3. User selects a path or cancels.
 4. If cancelled, nothing happens.
 5. If selected, generate bytes via `exports/calendar.py`, write to
-   path. Show a brief success dialog or status bar message including
-   the chosen path.
+   path. The export honors the Hide matured toggle: when the toggle
+   is on (the default), matured investments are excluded from the
+   `.ics` file using the same rule as the table view
+   (`maturity_date > today`). When off, all investments are exported.
+   Show a brief success dialog or status bar message including the
+   chosen path.
 6. On error (file system permission, disk full, etc.), show a modal
    error dialog with the exception message.
 
