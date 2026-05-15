@@ -292,3 +292,41 @@ class TestVisibleInvestmentsFilter:
         result = MainWindow.visible_investments(self_mock)
 
         assert result == [inv_a, inv_b, inv_c]
+
+
+class TestFilterHandlers:
+    def test_issuer_handler_sets_filter_and_calls_refresh(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._filter_issuer = None
+
+        MainWindow._on_issuer_filter_changed(self_mock, "Bank A")
+
+        assert self_mock._filter_issuer == "Bank A"
+        self_mock.refresh_table.assert_called_once_with()
+
+    def test_issuer_handler_clears_filter_on_all(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._filter_issuer = "Bank A"
+
+        MainWindow._on_issuer_filter_changed(self_mock, "All")
+
+        assert self_mock._filter_issuer is None
+        self_mock.refresh_table.assert_called_once_with()
+
+    def test_conglomerate_handler_sets_filter_and_calls_refresh(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._filter_conglomerate = None
+
+        MainWindow._on_conglomerate_filter_changed(self_mock, "Group A")
+
+        assert self_mock._filter_conglomerate == "Group A"
+        self_mock.refresh_table.assert_called_once_with()
+
+    def test_conglomerate_handler_clears_filter_on_all(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._filter_conglomerate = "Group A"
+
+        MainWindow._on_conglomerate_filter_changed(self_mock, "All")
+
+        assert self_mock._filter_conglomerate is None
+        self_mock.refresh_table.assert_called_once_with()

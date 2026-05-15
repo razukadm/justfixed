@@ -14,6 +14,7 @@ from PySide6.QtCore import QDate, QLocale, QStandardPaths, QStringListModel, Qt,
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QCompleter,
     QFileDialog,
     QHBoxLayout,
@@ -291,6 +292,22 @@ class MainWindow(QMainWindow):
         top.addWidget(self._status_label, stretch=1)
         root.addLayout(top)
 
+        # Filter row — issuer and conglomerate dropdowns
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(QLabel("Issuer:"))
+        self._issuer_combo = QComboBox()
+        self._issuer_combo.addItem("All")
+        self._issuer_combo.textActivated.connect(self._on_issuer_filter_changed)
+        filter_row.addWidget(self._issuer_combo)
+        filter_row.addSpacing(12)
+        filter_row.addWidget(QLabel("Conglomerate:"))
+        self._conglomerate_combo = QComboBox()
+        self._conglomerate_combo.addItem("All")
+        self._conglomerate_combo.textActivated.connect(self._on_conglomerate_filter_changed)
+        filter_row.addWidget(self._conglomerate_combo)
+        filter_row.addStretch()
+        root.addLayout(filter_row)
+
         # Middle — table or empty-state label (swapped via QStackedWidget)
         self._stack = QStackedWidget()
 
@@ -362,6 +379,7 @@ class MainWindow(QMainWindow):
     def refresh_table(self, highlight_issuer_id: uuid.UUID | None = None) -> None:
         """Reload all investments from DB and repopulate the table."""
         self._investments = self._repo.list_all()
+        self._populate_filter_dropdowns()
         visible = self.visible_investments()
         scroll_y = self._table.verticalScrollBar().value()
         self._table.setRowCount(len(visible))
@@ -380,6 +398,28 @@ class MainWindow(QMainWindow):
         self._table.verticalScrollBar().setValue(scroll_y)
         self._stack.setCurrentIndex(0 if self._investments else 1)
         self._update_button_states()
+
+    def _populate_filter_dropdowns(self) -> None:
+        issuer_names = sorted({i.issuer.name for i in self._investments})
+        conglomerate_names = sorted({i.issuer.conglomerate for i in self._investments})
+        for combo, names, current in (
+            (self._issuer_combo, issuer_names, self._filter_issuer),
+            (self._conglomerate_combo, conglomerate_names, self._filter_conglomerate),
+        ):
+            combo.clear()
+            combo.addItem("All")
+            for name in names:
+                combo.addItem(name)
+            if current is not None and combo.findText(current) != -1:
+                combo.setCurrentText(current)
+
+    def _on_issuer_filter_changed(self, text: str) -> None:
+        self._filter_issuer = None if text == "All" else text
+        self.refresh_table()
+
+    def _on_conglomerate_filter_changed(self, text: str) -> None:
+        self._filter_conglomerate = None if text == "All" else text
+        self.refresh_table()
 
     def visible_investments(self) -> list:
         result = self._investments
