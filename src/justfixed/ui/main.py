@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
-from justfixed.engine.fgc import ExposureStatus, FGCReport, fgc_concentration_report, fgc_concentration_report_from_projections
+from justfixed.engine.fgc import ExposureStatus, FGCReport, fgc_concentration_report_from_projections
 from justfixed.engine.projection import ProjectionResult, project
 from justfixed.exports.calendar import export_maturity_calendar
 from justfixed.importers.xp_loader import LoadResult, load_xp_statement
@@ -122,9 +122,7 @@ class _ProjectWorker(QThread):
                 project(inv, as_of=today, assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA)
                 for inv in self._investments
             ]
-            fgc_report = fgc_concentration_report(
-                self._investments, as_of=today, assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA
-            )
+            fgc_report = fgc_concentration_report_from_projections(results)
             self.finished.emit(results, fgc_report)
         except Exception as exc:
             self.error.emit(str(exc))
