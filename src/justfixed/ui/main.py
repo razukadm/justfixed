@@ -257,6 +257,8 @@ class MainWindow(QMainWindow):
         # list intact and _set_busy(False) re-enables buttons correctly.
         self._investments: list = []
         self._hide_matured: bool = True
+        self._filter_issuer: str | None = None
+        self._filter_conglomerate: str | None = None
         self._has_projected: bool = False
         # projection_cache holds the most recent projection results. It's used to
         # update FGC badges on conglomerate edits without forcing a re-projection.
@@ -380,10 +382,15 @@ class MainWindow(QMainWindow):
         self._update_button_states()
 
     def visible_investments(self) -> list:
-        if not self._hide_matured:
-            return self._investments
-        today = date.today()
-        return [i for i in self._investments if i.maturity_date > today]
+        result = self._investments
+        if self._filter_issuer is not None:
+            result = [i for i in result if i.issuer.name == self._filter_issuer]
+        if self._filter_conglomerate is not None:
+            result = [i for i in result if i.issuer.conglomerate == self._filter_conglomerate]
+        if self._hide_matured:
+            today = date.today()
+            result = [i for i in result if i.maturity_date > today]
+        return sorted(result, key=lambda i: i.maturity_date)
 
     def _populate_row(
         self,

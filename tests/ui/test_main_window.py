@@ -9,6 +9,7 @@ no QApplication or database setup is needed.
 from __future__ import annotations
 
 import uuid
+from datetime import date, timedelta
 from unittest.mock import MagicMock, call, patch
 
 from PySide6.QtCore import QTimer
@@ -205,3 +206,89 @@ class TestRefreshTableScrollPreservation:
         MainWindow.refresh_table(self_mock)
 
         self_mock._table.verticalScrollBar.return_value.setValue.assert_called_once_with(150)
+
+
+def _make_inv(issuer_name: str, conglomerate: str, days_to_maturity: int) -> MagicMock:
+    inv = MagicMock()
+    inv.issuer.name = issuer_name
+    inv.issuer.conglomerate = conglomerate
+    inv.maturity_date = date.today() + timedelta(days=days_to_maturity)
+    return inv
+
+
+class TestVisibleInvestmentsFilter:
+    def _make_self(self, investments: list, *, hide_matured: bool = False,
+                   filter_issuer: str | None = None,
+                   filter_conglomerate: str | None = None) -> MagicMock:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._investments = investments
+        self_mock._hide_matured = hide_matured
+        self_mock._filter_issuer = filter_issuer
+        self_mock._filter_conglomerate = filter_conglomerate
+        return self_mock
+
+    def test_no_filters_returns_all_sorted_by_maturity(self) -> None:
+        inv_a = _make_inv("Bank A", "Group A", 60)
+        inv_b = _make_inv("Bank B", "Group B", 30)
+        self_mock = self._make_self([inv_a, inv_b])
+
+        result = MainWindow.visible_investments(self_mock)
+
+        assert result == [inv_b, inv_a]
+
+    def test_filter_issuer_excludes_non_matching(self) -> None:
+        inv_a = _make_inv("Bank A", "Group A", 30)
+        inv_b = _make_inv("Bank B", "Group B", 60)
+        self_mock = self._make_self([inv_a, inv_b], filter_issuer="Bank A")
+
+        result = MainWindow.visible_investments(self_mock)
+
+        assert result == [inv_a]
+
+    def test_filter_conglomerate_excludes_non_matching(self) -> None:
+        inv_a = _make_inv("Bank A", "Group A", 30)
+        inv_b = _make_inv("Bank B", "Group A", 60)
+        inv_c = _make_inv("Bank C", "Group B", 45)
+        self_mock = self._make_self([inv_a, inv_b, inv_c], filter_conglomerate="Group A")
+
+        result = MainWindow.visible_investments(self_mock)
+
+        assert result == [inv_a, inv_b]
+
+    def test_issuer_and_conglomerate_filters_are_anded(self) -> None:
+        inv_a = _make_inv("Bank A", "Group A", 30)
+        inv_b = _make_inv("Bank B", "Group A", 60)
+        self_mock = self._make_self([inv_a, inv_b],
+                                    filter_issuer="Bank A", filter_conglomerate="Group A")
+
+        result = MainWindow.visible_investments(self_mock)
+
+        assert result == [inv_a]
+
+    def test_hide_matured_excludes_past_maturity(self) -> None:
+        active = _make_inv("Bank A", "Group A", 30)
+        matured = _make_inv("Bank B", "Group B", -1)
+        self_mock = self._make_self([active, matured], hide_matured=True)
+
+        result = MainWindow.visible_investments(self_mock)
+
+        assert result == [active]
+
+    def test_filter_issuer_none_does_not_filter(self) -> None:
+        inv_a = _make_inv("Bank A", "Group A", 10)
+        inv_b = _make_inv("Bank B", "Group B", 20)
+        self_mock = self._make_self([inv_a, inv_b], filter_issuer=None)
+
+        result = MainWindow.visible_investments(self_mock)
+
+        assert result == [inv_a, inv_b]
+
+    def test_result_sorted_ascending_by_maturity_date(self) -> None:
+        inv_c = _make_inv("Bank C", "Group C", 90)
+        inv_a = _make_inv("Bank A", "Group A", 10)
+        inv_b = _make_inv("Bank B", "Group B", 50)
+        self_mock = self._make_self([inv_c, inv_a, inv_b])
+
+        result = MainWindow.visible_investments(self_mock)
+
+        assert result == [inv_a, inv_b, inv_c]
