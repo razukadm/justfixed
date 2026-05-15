@@ -69,13 +69,16 @@ class TestRefreshTableCacheAwareness:
 
     def test_refresh_table_with_cache_uses_fgc_report(self) -> None:
         self_mock = self._make_self_mock()
+        inv_id = uuid.uuid4()
         fake_inv = MagicMock()
-        fake_inv.issuer.conglomerate = "Banco X S.A."
+        fake_inv.id = inv_id
         self_mock.visible_investments.return_value = [fake_inv]
 
+        fake_inv_exposure = MagicMock()
+        fake_inv_exposure.investment_id = inv_id
         fake_conglomerate = MagicMock()
-        fake_conglomerate.conglomerate_name = "Banco X S.A."
         fake_conglomerate.current_status = ExposureStatus.APPROACHING
+        fake_conglomerate.investments = [fake_inv_exposure]
         fake_report = MagicMock()
         fake_report.conglomerates = [fake_conglomerate]
 

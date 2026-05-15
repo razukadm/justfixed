@@ -384,12 +384,16 @@ class MainWindow(QMainWindow):
         scroll_y = self._table.verticalScrollBar().value()
         self._table.setRowCount(len(visible))
 
-        status_map: dict[str, ExposureStatus] = {}
         projection_map: dict[uuid.UUID, ProjectionResult] = {}
+        status_by_investment: dict[uuid.UUID, ExposureStatus] = {}
         if self.projection_cache is not None:
             fgc_report = fgc_concentration_report_from_projections(self.projection_cache)
-            status_map = {c.conglomerate_name: c.current_status for c in fgc_report.conglomerates}
             projection_map = {p.investment.id: p for p in self.projection_cache}
+            status_by_investment = {
+                inv_exposure.investment_id: c.current_status
+                for c in fgc_report.conglomerates
+                for inv_exposure in c.investments
+            }
 
         for row, inv in enumerate(visible):
             proj = projection_map.get(inv.id)
@@ -397,7 +401,7 @@ class MainWindow(QMainWindow):
                 row, inv,
                 current_value=proj.current_value if proj else None,
                 projected_value=proj.gross_at_maturity if proj else None,
-                fgc_status=status_map.get(inv.issuer.conglomerate),
+                fgc_status=status_by_investment.get(inv.id),
                 highlight=(inv.issuer.id == highlight_issuer_id),
             )
         # setValue clamps to the scrollbar's valid range, so scroll_y past the
