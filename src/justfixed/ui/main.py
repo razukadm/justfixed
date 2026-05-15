@@ -385,14 +385,21 @@ class MainWindow(QMainWindow):
         self._table.setRowCount(len(visible))
 
         status_map: dict[str, ExposureStatus] = {}
+        projection_map: dict[uuid.UUID, ProjectionResult] = {}
         if self.projection_cache is not None:
             fgc_report = fgc_concentration_report_from_projections(self.projection_cache)
             status_map = {c.conglomerate_name: c.current_status for c in fgc_report.conglomerates}
+            projection_map = {p.investment.id: p for p in self.projection_cache}
 
         for row, inv in enumerate(visible):
-            self._populate_row(row, inv, current_value=None, projected_value=None,
-                               fgc_status=status_map.get(inv.issuer.conglomerate),
-                               highlight=(inv.issuer.id == highlight_issuer_id))
+            proj = projection_map.get(inv.id)
+            self._populate_row(
+                row, inv,
+                current_value=proj.current_value if proj else None,
+                projected_value=proj.gross_at_maturity if proj else None,
+                fgc_status=status_map.get(inv.issuer.conglomerate),
+                highlight=(inv.issuer.id == highlight_issuer_id),
+            )
         # setValue clamps to the scrollbar's valid range, so scroll_y past the
         # new content end (e.g. after Clear DB or Hide-matured toggle) is safe.
         self._table.verticalScrollBar().setValue(scroll_y)

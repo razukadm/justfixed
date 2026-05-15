@@ -110,6 +110,49 @@ class TestRefreshTableCacheAwareness:
             highlight=False,
         )
 
+    def test_refresh_table_populates_current_and_projected_from_cache(self) -> None:
+        self_mock = self._make_self_mock()
+        inv_id = uuid.uuid4()
+
+        fake_inv = MagicMock()
+        fake_inv.id = inv_id
+        fake_inv.issuer.conglomerate = "Banco X S.A."
+
+        other_inv = MagicMock()
+        other_inv.id = uuid.uuid4()
+        other_inv.issuer.conglomerate = "Banco Y S.A."
+
+        self_mock.visible_investments.return_value = [fake_inv, other_inv]
+
+        fake_proj = MagicMock()
+        fake_proj.investment.id = inv_id
+        fake_proj.current_value = MagicMock(name="current_value")
+        fake_proj.gross_at_maturity = MagicMock(name="gross_at_maturity")
+
+        fake_report = MagicMock()
+        fake_report.conglomerates = []
+        self_mock.projection_cache = [fake_proj]
+
+        with patch("justfixed.ui.main.fgc_concentration_report_from_projections",
+                   return_value=fake_report):
+            MainWindow.refresh_table(self_mock)
+
+        calls = self_mock._populate_row.call_args_list
+        assert calls[0] == call(
+            0, fake_inv,
+            current_value=fake_proj.current_value,
+            projected_value=fake_proj.gross_at_maturity,
+            fgc_status=None,
+            highlight=False,
+        )
+        assert calls[1] == call(
+            1, other_inv,
+            current_value=None,
+            projected_value=None,
+            fgc_status=None,
+            highlight=False,
+        )
+
 
 class TestRefreshTableHighlight:
     def _make_self_mock(self) -> MagicMock:
