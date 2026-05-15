@@ -162,4 +162,4 @@ class TestConglomerateEditDelegateSave:
 
         assert inv.issuer.conglomerate == "New Conglomerate"
         mock_logging.warning.assert_called_once()
-        delegate._main_window._refresh_table.assert_called_once()
+        delegate._main_window._trigger_conglomerate_highlight.assert_called_once_with(inv.issuer.id)

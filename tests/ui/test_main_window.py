@@ -11,6 +11,7 @@ from __future__ import annotations
 import uuid
 from unittest.mock import MagicMock, call, patch
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QMessageBox
 
 from justfixed.engine.fgc import ExposureStatus
@@ -154,3 +155,38 @@ class TestRefreshTableHighlight:
             fgc_status=None,
             highlight=False,
         )
+
+
+class TestTriggerConglomerateHighlight:
+    def test_trigger_highlight_cancels_existing_timer(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        old_timer = MagicMock(spec=QTimer)
+        self_mock._highlight_timer = old_timer
+
+        with patch("justfixed.ui.main.QTimer"):
+            MainWindow._trigger_conglomerate_highlight(self_mock, uuid.uuid4())
+
+        old_timer.stop.assert_called_once()
+
+    def test_trigger_highlight_calls_refresh_with_id(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._highlight_timer = None
+        issuer_id = uuid.uuid4()
+
+        with patch("justfixed.ui.main.QTimer"):
+            MainWindow._trigger_conglomerate_highlight(self_mock, issuer_id)
+
+        self_mock._refresh_table.assert_called_once_with(highlight_issuer_id=issuer_id)
+
+    def test_trigger_highlight_schedules_clear_after_3000ms(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._highlight_timer = None
+
+        with patch("justfixed.ui.main.QTimer") as MockQTimer:
+            mock_timer = MagicMock(spec=QTimer)
+            MockQTimer.return_value = mock_timer
+            MainWindow._trigger_conglomerate_highlight(self_mock, uuid.uuid4())
+
+        mock_timer.setSingleShot.assert_called_once_with(True)
+        mock_timer.setInterval.assert_called_once_with(3000)
+        mock_timer.start.assert_called_once()

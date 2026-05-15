@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QLocale, QStandardPaths, QStringListModel, Qt, QThread, Signal
+from PySide6.QtCore import QDate, QLocale, QStandardPaths, QStringListModel, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication,
@@ -231,7 +231,7 @@ class ConglomerateEditDelegate(QStyledItemDelegate):
                 issuer.name,
             )
 
-        self._main_window._refresh_table()
+        self._main_window._trigger_conglomerate_highlight(issuer.id)
 
     def updateEditorGeometry(self, editor, option, index) -> None:
         editor.setGeometry(option.rect)
@@ -267,6 +267,7 @@ class MainWindow(QMainWindow):
         # whole point. Future invalidations when those features exist: investment
         # add/edit/delete, assumed-CDI/IPCA change.
         self._projection_cache: list[ProjectionResult] | None = None
+        self._highlight_timer: QTimer | None = None  # keeps highlight timer alive for cancellation
         self._worker: QThread | None = None  # keeps worker alive during run
 
         self._build_ui()
@@ -444,6 +445,25 @@ class MainWindow(QMainWindow):
         self._export_btn.setEnabled(
             any(inv.maturity_date >= today for inv in self._investments)
         )
+
+    def _trigger_conglomerate_highlight(self, issuer_id: uuid.UUID) -> None:
+        """Highlight all rows for issuer_id for 3 seconds, then snap back.
+
+        Cancels any in-flight highlight before starting a new one. If the
+        prior timer's queued callback fires after cancellation (race window
+        measured in microseconds), the worst outcome is a spurious clear-
+        refresh — safe but visible. Fix if ever observed: disconnect before
+        stop.
+        """
+        if self._highlight_timer is not None:
+            self._highlight_timer.stop()
+        self._refresh_table(highlight_issuer_id=issuer_id)
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.setInterval(3000)
+        timer.timeout.connect(lambda: self._refresh_table(highlight_issuer_id=None))
+        timer.start()
+        self._highlight_timer = timer
 
     def _on_hide_matured_toggled(self, checked: bool) -> None:
         self._hide_matured = checked
