@@ -14,6 +14,7 @@ Financial expected values:
 
 from __future__ import annotations
 
+import pytest
 from datetime import date
 from decimal import Decimal
 
@@ -28,6 +29,7 @@ from justfixed.engine.fgc import (
     FGCReport,
     InvestmentExposure,
     fgc_concentration_report,
+    fgc_concentration_report_from_projections,
 )
 from justfixed.engine.projection import project
 
@@ -301,3 +303,43 @@ def test_fgc_concentration_report_propagates_assumed_ipca() -> None:
     exposure = report.conglomerates[0]
     assert exposure.conglomerate_name == "GRUPO IPCA"
     assert exposure.current_exposure == direct.current_value
+
+
+# ── Group G: fgc_concentration_report_from_projections ───────────────────────
+
+def test_from_projections_empty_returns_empty_report() -> None:
+    report = fgc_concentration_report_from_projections([])
+    assert report.conglomerates == []
+    assert report.total_current_exposure == Money.zero()
+
+
+def test_from_projections_single_conglomerate_sums_exposure() -> None:
+    # Two CDBs at R$80k each → R$160k current exposure (UNDER).
+    # as_of == PURCHASE so current_value == principal exactly — no accrual math.
+    # Verify result matches fgc_concentration_report called with the same data.
+    bank = _bank("Banco Inter", "Banco Inter S.A.")
+    inv_a = _cdb(bank, "80000", date(2026, 1, 2))
+    inv_b = _cdb(bank, "80000", date(2027, 1, 2))
+    projections = [
+        project(inv, as_of=PURCHASE, assumed_cdi=ASSUMED_CDI)
+        for inv in [inv_a, inv_b]
+    ]
+    report = fgc_concentration_report_from_projections(projections)
+    assert len(report.conglomerates) == 1
+    c = report.conglomerates[0]
+    assert c.conglomerate_name == "Banco Inter S.A."
+    assert c.current_exposure == Money.from_reais("160000")
+    assert c.current_status == ExposureStatus.UNDER
+
+    # Cross-check: the classic function returns the same exposure.
+    classic = fgc_concentration_report([inv_a, inv_b], as_of=PURCHASE, assumed_cdi=ASSUMED_CDI)
+    assert classic.conglomerates[0].current_exposure == c.current_exposure
+
+
+def test_from_projections_mismatched_as_of_raises() -> None:
+    bank = _bank("Banco Mismatch", "Banco Mismatch S.A.")
+    inv = _cdb(bank, "50000", date(2026, 1, 2))
+    proj_a = project(inv, as_of=PURCHASE, assumed_cdi=ASSUMED_CDI)
+    proj_b = project(inv, as_of=date(2025, 6, 1), assumed_cdi=ASSUMED_CDI)
+    with pytest.raises(ValueError):
+        fgc_concentration_report_from_projections([proj_a, proj_b])

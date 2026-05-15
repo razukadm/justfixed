@@ -151,52 +151,45 @@ def fgc_concentration_report(
         for inv in fgc_investments
     ]
 
-    # Step 3 — Group by conglomerate name.
-    groups: dict[str, list[tuple[Investment, ProjectionResult]]] = defaultdict(list)
-    for inv, proj in zip(fgc_investments, projections):
-        groups[inv.issuer.conglomerate].append((inv, proj))
+    return _build_report_from_projections(projections, as_of)
 
-    # Step 4 — Build one ConglomerateExposure per group.
-    conglomerate_list: list[ConglomerateExposure] = []
-    for cname, pairs in groups.items():
-        # Sort investments by maturity_date ascending (natural order for the
-        # future timeline view; not currently asserted but pinned here).
-        pairs_sorted = sorted(pairs, key=lambda p: p[0].maturity_date)
 
-        inv_exposures = [
-            InvestmentExposure(
-                investment_id=inv.id,
-                issuer_name=inv.issuer.name,
-                product=inv.product,
-                purchase_date=inv.purchase_date,
-                maturity_date=inv.maturity_date,
-                principal=inv.principal,
-                current_value=proj.current_value,
-                peak_value=proj.gross_at_maturity,
-            )
-            for inv, proj in pairs_sorted
-        ]
+def fgc_concentration_report_from_projections(
+    projections: list[ProjectionResult],
+) -> FGCReport:
+    """Compute FGC concentration exposure from already-projected results.
 
-        current_exposure = _sum_money(e.current_value for e in inv_exposures)
-        peak_exposure    = _sum_money(e.peak_value    for e in inv_exposures)
+    Use this when projections are already computed and cached to avoid
+    re-projecting on a conglomerate rename. Equivalent to
+    fgc_concentration_report but consumes current_value from each
+    ProjectionResult directly instead of calling project() internally.
 
-        conglomerate_list.append(ConglomerateExposure(
-            conglomerate_name=cname,
-            investments=inv_exposures,
-            current_exposure=current_exposure,
-            peak_exposure=peak_exposure,
-            current_status=_classify_status(current_exposure),
-            peak_status=_classify_status(peak_exposure),
-            is_unverified=cname.startswith(UNVERIFIED_CONGLOMERATE_PREFIX),
-        ))
+    Args:
+        projections: Already-computed projection results. Treasury holdings
+            are filtered out internally. Pass all cached projections.
 
-    # Step 5 — Sort by current_exposure descending; alphabetical name as the
-    # explicit tiebreaker (not relying on dict/sort stability alone).
-    conglomerate_list.sort(
-        key=lambda c: (-c.current_exposure.amount, c.conglomerate_name)
-    )
+    Returns:
+        FGCReport with conglomerates sorted by current_exposure descending.
+        as_of is taken from the projections' shared as_of date.
 
-    return FGCReport(conglomerates=conglomerate_list, as_of=as_of)
+    Raises:
+        ValueError: If projections have more than one distinct as_of date.
+    """
+    if not projections:
+        return FGCReport(conglomerates=[], as_of=date.today())
+
+    as_of_dates = {p.as_of for p in projections}
+    if len(as_of_dates) > 1:
+        raise ValueError(
+            f"All projections must share the same as_of date; got {sorted(as_of_dates)}"
+        )
+    as_of = next(iter(as_of_dates))
+
+    fgc_projections = [
+        p for p in projections
+        if p.investment.issuer.kind != IssuerKind.TREASURY
+    ]
+    return _build_report_from_projections(fgc_projections, as_of)
 
 
 # ── Private helpers ───────────────────────────────────────────────────────────
@@ -214,3 +207,55 @@ def _sum_money(amounts: Iterable[Money]) -> Money:
     for amount in amounts:
         total = total + amount
     return total
+
+
+def _build_report_from_projections(
+    projections: list[ProjectionResult],
+    as_of: date,
+) -> FGCReport:
+    """Aggregate already-filtered, already-projected results into an FGCReport.
+
+    Treasury filtering must be done by the caller before passing projections.
+    """
+    if not projections:
+        return FGCReport(conglomerates=[], as_of=as_of)
+
+    groups: dict[str, list[ProjectionResult]] = defaultdict(list)
+    for proj in projections:
+        groups[proj.investment.issuer.conglomerate].append(proj)
+
+    conglomerate_list: list[ConglomerateExposure] = []
+    for cname, projs in groups.items():
+        projs_sorted = sorted(projs, key=lambda p: p.investment.maturity_date)
+
+        inv_exposures = [
+            InvestmentExposure(
+                investment_id=proj.investment.id,
+                issuer_name=proj.investment.issuer.name,
+                product=proj.investment.product,
+                purchase_date=proj.investment.purchase_date,
+                maturity_date=proj.investment.maturity_date,
+                principal=proj.investment.principal,
+                current_value=proj.current_value,
+                peak_value=proj.gross_at_maturity,
+            )
+            for proj in projs_sorted
+        ]
+
+        current_exposure = _sum_money(e.current_value for e in inv_exposures)
+        peak_exposure    = _sum_money(e.peak_value    for e in inv_exposures)
+
+        conglomerate_list.append(ConglomerateExposure(
+            conglomerate_name=cname,
+            investments=inv_exposures,
+            current_exposure=current_exposure,
+            peak_exposure=peak_exposure,
+            current_status=_classify_status(current_exposure),
+            peak_status=_classify_status(peak_exposure),
+            is_unverified=cname.startswith(UNVERIFIED_CONGLOMERATE_PREFIX),
+        ))
+
+    conglomerate_list.sort(
+        key=lambda c: (-c.current_exposure.amount, c.conglomerate_name)
+    )
+    return FGCReport(conglomerates=conglomerate_list, as_of=as_of)
