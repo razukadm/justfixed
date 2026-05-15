@@ -8,7 +8,8 @@ no QApplication or database setup is needed.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import uuid
+from unittest.mock import MagicMock, call, patch
 
 from PySide6.QtWidgets import QMessageBox
 
@@ -88,6 +89,7 @@ class TestRefreshTableCacheAwareness:
             current_value=None,
             projected_value=None,
             fgc_status=ExposureStatus.APPROACHING,
+            highlight=False,
         )
 
     def test_refresh_table_without_cache_passes_none_fgc_status(self) -> None:
@@ -103,4 +105,52 @@ class TestRefreshTableCacheAwareness:
             current_value=None,
             projected_value=None,
             fgc_status=None,
+            highlight=False,
+        )
+
+
+class TestRefreshTableHighlight:
+    def _make_self_mock(self) -> MagicMock:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._repo = MagicMock()
+        self_mock._table = MagicMock()
+        self_mock._stack = MagicMock()
+        self_mock._projection_cache = None
+        return self_mock
+
+    def test_refresh_table_highlights_matching_issuer_rows(self) -> None:
+        self_mock = self._make_self_mock()
+        matching_id = uuid.uuid4()
+
+        matching_inv = MagicMock()
+        matching_inv.issuer.id = matching_id
+        matching_inv.issuer.conglomerate = "Banco A S.A."
+
+        other_inv = MagicMock()
+        other_inv.issuer.id = uuid.uuid4()
+        other_inv.issuer.conglomerate = "Banco B S.A."
+
+        self_mock._visible_investments.return_value = [matching_inv, other_inv]
+
+        MainWindow._refresh_table(self_mock, highlight_issuer_id=matching_id)
+
+        calls = self_mock._populate_row.call_args_list
+        assert calls[0] == call(0, matching_inv, current_value=None, projected_value=None,
+                                fgc_status=None, highlight=True)
+        assert calls[1] == call(1, other_inv, current_value=None, projected_value=None,
+                                fgc_status=None, highlight=False)
+
+    def test_refresh_table_no_highlight_when_id_is_none(self) -> None:
+        self_mock = self._make_self_mock()
+        fake_inv = MagicMock()
+        self_mock._visible_investments.return_value = [fake_inv]
+
+        MainWindow._refresh_table(self_mock)
+
+        self_mock._populate_row.assert_called_once_with(
+            0, fake_inv,
+            current_value=None,
+            projected_value=None,
+            fgc_status=None,
+            highlight=False,
         )

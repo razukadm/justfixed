@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import uuid
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -84,6 +85,8 @@ _FGC_COLORS: dict[ExposureStatus, tuple[QColor, str]] = {
     ExposureStatus.APPROACHING: (QColor("#e67e22"), "● APPROACHING"),
     ExposureStatus.OVER:        (QColor("#e74c3c"), "● OVER"),
 }
+
+_HIGHLIGHT_COLOR = QColor("#FFF8DC")
 
 
 # ── Background workers ────────────────────────────────────────────────────────
@@ -355,7 +358,7 @@ class MainWindow(QMainWindow):
 
     # ── Table ─────────────────────────────────────────────────────────────────
 
-    def _refresh_table(self) -> None:
+    def _refresh_table(self, highlight_issuer_id: uuid.UUID | None = None) -> None:
         """Reload all investments from DB and repopulate the table."""
         self._investments = self._repo.list_all()
         visible = self._visible_investments()
@@ -368,7 +371,8 @@ class MainWindow(QMainWindow):
 
         for row, inv in enumerate(visible):
             self._populate_row(row, inv, current_value=None, projected_value=None,
-                               fgc_status=status_map.get(inv.issuer.conglomerate))
+                               fgc_status=status_map.get(inv.issuer.conglomerate),
+                               highlight=(inv.issuer.id == highlight_issuer_id))
         self._stack.setCurrentIndex(0 if self._investments else 1)
         self._update_button_states()
 
@@ -386,6 +390,7 @@ class MainWindow(QMainWindow):
         current_value: Money | None,
         projected_value: Money | None,
         fgc_status: ExposureStatus | None,
+        highlight: bool = False,
     ) -> None:
         self._cell(row, _COL_ISSUER, inv.issuer.name)
 
@@ -423,6 +428,12 @@ class MainWindow(QMainWindow):
             badge.setForeground(color)
         badge.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self._table.setItem(row, _COL_FGC, badge)
+
+        if highlight:
+            for col in range(_NCOLS):
+                item = self._table.item(row, col)
+                if item is not None:
+                    item.setBackground(_HIGHLIGHT_COLOR)
 
     def _cell(self, row: int, col: int, text: str) -> None:
         self._table.setItem(row, col, QTableWidgetItem(text))
