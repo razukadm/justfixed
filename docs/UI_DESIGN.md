@@ -274,7 +274,7 @@ Specifically:
 - **Projection:** `engine/projection.project(investment, as_of, assumed_cdi, assumed_ipca)`
   per row. Both assumed-rate kwargs are required when the portfolio
   contains the corresponding rate types.
-- **FGC:** Two call paths. Initial projection: `_ProjectWorker` calls `fgc_concentration_report_from_projections(results)` over its already-computed `ProjectionResult` list (projects once, no double-projection). Cache-aware refresh after conglomerate edits: `_refresh_table` calls the same function over `_projection_cache`. The original `fgc_concentration_report(investments, as_of, assumed_cdi, assumed_ipca)` remains the public API for callers without pre-computed projections.
+- **FGC:** Two call paths. Initial projection: `_ProjectWorker` calls `fgc_concentration_report_from_projections(results)` over its already-computed `ProjectionResult` list (projects once, no double-projection). Cache-aware refresh after conglomerate edits: `refresh_table` calls the same function over `projection_cache`. The original `fgc_concentration_report(investments, as_of, assumed_cdi, assumed_ipca)` remains the public API for callers without pre-computed projections.
 - **Calendar export:** `exports/calendar.export(...)` (signature per
   `exports/calendar.py`).
 

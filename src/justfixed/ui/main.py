@@ -203,7 +203,7 @@ class ConglomerateEditDelegate(QStyledItemDelegate):
             )
             return
 
-        visible = self._main_window._visible_investments()
+        visible = self._main_window.visible_investments()
         issuer = visible[index.row()].issuer
 
         old_string = issuer.conglomerate  # captured for session 2 signal emit
@@ -229,7 +229,7 @@ class ConglomerateEditDelegate(QStyledItemDelegate):
                 issuer.name,
             )
 
-        self._main_window._trigger_conglomerate_highlight(issuer.id)
+        self._main_window.trigger_conglomerate_highlight(issuer.id)
 
     def updateEditorGeometry(self, editor, option, index) -> None:
         editor.setGeometry(option.rect)
@@ -252,24 +252,24 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(None, "Database error", str(exc))
             sys.exit(1)
 
-        # Loaded investments — only mutated by _refresh_table(), never by
+        # Loaded investments — only mutated by refresh_table(), never by
         # error handlers, so a failed import/project leaves the previous
         # list intact and _set_busy(False) re-enables buttons correctly.
         self._investments: list = []
         self._hide_matured: bool = True
         self._has_projected: bool = False
-        # _projection_cache holds the most recent projection results. It's used to
+        # projection_cache holds the most recent projection results. It's used to
         # update FGC badges on conglomerate edits without forcing a re-projection.
         # Invalidated on: project completion (replaced), import done, Clear DB,
         # Hide matured toggle. Conglomerate edits do NOT invalidate — that's the
         # whole point. Future invalidations when those features exist: investment
         # add/edit/delete, assumed-CDI/IPCA change.
-        self._projection_cache: list[ProjectionResult] | None = None
+        self.projection_cache: list[ProjectionResult] | None = None
         self._highlight_timer: QTimer | None = None  # keeps highlight timer alive for cancellation
         self._worker: QThread | None = None  # keeps worker alive during run
 
         self._build_ui()
-        self._refresh_table()
+        self.refresh_table()
 
     # ── Layout ────────────────────────────────────────────────────────────────
 
@@ -357,16 +357,16 @@ class MainWindow(QMainWindow):
 
     # ── Table ─────────────────────────────────────────────────────────────────
 
-    def _refresh_table(self, highlight_issuer_id: uuid.UUID | None = None) -> None:
+    def refresh_table(self, highlight_issuer_id: uuid.UUID | None = None) -> None:
         """Reload all investments from DB and repopulate the table."""
         self._investments = self._repo.list_all()
-        visible = self._visible_investments()
+        visible = self.visible_investments()
         scroll_y = self._table.verticalScrollBar().value()
         self._table.setRowCount(len(visible))
 
         status_map: dict[str, ExposureStatus] = {}
-        if self._projection_cache is not None:
-            fgc_report = fgc_concentration_report_from_projections(self._projection_cache)
+        if self.projection_cache is not None:
+            fgc_report = fgc_concentration_report_from_projections(self.projection_cache)
             status_map = {c.conglomerate_name: c.current_status for c in fgc_report.conglomerates}
 
         for row, inv in enumerate(visible):
@@ -379,7 +379,7 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(0 if self._investments else 1)
         self._update_button_states()
 
-    def _visible_investments(self) -> list:
+    def visible_investments(self) -> list:
         if not self._hide_matured:
             return self._investments
         today = date.today()
@@ -448,7 +448,7 @@ class MainWindow(QMainWindow):
             any(inv.maturity_date >= today for inv in self._investments)
         )
 
-    def _trigger_conglomerate_highlight(self, issuer_id: uuid.UUID) -> None:
+    def trigger_conglomerate_highlight(self, issuer_id: uuid.UUID) -> None:
         """Highlight all rows for issuer_id for 3 seconds, then snap back.
 
         Cancels any in-flight highlight before starting a new one. If the
@@ -459,18 +459,18 @@ class MainWindow(QMainWindow):
         """
         if self._highlight_timer is not None:
             self._highlight_timer.stop()
-        self._refresh_table(highlight_issuer_id=issuer_id)
+        self.refresh_table(highlight_issuer_id=issuer_id)
         timer = QTimer(self)
         timer.setSingleShot(True)
         timer.setInterval(3000)
-        timer.timeout.connect(lambda: self._refresh_table(highlight_issuer_id=None))
+        timer.timeout.connect(lambda: self.refresh_table(highlight_issuer_id=None))
         timer.start()
         self._highlight_timer = timer
 
     def _on_hide_matured_toggled(self, checked: bool) -> None:
         self._hide_matured = checked
-        self._projection_cache = None
-        self._refresh_table()
+        self.projection_cache = None
+        self.refresh_table()
         if self._has_projected:
             self._on_project_clicked()
 
@@ -491,8 +491,8 @@ class MainWindow(QMainWindow):
             return
         deleted_investments, _ = self._repo.delete_all()
         self._has_projected = False
-        self._projection_cache = None
-        self._refresh_table()
+        self.projection_cache = None
+        self.refresh_table()
         self.statusBar().showMessage(f"Cleared {deleted_investments} investments.", 6000)
 
     def _on_cell_double_clicked(self, row: int, column: int) -> None:
@@ -528,11 +528,11 @@ class MainWindow(QMainWindow):
             f"({result.inserted} new, {result.skipped} unchanged)."
         )
         self._has_projected = False
-        self._projection_cache = None
-        self._refresh_table()
+        self.projection_cache = None
+        self.refresh_table()
 
     def _on_import_error(self, message: str) -> None:
-        # _investments unchanged — failed import did not reach _refresh_table().
+        # _investments unchanged — failed import did not reach refresh_table().
         self._set_busy(False)
         self._status_label.setText("Ready.")
         QMessageBox.critical(self, "Import failed", message)
@@ -542,7 +542,7 @@ class MainWindow(QMainWindow):
     def _on_project_clicked(self) -> None:
         self._set_busy(True)
 
-        self._worker = _ProjectWorker(self._visible_investments())
+        self._worker = _ProjectWorker(self.visible_investments())
         self._worker.finished.connect(self._on_project_done)
         self._worker.error.connect(self._on_project_error)
         self._worker.start()
@@ -565,7 +565,7 @@ class MainWindow(QMainWindow):
             f"Projected {len(results)} investments as of {date.today():%d/%m/%Y}.", 6000
         )
         self._has_projected = True
-        self._projection_cache = results
+        self.projection_cache = results
 
     def _on_project_error(self, message: str) -> None:
         self._set_busy(False)
@@ -583,7 +583,7 @@ class MainWindow(QMainWindow):
             return
         try:
             ics = export_maturity_calendar(
-                self._visible_investments(), as_of=date.today(), assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA
+                self.visible_investments(), as_of=date.today(), assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA
             )
             Path(path_str).write_bytes(ics)
             self.statusBar().showMessage(f"Calendar exported to {path_str}.", 8000)

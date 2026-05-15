@@ -108,7 +108,7 @@ def _make_inv(name: str = "Foo", conglomerate: str = "[unverified] Foo") -> Magi
 class TestConglomerateEditDelegateSave:
     def test_accept_writes_to_both_repos_in_order(self, delegate) -> None:
         inv = _make_inv()
-        delegate._main_window._visible_investments.return_value = [inv]
+        delegate._main_window.visible_investments.return_value = [inv]
         index = MagicMock()
         index.row.return_value = 0
 
@@ -127,7 +127,7 @@ class TestConglomerateEditDelegateSave:
 
     def test_issuer_save_failure_aborts_curation_write(self, delegate) -> None:
         inv = _make_inv()
-        delegate._main_window._visible_investments.return_value = [inv]
+        delegate._main_window.visible_investments.return_value = [inv]
         index = MagicMock()
         index.row.return_value = 0
 
@@ -147,7 +147,7 @@ class TestConglomerateEditDelegateSave:
 
     def test_curation_failure_does_not_rollback_issuer_save(self, delegate) -> None:
         inv = _make_inv()
-        delegate._main_window._visible_investments.return_value = [inv]
+        delegate._main_window.visible_investments.return_value = [inv]
         index = MagicMock()
         index.row.return_value = 0
 
@@ -162,4 +162,4 @@ class TestConglomerateEditDelegateSave:
 
         assert inv.issuer.conglomerate == "New Conglomerate"
         mock_logging.warning.assert_called_once()
-        delegate._main_window._trigger_conglomerate_highlight.assert_called_once_with(inv.issuer.id)
+        delegate._main_window.trigger_conglomerate_highlight.assert_called_once_with(inv.issuer.id)
