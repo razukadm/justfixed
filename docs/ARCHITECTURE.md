@@ -11,14 +11,14 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Layer | Status | Test count |
 |---|---|---|
 | Domain | Complete | 153 |
-| Persistence | Complete | 83 |
-| Engine | Complete | 132 |
+| Persistence | Complete | 86 |
+| Engine | Complete | 135 |
 | Importer (parser, mapper) | Complete | 80 |
 | Importer (loader / DB persistence) | Complete | 14 |
-| UI (PySide6) | A′-plus complete (read-only viewer + dev tooling) | 0 |
+| UI (PySide6) | B′ complete (curation, reactivity, highlight) | 17 |
 | Exports (calendar / ICS) | Complete | 9 |
 
-471 tests pass in ~5 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+494 tests pass in ~4 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -237,6 +237,8 @@ Behavior at edges:
 
 Computes per-conglomerate FGC exposure. Given a list of investments and an as-of date, returns an `FGCReport` listing each conglomerate's current and peak gross exposure with status flags (under, approaching, over the R$250k limit). Treasury holdings are filtered out (FGC doesn't cover sovereign debt). Investments are grouped by `issuer.conglomerate`; issuers whose conglomerate begins with `UNVERIFIED_CONGLOMERATE_PREFIX` are flagged as needing human review. Peak exposure is a deliberate conservative overestimate — each investment's value at its own maturity, summed; simultaneous peaks are physically impossible but the false positive is safe.
 
+The engine exposes two FGC report functions. `fgc_concentration_report(investments, as_of, assumed_cdi)` is the original API: takes raw investments, projects each internally, aggregates. `fgc_concentration_report_from_projections(projections)` takes already-computed `ProjectionResult` instances and aggregates without re-projecting. Both produce the same `FGCReport` and share their aggregation logic via the private helper `_build_report_from_projections`. The UI uses the second function from two call sites: `_ProjectWorker` (project once, FGC over results) and `_refresh_table` (FGC over cached projections after a conglomerate edit). The first function remains for callers that don't have projections pre-computed.
+
 ---
 
 ## Importers (`src/justfixed/importers/`)
@@ -300,7 +302,7 @@ If no existing issuer matches, the loader creates one. The create path branches 
 
 The loader has only one piece of issuer information: the parser-emitted name. It can't know whether `"BMG"` and `"PAN"` belong to the same conglomerate, or whether `"CEF"` is part of a holding company. So new commercial-bank issuers are created with `conglomerate=f"[unverified] {name}"` — a string convention that signals "this needs human review."
 
-The FGC concentration check (`engine/fgc.py`) surfaces these for the user to merge into real conglomerates. Until that merge happens, the prefix is honest about what we don't know. When the user does merge (via the curation UI, milestone B′ — not yet built), the merge writes to curation memory, and re-importing the same statement preserves the merge. This is a string convention, not a schema constraint, so future migration to a nullable conglomerate field is a one-line UPDATE.
+The FGC concentration check (`engine/fgc.py`) surfaces these for the user to merge into real conglomerates. Until that merge happens, the prefix is honest about what we don't know. When the user does merge (via the curation UI, milestone B′ — shipped), the merge writes to curation memory, and re-importing the same statement preserves the merge. This is a string convention, not a schema constraint, so future migration to a nullable conglomerate field is a one-line UPDATE.
 
 The constant `UNVERIFIED_CONGLOMERATE_PREFIX` lives in `domain/issuer.py` and is imported by both the loader (writing) and the FGC engine (reading).
 
@@ -362,21 +364,21 @@ Design choices:
 
 ### `main.py`
 
-PySide6 single-window desktop application. Imports an XP statement, displays investments in a read-only table with per-row FGC concentration badges, projects current values as of today, and exports the maturity calendar to an `.ics` file. Background work (statement loading, projection) runs on `QThread` workers; a single `_set_busy` guard prevents overlapping operations. Empty state (no investments loaded) swaps the table for a centered prompt via `QStackedWidget`.
+PySide6 single-window desktop application. Imports an XP statement, displays investments in a table with per-row FGC concentration badges and an inline-editable Conglomerate column (B′ curation), projects current values as of today, and exports the maturity calendar to an `.ics` file. Background work (statement loading, projection) runs on `QThread` workers; a single `_set_busy` guard prevents overlapping operations. Empty state (no investments loaded) swaps the table for a centered prompt via `QStackedWidget`.
 
 The module imports from `domain`, `persistence`, `engine.projection`, `engine.fgc`, `exports.calendar`, and `importers.xp_loader`. It introduces no new architectural layer between itself and those — direct calls, no service or presenter layer.
 
 CDI is hardcoded as a module-level constant (`_ASSUMED_CDI`) for postfixed-rate projections. Replace with the current Selic/CDI value at each rebuild until ROADMAP B10 (real index data fetching) is implemented.
 
-This module has no automated tests by deliberate design — UI verification is the human "build, run, look at it" loop, per `docs/UI_DESIGN.md`. Backend changes touched by UI work are still tested at the engine/persistence level.
+UI tests live in `tests/ui/` and use a "real method, MagicMock self" pattern: actual `MainWindow` or `ConglomerateEditDelegate` methods are called with a `MagicMock(spec=...)` stand-in for `self`, avoiding Qt window instantiation entirely. Layout and interaction verification remains a human "build, run, look at it" loop.
 
-See `docs/UI_DESIGN.md` for the design rationale, milestone A′ scope, and the deferred B′/C′ surfaces (curation, manual-entry form, projection detail view).
+See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′ shipped; C′ deferred — manual-entry form, projection detail view).
 
 ---
 
 ## Test discipline
 
-**471 tests, ~5 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**494 tests, ~4 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
@@ -468,7 +470,7 @@ The project uses what's in `pyproject.toml` and nothing else. Don't add a new de
 
 In rough order:
 
-1. **UI — milestone B′ (curation)** — extend `ui/main.py` to support reviewing and editing `[unverified]` conglomerate values inline, with autocomplete from existing DB values. Resolves the deferred contract created by the loader's `[unverified]` prefix convention. See `docs/UI_DESIGN.md`. ~2-3 sessions.
+1. **UI — milestone B′ companion (filter and totals)** — text filter narrowing the table by issuer/conglomerate name; totals panel showing aggregate principal, current value, projected value across visible investments. Depends on B′ curation (shipped) to make the conglomerate namespace clean enough for filtering to be useful. ~1-2 sessions.
 2. **UI — milestone C′ (manual entry, detail view)** — manual-entry form for investments outside XP statements, per-investment detail view (accrual breakdown, IR tax, net at maturity). ~3-4 sessions.
 3. **Windows installer** — PyInstaller + Inno Setup. 1-2 sessions.
 

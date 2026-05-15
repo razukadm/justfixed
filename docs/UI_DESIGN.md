@@ -274,9 +274,7 @@ Specifically:
 - **Projection:** `engine/projection.project(investment, as_of, assumed_cdi, assumed_ipca)`
   per row. Both assumed-rate kwargs are required when the portfolio
   contains the corresponding rate types.
-- **FGC:** `engine/fgc.fgc_concentration_report(investments, as_of, assumed_cdi, assumed_ipca)`
-  once, then look up each row's conglomerate in the report. Both
-  assumed-rate kwargs forward to the internal projection calls.
+- **FGC:** Two call paths. Initial projection: `_ProjectWorker` calls `fgc_concentration_report_from_projections(results)` over its already-computed `ProjectionResult` list (projects once, no double-projection). Cache-aware refresh after conglomerate edits: `_refresh_table` calls the same function over `_projection_cache`. The original `fgc_concentration_report(investments, as_of, assumed_cdi, assumed_ipca)` remains the public API for callers without pre-computed projections.
 - **Calendar export:** `exports/calendar.export(...)` (signature per
   `exports/calendar.py`).
 
@@ -455,9 +453,9 @@ deliberately left for a future polish pass:
   Deliberate: buttons reflect DB state, the filter reflects view
   state.
 
-### Curation — milestone B′
+### Curation — milestone B′ (shipped)
 
-Inline conglomerate editing. Model: **string editing only, no
+**Shipped** (commits `a60ba63`, `8938820`, `a65ff19`, `578a186`, `68cb88a`, `d7435c9`, `cb5255d`, `7052f2f`, `29c8513`, `95eaa6f`, `3a4857f`). Inline conglomerate editing. Model: **string editing only, no
 verified flag.** The `[unverified]` prefix is the verification
 state — its presence or absence in the conglomerate string is the
 truth. To verify a row, the user edits the string and removes the

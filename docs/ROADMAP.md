@@ -24,26 +24,8 @@ careful pace this project uses (2–4 hours each).
 
 ### 1. UI — PySide6
 
-**Status:** Milestone A′ complete (commit `ad05ad4`). See
-`docs/UI_DESIGN.md` for what shipped and what's deferred.
-
-**A′ — shipped.** One-window read-only app: import XP statement,
-investment table with per-row FGC badges, project as of today,
-export maturity calendar to .ics.
-
-**A′-plus — shipped** (commits `27541bb`, `6d26697`, `28becc8`,
-`0099c02`, `897e66e`, `f975aad`, `1582ee5`). Three UI additions:
-Clear DB button (dev-flag gated), Projected Value column (net at
-maturity), Hide matured toggle. Plus four loader/domain/parser
-fixes surfaced during testing (BDMG issuer kind, LCA-from-dev-bank
-rule, ProductRule generalization, parser section terminators).
-See `docs/UI_DESIGN.md` § "Deferred from A′" for specs.
-
-**B′ — curation (~2-3 sessions).** Inline conglomerate editing
-with autocomplete. Model: string editing only, no verified flag.
-Autocomplete filtered to verified-only. Immediate FGC refresh on
-every edit. See `docs/UI_DESIGN.md` § "Deferred from A′" for
-specs.
+**Status:** Milestones A′, A′-plus, and B′ complete. See
+`docs/UI_DESIGN.md` and `docs/ARCHITECTURE.md` for what shipped.
 
 **B′ companion — filter and totals (~1-2 sessions).** Filter by
 issuer/conglomerate, totals panel. Depends on B′ being shipped
@@ -53,16 +35,6 @@ issuer/conglomerate, totals panel. Depends on B′ being shipped
 **C′ — manual entry and detail view (~3-4 sessions, deferred).**
 Manual-entry form for non-XP investments, per-investment detail
 view with accrual breakdown and IR tax.
-
-**Risks worth keeping in mind for B′:**
-- PySide6 changes between minor versions. Verify against current
-  docs at build time, not from training-time memory.
-- UI bugs are visual; the feedback loop stays "run the app, look
-  at it." Don't try to instrument GUI verification through
-  background-launch tricks.
-- API names in the backend (LoadResult fields, ProjectionResult
-  shape, etc.) need to be confirmed by reading source before code
-  is written that depends on them.
 
 ### 2. Windows installer
 

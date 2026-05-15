@@ -8,9 +8,9 @@ this file is the working-style and conventions summary.
 
 JustFixed is a Windows desktop portfolio tracker for Brazilian fixed-income investments
 (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, single-user. Engine,
-persistence, and exports are complete; the importer for XP statements is complete;
-the UI (PySide6) is the next major piece. The README covers the user-facing intent; ARCHITECTURE.md
-covers the internal shape.
+persistence, exports, and the XP importer are complete; the UI (PySide6) is through
+milestone B′ (read-only viewer + conglomerate curation). The README covers the
+user-facing intent; ARCHITECTURE.md covers the internal shape.
 
 ## Architectural shape
 
@@ -22,7 +22,7 @@ Strict layer ordering, no upward dependencies:
 - `importers/` — three layers: parser (xlsx → strings), mapper (strings → typed),
   loader (typed → persisted).
 - `exports/` — calendar.py: iCalendar (.ics) export. Depends on domain + engine, not persistence.
-- `ui/` — PySide6 single-window app. Milestone A′ shipped (read-only). See docs/UI_DESIGN.md.
+- `ui/` — PySide6 single-window app. Milestones A′ and B′ shipped (read-only viewer + conglomerate curation). See docs/UI_DESIGN.md.
 
 Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 
@@ -34,7 +34,7 @@ Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 - **Domain types validate in `__post_init__`.** Corrupt data fails to load with a
   clear `ValueError`. The domain is the gatekeeper for invariants.
 - **Tests are the spec.** If behavior changes, the test changes first. Currently
-  471 tests, ~5 second runtime, no skips. Tests pass on every commit.
+  494 tests, ~4 second runtime, no skips. Tests pass on every commit.
 - **Hand-compute financial test expected values.** Show all decimals; don't approximate.
   Approximation has been a real source of bugs.
 - **Repositories are the only public access to persistence.** Engine, UI, and importers
@@ -64,7 +64,8 @@ New commercial-bank issuers from the loader are created with
 into which holdings (Itaú/Unibanco, BTG/Pan, etc.) — that's a curation problem the
 FGC concentration check (engine/fgc.py) surfaces. The persistence foundation for
 curation is now live (B′): `CurationMemoryRepository` stores curated values, and the
-loader auto-applies them on the create branch. The curation UI is the next step.
+loader auto-applies them on the create branch. The curation UI is shipped; the table shows verified and [unverified]-prefixed
+conglomerate names with inline editing on the conglomerate column.
 The prefix signals "human review needed."
 The constant `UNVERIFIED_CONGLOMERATE_PREFIX` lives in `domain/issuer.py` and is consumed
 by both the loader (writing) and the FGC engine (reading).
@@ -103,8 +104,8 @@ structures. A third mechanism (curation memory) is database-backed, not hardcode
   on the **create branch only** — if a curated entry exists for the normalized name,
   the new issuer is created with that conglomerate instead of `[unverified] {name}`.
   Existing issuers are never overwritten; the find branch ignores curation memory
-  entirely. Entries are populated by future surfaces (B′ UI for user-driven curation;
-  B20 pre-seed for bundled defaults). The repository is also writable directly, which
+  entirely. Entries are populated by the B′ curation UI (shipped) and future B20
+  pre-seed for bundled defaults. The repository is also writable directly, which
   is how tests seed curation memory.
 - **Development-bank set** (xp_loader.py `_DEVELOPMENT_BANK_NAMES`): issuers in this
   set get `IssuerKind.DEVELOPMENT_BANK` instead of the `COMMERCIAL_BANK` default.
