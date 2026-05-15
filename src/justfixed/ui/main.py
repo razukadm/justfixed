@@ -34,7 +34,7 @@ from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
 from justfixed.engine.fgc import ExposureStatus, FGCReport, fgc_concentration_report
-from justfixed.engine.projection import project
+from justfixed.engine.projection import ProjectionResult, project
 from justfixed.exports.calendar import export_maturity_calendar
 from justfixed.importers.xp_loader import LoadResult, load_xp_statement
 from justfixed.persistence.database import (
@@ -257,6 +257,13 @@ class MainWindow(QMainWindow):
         self._investments: list = []
         self._hide_matured: bool = True
         self._has_projected: bool = False
+        # _projection_cache holds the most recent projection results. It's used to
+        # update FGC badges on conglomerate edits without forcing a re-projection.
+        # Invalidated on: project completion (replaced), import done, Clear DB,
+        # Hide matured toggle. Conglomerate edits do NOT invalidate — that's the
+        # whole point. Future invalidations when those features exist: investment
+        # add/edit/delete, assumed-CDI/IPCA change.
+        self._projection_cache: list[ProjectionResult] | None = None
         self._worker: QThread | None = None  # keeps worker alive during run
 
         self._build_ui()
@@ -422,6 +429,7 @@ class MainWindow(QMainWindow):
 
     def _on_hide_matured_toggled(self, checked: bool) -> None:
         self._hide_matured = checked
+        self._projection_cache = None
         self._refresh_table()
         if self._has_projected:
             self._on_project_clicked()
@@ -443,6 +451,7 @@ class MainWindow(QMainWindow):
             return
         deleted_investments, _ = self._repo.delete_all()
         self._has_projected = False
+        self._projection_cache = None
         self._refresh_table()
         self.statusBar().showMessage(f"Cleared {deleted_investments} investments.", 6000)
 
@@ -479,6 +488,7 @@ class MainWindow(QMainWindow):
             f"({result.inserted} new, {result.skipped} unchanged)."
         )
         self._has_projected = False
+        self._projection_cache = None
         self._refresh_table()
 
     def _on_import_error(self, message: str) -> None:
@@ -515,6 +525,7 @@ class MainWindow(QMainWindow):
             f"Projected {len(results)} investments as of {date.today():%d/%m/%Y}.", 6000
         )
         self._has_projected = True
+        self._projection_cache = results
 
     def _on_project_error(self, message: str) -> None:
         self._set_busy(False)
