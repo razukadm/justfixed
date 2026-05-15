@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 from PySide6.QtWidgets import QMessageBox
 
+from justfixed.engine.fgc import ExposureStatus
 from justfixed.ui.main import MainWindow
 
 
@@ -53,3 +54,53 @@ class TestProjectionCacheInvalidation:
             MainWindow._on_clear_db_clicked(self_mock)
 
         assert self_mock._projection_cache is None
+
+
+class TestRefreshTableCacheAwareness:
+    def _make_self_mock(self) -> MagicMock:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._repo = MagicMock()
+        self_mock._table = MagicMock()
+        self_mock._stack = MagicMock()
+        return self_mock
+
+    def test_refresh_table_with_cache_uses_fgc_report(self) -> None:
+        self_mock = self._make_self_mock()
+        fake_inv = MagicMock()
+        fake_inv.issuer.conglomerate = "Banco X S.A."
+        self_mock._visible_investments.return_value = [fake_inv]
+
+        fake_conglomerate = MagicMock()
+        fake_conglomerate.conglomerate_name = "Banco X S.A."
+        fake_conglomerate.current_status = ExposureStatus.APPROACHING
+        fake_report = MagicMock()
+        fake_report.conglomerates = [fake_conglomerate]
+
+        self_mock._projection_cache = [MagicMock()]
+
+        with patch("justfixed.ui.main.fgc_concentration_report_from_projections",
+                   return_value=fake_report) as mock_fgc_func:
+            MainWindow._refresh_table(self_mock)
+
+        mock_fgc_func.assert_called_once_with(self_mock._projection_cache)
+        self_mock._populate_row.assert_called_once_with(
+            0, fake_inv,
+            current_value=None,
+            projected_value=None,
+            fgc_status=ExposureStatus.APPROACHING,
+        )
+
+    def test_refresh_table_without_cache_passes_none_fgc_status(self) -> None:
+        self_mock = self._make_self_mock()
+        fake_inv = MagicMock()
+        self_mock._visible_investments.return_value = [fake_inv]
+        self_mock._projection_cache = None
+
+        MainWindow._refresh_table(self_mock)
+
+        self_mock._populate_row.assert_called_once_with(
+            0, fake_inv,
+            current_value=None,
+            projected_value=None,
+            fgc_status=None,
+        )

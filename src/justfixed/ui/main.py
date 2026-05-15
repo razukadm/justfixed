@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
-from justfixed.engine.fgc import ExposureStatus, FGCReport, fgc_concentration_report
+from justfixed.engine.fgc import ExposureStatus, FGCReport, fgc_concentration_report, fgc_concentration_report_from_projections
 from justfixed.engine.projection import ProjectionResult, project
 from justfixed.exports.calendar import export_maturity_calendar
 from justfixed.importers.xp_loader import LoadResult, load_xp_statement
@@ -360,8 +360,15 @@ class MainWindow(QMainWindow):
         self._investments = self._repo.list_all()
         visible = self._visible_investments()
         self._table.setRowCount(len(visible))
+
+        status_map: dict[str, ExposureStatus] = {}
+        if self._projection_cache is not None:
+            fgc_report = fgc_concentration_report_from_projections(self._projection_cache)
+            status_map = {c.conglomerate_name: c.current_status for c in fgc_report.conglomerates}
+
         for row, inv in enumerate(visible):
-            self._populate_row(row, inv, current_value=None, projected_value=None, fgc_status=None)
+            self._populate_row(row, inv, current_value=None, projected_value=None,
+                               fgc_status=status_map.get(inv.issuer.conglomerate))
         self._stack.setCurrentIndex(0 if self._investments else 1)
         self._update_button_states()
 
