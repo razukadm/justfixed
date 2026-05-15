@@ -190,3 +190,18 @@ class TestTriggerConglomerateHighlight:
         mock_timer.setSingleShot.assert_called_once_with(True)
         mock_timer.setInterval.assert_called_once_with(3000)
         mock_timer.start.assert_called_once()
+
+
+class TestRefreshTableScrollPreservation:
+    def test_refresh_table_preserves_scroll_position(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._repo = MagicMock()
+        self_mock._table = MagicMock()
+        self_mock._stack = MagicMock()
+        self_mock._projection_cache = None
+        self_mock._visible_investments.return_value = []
+        self_mock._table.verticalScrollBar.return_value.value.return_value = 150
+
+        MainWindow._refresh_table(self_mock)
+
+        self_mock._table.verticalScrollBar.return_value.setValue.assert_called_once_with(150)

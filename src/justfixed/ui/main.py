@@ -361,6 +361,7 @@ class MainWindow(QMainWindow):
         """Reload all investments from DB and repopulate the table."""
         self._investments = self._repo.list_all()
         visible = self._visible_investments()
+        scroll_y = self._table.verticalScrollBar().value()
         self._table.setRowCount(len(visible))
 
         status_map: dict[str, ExposureStatus] = {}
@@ -372,6 +373,9 @@ class MainWindow(QMainWindow):
             self._populate_row(row, inv, current_value=None, projected_value=None,
                                fgc_status=status_map.get(inv.issuer.conglomerate),
                                highlight=(inv.issuer.id == highlight_issuer_id))
+        # setValue clamps to the scrollbar's valid range, so scroll_y past the
+        # new content end (e.g. after Clear DB or Hide-matured toggle) is safe.
+        self._table.verticalScrollBar().setValue(scroll_y)
         self._stack.setCurrentIndex(0 if self._investments else 1)
         self._update_button_states()
 
