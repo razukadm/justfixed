@@ -38,3 +38,4 @@ data/
 build/
 dist/
 *.spec
+!justfixed.spec
