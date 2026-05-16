@@ -10,13 +10,15 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, timedelta
+from decimal import Decimal
 from unittest.mock import MagicMock, call, patch
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QMessageBox
 
+from justfixed.domain.money import Money
 from justfixed.engine.fgc import ExposureStatus
-from justfixed.ui.main import MainWindow
+from justfixed.ui.main import MainWindow, compute_totals
 
 
 class TestProjectionCachePopulation:
@@ -376,3 +378,79 @@ class TestFilterHandlers:
 
         assert self_mock._filter_conglomerate is None
         self_mock.refresh_table.assert_called_once_with()
+
+
+# ── compute_totals helpers ────────────────────────────────────────────────────
+
+def _brl(amount: str) -> Money:
+    return Money(Decimal(amount), "BRL")
+
+
+def _make_investment(principal: Money) -> MagicMock:
+    inv = MagicMock()
+    inv.id = uuid.uuid4()
+    inv.principal = principal
+    return inv
+
+
+def _make_projection(inv: MagicMock, current: Money, gross: Money) -> MagicMock:
+    proj = MagicMock()
+    proj.investment.id = inv.id
+    proj.current_value = current
+    proj.gross_at_maturity = gross
+    return proj
+
+
+class TestComputeTotals:
+    def test_empty_investments_no_cache(self) -> None:
+        result = compute_totals([], None)
+
+        assert result["principal_total"] == Money.zero()
+        assert result["current_value_total"] is None
+        assert result["gross_at_maturity_total"] is None
+        assert result["row_count"] == 0
+
+    def test_empty_investments_with_cache(self) -> None:
+        some_proj = MagicMock()
+        result = compute_totals([], [some_proj])
+
+        assert result["principal_total"] == Money.zero()
+        assert result["current_value_total"] == Money.zero()
+        assert result["gross_at_maturity_total"] == Money.zero()
+        assert result["row_count"] == 0
+
+    def test_investments_no_cache_returns_principal_only(self) -> None:
+        inv_a = _make_investment(_brl("100.00"))
+        inv_b = _make_investment(_brl("250.00"))
+
+        result = compute_totals([inv_a, inv_b], None)
+
+        assert result["principal_total"] == _brl("350.00")
+        assert result["current_value_total"] is None
+        assert result["gross_at_maturity_total"] is None
+        assert result["row_count"] == 2
+
+    def test_all_investments_in_cache_sums_projections(self) -> None:
+        inv_a = _make_investment(_brl("100.00"))
+        inv_b = _make_investment(_brl("250.00"))
+        proj_a = _make_projection(inv_a, _brl("110.00"), _brl("130.00"))
+        proj_b = _make_projection(inv_b, _brl("260.00"), _brl("300.00"))
+
+        result = compute_totals([inv_a, inv_b], [proj_a, proj_b])
+
+        assert result["principal_total"] == _brl("350.00")
+        assert result["current_value_total"] == _brl("370.00")
+        assert result["gross_at_maturity_total"] == _brl("430.00")
+        assert result["row_count"] == 2
+
+    def test_partial_cache_returns_none_for_projected(self) -> None:
+        inv_a = _make_investment(_brl("100.00"))
+        inv_b = _make_investment(_brl("250.00"))
+        proj_a = _make_projection(inv_a, _brl("110.00"), _brl("130.00"))
+
+        result = compute_totals([inv_a, inv_b], [proj_a])
+
+        assert result["principal_total"] == _brl("350.00")
+        assert result["current_value_total"] is None
+        assert result["gross_at_maturity_total"] is None
+        assert result["row_count"] == 2

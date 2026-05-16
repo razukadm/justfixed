@@ -90,6 +90,68 @@ _FGC_COLORS: dict[ExposureStatus, tuple[QColor, str]] = {
 _HIGHLIGHT_COLOR = QColor("#FFF8DC")
 
 
+# ── Utilities ─────────────────────────────────────────────────────────────────
+
+def compute_totals(
+    investments: list,
+    cache: list[ProjectionResult] | None,
+) -> dict:
+    """Summarise visible investments and their projection data.
+
+    Returns a dict with four keys:
+      principal_total        — always a Money (sum of inv.principal).
+      current_value_total    — Money if all investments are in cache, else None.
+      gross_at_maturity_total — Money if all investments are in cache, else None.
+      row_count              — int, always len(investments).
+
+    None semantics: "we have investments but the cache doesn't cover all of
+    them." Zero investments with a cache present gives zero totals, not None
+    (an empty sum is unambiguously zero, not unknown).
+    """
+    row_count = len(investments)
+    principal_total = sum((inv.principal for inv in investments), Money.zero())
+
+    if not investments:
+        current_value_total = Money.zero() if cache is not None else None
+        gross_at_maturity_total = Money.zero() if cache is not None else None
+        return {
+            "principal_total": principal_total,
+            "current_value_total": current_value_total,
+            "gross_at_maturity_total": gross_at_maturity_total,
+            "row_count": row_count,
+        }
+
+    if not cache:
+        return {
+            "principal_total": principal_total,
+            "current_value_total": None,
+            "gross_at_maturity_total": None,
+            "row_count": row_count,
+        }
+
+    proj_by_id = {p.investment.id: p for p in cache}
+    current_values: list[Money] = []
+    gross_values: list[Money] = []
+    for inv in investments:
+        proj = proj_by_id.get(inv.id)
+        if proj is None:
+            return {
+                "principal_total": principal_total,
+                "current_value_total": None,
+                "gross_at_maturity_total": None,
+                "row_count": row_count,
+            }
+        current_values.append(proj.current_value)
+        gross_values.append(proj.gross_at_maturity)
+
+    return {
+        "principal_total": principal_total,
+        "current_value_total": sum(current_values, Money.zero()),
+        "gross_at_maturity_total": sum(gross_values, Money.zero()),
+        "row_count": row_count,
+    }
+
+
 # ── Background workers ────────────────────────────────────────────────────────
 
 class _ImportWorker(QThread):
