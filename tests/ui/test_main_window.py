@@ -53,6 +53,7 @@ class TestProjectionCacheInvalidation:
         self_mock._investments = [MagicMock()]  # non-empty so dialog appears
         self_mock._repo = MagicMock()
         self_mock._repo.delete_all.return_value = (1, 0)
+        self_mock._status_label = MagicMock()
 
         with patch("justfixed.ui.main.QMessageBox.question",
                    return_value=QMessageBox.StandardButton.Yes):

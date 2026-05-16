@@ -658,6 +658,7 @@ class MainWindow(QMainWindow):
         self._has_projected = False
         self.projection_cache = None
         self.refresh_table()
+        self._status_label.setText("Ready.")
         self.statusBar().showMessage(f"Cleared {deleted_investments} investments.")
 
     def _on_cell_double_clicked(self, row: int, column: int) -> None:
