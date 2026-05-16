@@ -16,9 +16,10 @@ from unittest.mock import MagicMock, call, patch
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QMessageBox
 
+from justfixed.domain.issuer import IssuerKind
 from justfixed.domain.money import Money
 from justfixed.engine.fgc import ExposureStatus
-from justfixed.ui.main import MainWindow, compute_totals
+from justfixed.ui.main import ConglomerateEditDelegate, MainWindow, compute_totals
 
 
 class TestProjectionCachePopulation:
@@ -526,3 +527,265 @@ class TestUpdateTotals:
             MainWindow._update_totals(self_mock)
 
         self_mock._rows_label.setText.assert_called_once_with("Rows: 1 of 3")
+
+
+# ── Integration test helpers ──────────────────────────────────────────────────
+
+def _make_integration_projection(inv: MagicMock, current: Money, gross: Money) -> MagicMock:
+    proj = MagicMock()
+    proj.investment = inv         # same Python reference — mutations propagate
+    proj.as_of = date.today()    # real date required by fgc_concentration_report_from_projections
+    proj.current_value = current
+    proj.gross_at_maturity = gross
+    return proj
+
+
+def _make_integration_self_mock(
+    investments: list,
+    projection_cache: list | None = None,
+    filter_issuer: str | None = None,
+    filter_conglomerate: str | None = None,
+) -> MagicMock:
+    self_mock = MagicMock(spec=MainWindow)
+
+    self_mock._investments = investments
+    self_mock._hide_matured = False
+    self_mock._filter_issuer = filter_issuer
+    self_mock._filter_conglomerate = filter_conglomerate
+    self_mock._has_projected = False
+    self_mock.projection_cache = projection_cache
+    self_mock._highlight_timer = None
+    self_mock._worker = None
+
+    self_mock._table = MagicMock()
+    self_mock._stack = MagicMock()
+    self_mock._issuer_combo = MagicMock()
+    self_mock._conglomerate_combo = MagicMock()
+    self_mock._principal_label = MagicMock()
+    self_mock._current_label = MagicMock()
+    self_mock._projected_label = MagicMock()
+    self_mock._rows_label = MagicMock()
+
+    self_mock._repo = MagicMock()
+    self_mock._repo.list_all.return_value = investments
+
+    self_mock.visible_investments.side_effect = (
+        lambda *, apply_filter=True:
+        MainWindow.visible_investments(self_mock, apply_filter=apply_filter)
+    )
+    self_mock._update_totals.side_effect = (
+        lambda: MainWindow._update_totals(self_mock)
+    )
+    self_mock._populate_filter_dropdowns.side_effect = (
+        lambda: MainWindow._populate_filter_dropdowns(self_mock)
+    )
+    self_mock.refresh_table.side_effect = (
+        lambda highlight_issuer_id=None:
+        MainWindow.refresh_table(self_mock, highlight_issuer_id=highlight_issuer_id)
+    )
+
+    return self_mock
+
+
+class TestCurationRoundtripIntegration:
+    def test_edit_conglomerate_propagates_through_save_and_refresh(self) -> None:
+        inv1 = MagicMock()
+        inv1.id = uuid.uuid4()
+        inv1.issuer.id = uuid.uuid4()
+        inv1.issuer.name = "Bank Alpha"
+        inv1.issuer.conglomerate = "[unverified] Bank Alpha"
+        inv1.issuer.kind = IssuerKind.COMMERCIAL_BANK
+        inv1.maturity_date = date.today() + timedelta(days=30)
+        inv1.purchase_date = date.today() - timedelta(days=30)
+        inv1.product = MagicMock()
+        inv1.principal = _brl("10000.00")
+
+        inv2 = MagicMock()
+        inv2.id = uuid.uuid4()
+        inv2.issuer.id = uuid.uuid4()
+        inv2.issuer.name = "Bank Alpha"
+        inv2.issuer.conglomerate = "[unverified] Bank Alpha"
+        inv2.issuer.kind = IssuerKind.COMMERCIAL_BANK
+        inv2.maturity_date = date.today() + timedelta(days=60)
+        inv2.purchase_date = date.today() - timedelta(days=60)
+        inv2.product = MagicMock()
+        inv2.principal = _brl("5000.00")
+
+        proj1 = _make_integration_projection(inv1, _brl("10500.00"), _brl("11000.00"))
+        proj2 = _make_integration_projection(inv2, _brl("5200.00"), _brl("5500.00"))
+
+        investments = [inv1, inv2]
+        self_mock = _make_integration_self_mock(investments, projection_cache=[proj1, proj2])
+
+        # Phase 1 — baseline refresh
+        MainWindow.refresh_table(self_mock)
+
+        calls = self_mock._populate_row.call_args_list
+        assert len(calls) == 2
+        assert calls[0].kwargs["fgc_status"] == ExposureStatus.UNDER
+        assert calls[1].kwargs["fgc_status"] == ExposureStatus.UNDER
+
+        expected_principal = inv1.principal + inv2.principal
+        self_mock._principal_label.setText.assert_called_with(
+            f"Principal: {expected_principal.to_display()}"
+        )
+
+        # Phase 2 — delegate save
+        delegate = ConglomerateEditDelegate(self_mock, MagicMock())
+        editor = MagicMock()
+        editor.text.return_value = "Alpha Banking Group"
+        index = MagicMock()
+        index.row.return_value = 0  # inv1 comes first (shorter maturity)
+
+        with patch("justfixed.ui.main.IssuerRepository") as MockIssuerRepo, \
+             patch("justfixed.ui.main.CurationMemoryRepository") as MockCurationRepo:
+            delegate.setModelData(editor, MagicMock(), index)
+
+        MockIssuerRepo.return_value.save.assert_called_once_with(inv1.issuer)
+        MockCurationRepo.return_value.set.assert_called_once()
+        assert inv1.issuer.conglomerate == "Alpha Banking Group"
+        self_mock.trigger_conglomerate_highlight.assert_called_once_with(inv1.issuer.id)
+
+        # Phase 3 — post-edit refresh: mutation propagates through projection cache
+        self_mock._populate_row.reset_mock()
+        self_mock._principal_label.reset_mock()
+
+        MainWindow.refresh_table(self_mock)
+
+        calls = self_mock._populate_row.call_args_list
+        assert len(calls) == 2
+        # FGC now groups inv1 under "Alpha Banking Group" via the shared reference;
+        # exposure amounts unchanged, both conglomerates remain UNDER
+        assert calls[0].kwargs["fgc_status"] == ExposureStatus.UNDER
+        assert calls[1].kwargs["fgc_status"] == ExposureStatus.UNDER
+
+        self_mock._principal_label.setText.assert_called_with(
+            f"Principal: {expected_principal.to_display()}"
+        )
+
+
+class TestFilterTotalsIntegration:
+    def test_filter_narrows_visible_and_totals_with_cache(self) -> None:
+        inv1 = MagicMock()
+        inv1.id = uuid.uuid4()
+        inv1.issuer.name = "Bank A"
+        inv1.issuer.conglomerate = "Group X"
+        inv1.issuer.kind = IssuerKind.COMMERCIAL_BANK
+        inv1.maturity_date = date.today() + timedelta(days=10)
+        inv1.purchase_date = date.today() - timedelta(days=10)
+        inv1.product = MagicMock()
+        inv1.principal = _brl("10000.00")
+
+        inv2 = MagicMock()
+        inv2.id = uuid.uuid4()
+        inv2.issuer.name = "Bank A"
+        inv2.issuer.conglomerate = "Group Y"
+        inv2.issuer.kind = IssuerKind.COMMERCIAL_BANK
+        inv2.maturity_date = date.today() + timedelta(days=20)
+        inv2.purchase_date = date.today() - timedelta(days=20)
+        inv2.product = MagicMock()
+        inv2.principal = _brl("15000.00")
+
+        inv3 = MagicMock()
+        inv3.id = uuid.uuid4()
+        inv3.issuer.name = "Bank B"
+        inv3.issuer.conglomerate = "Group X"
+        inv3.issuer.kind = IssuerKind.COMMERCIAL_BANK
+        inv3.maturity_date = date.today() + timedelta(days=30)
+        inv3.purchase_date = date.today() - timedelta(days=30)
+        inv3.product = MagicMock()
+        inv3.principal = _brl("20000.00")
+
+        inv4 = MagicMock()
+        inv4.id = uuid.uuid4()
+        inv4.issuer.name = "Bank B"
+        inv4.issuer.conglomerate = "Group Y"
+        inv4.issuer.kind = IssuerKind.COMMERCIAL_BANK
+        inv4.maturity_date = date.today() + timedelta(days=40)
+        inv4.purchase_date = date.today() - timedelta(days=40)
+        inv4.product = MagicMock()
+        inv4.principal = _brl("25000.00")
+
+        proj1 = _make_integration_projection(inv1, _brl("10100.00"), _brl("10500.00"))
+        proj2 = _make_integration_projection(inv2, _brl("15200.00"), _brl("15800.00"))
+        proj3 = _make_integration_projection(inv3, _brl("20300.00"), _brl("21000.00"))
+        proj4 = _make_integration_projection(inv4, _brl("25400.00"), _brl("26000.00"))
+
+        investments = [inv1, inv2, inv3, inv4]
+        self_mock = _make_integration_self_mock(
+            investments, projection_cache=[proj1, proj2, proj3, proj4]
+        )
+
+        # Phase 1 — baseline: all four investments visible
+        MainWindow.refresh_table(self_mock)
+
+        assert self_mock._populate_row.call_count == 4
+        expected_all_principal = (
+            inv1.principal + inv2.principal + inv3.principal + inv4.principal
+        )
+        expected_all_current = (
+            proj1.current_value + proj2.current_value
+            + proj3.current_value + proj4.current_value
+        )
+        self_mock._principal_label.setText.assert_called_with(
+            f"Principal: {expected_all_principal.to_display()}"
+        )
+        self_mock._current_label.setText.assert_called_with(
+            f"Current: {expected_all_current.to_display()}"
+        )
+        self_mock._rows_label.setText.assert_called_with("Rows: 4")
+
+        # Phase 2 — issuer filter: Bank A only (inv1 + inv2)
+        self_mock._populate_row.reset_mock()
+        self_mock._principal_label.reset_mock()
+        self_mock._current_label.reset_mock()
+        self_mock._rows_label.reset_mock()
+
+        MainWindow._on_issuer_filter_changed(self_mock, "Bank A")
+
+        assert self_mock._populate_row.call_count == 2
+        expected_bank_a_principal = inv1.principal + inv2.principal
+        expected_bank_a_current = proj1.current_value + proj2.current_value
+        self_mock._principal_label.setText.assert_called_with(
+            f"Principal: {expected_bank_a_principal.to_display()}"
+        )
+        self_mock._current_label.setText.assert_called_with(
+            f"Current: {expected_bank_a_current.to_display()}"
+        )
+        self_mock._rows_label.setText.assert_called_with("Rows: 2 of 4")
+
+        # Phase 3 — AND conglomerate filter: Bank A ∩ Group X = inv1 only
+        self_mock._populate_row.reset_mock()
+        self_mock._principal_label.reset_mock()
+        self_mock._current_label.reset_mock()
+        self_mock._rows_label.reset_mock()
+
+        MainWindow._on_conglomerate_filter_changed(self_mock, "Group X")
+
+        assert self_mock._populate_row.call_count == 1
+        self_mock._principal_label.setText.assert_called_with(
+            f"Principal: {inv1.principal.to_display()}"
+        )
+        self_mock._current_label.setText.assert_called_with(
+            f"Current: {proj1.current_value.to_display()}"
+        )
+        self_mock._rows_label.setText.assert_called_with("Rows: 1 of 4")
+
+        # Phase 4 — clear issuer filter; conglomerate "Group X" still active
+        # visible = inv1 (Bank A, Group X) + inv3 (Bank B, Group X) = 2
+        self_mock._populate_row.reset_mock()
+        self_mock._rows_label.reset_mock()
+
+        MainWindow._on_issuer_filter_changed(self_mock, "All")
+
+        assert self_mock._populate_row.call_count == 2
+        self_mock._rows_label.setText.assert_called_with("Rows: 2 of 4")
+
+        # Phase 5 — clear conglomerate filter; both filters None, all four visible
+        self_mock._populate_row.reset_mock()
+        self_mock._rows_label.reset_mock()
+
+        MainWindow._on_conglomerate_filter_changed(self_mock, "All")
+
+        assert self_mock._populate_row.call_count == 4
+        self_mock._rows_label.setText.assert_called_with("Rows: 4")
