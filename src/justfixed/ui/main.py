@@ -658,7 +658,7 @@ class MainWindow(QMainWindow):
         self._has_projected = False
         self.projection_cache = None
         self.refresh_table()
-        self.statusBar().showMessage(f"Cleared {deleted_investments} investments.", 6000)
+        self.statusBar().showMessage(f"Cleared {deleted_investments} investments.")
 
     def _on_cell_double_clicked(self, row: int, column: int) -> None:
         if column == _COL_CONGLOMERATE:
@@ -731,6 +731,7 @@ class MainWindow(QMainWindow):
         )
         self._has_projected = True
         self.projection_cache = results
+        self._update_totals()
 
     def _on_project_error(self, message: str) -> None:
         self._set_busy(False)
