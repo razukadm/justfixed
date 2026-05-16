@@ -454,3 +454,74 @@ class TestComputeTotals:
         assert result["current_value_total"] is None
         assert result["gross_at_maturity_total"] is None
         assert result["row_count"] == 2
+
+
+class TestUpdateTotals:
+    def _make_self_mock(self) -> MagicMock:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._filter_issuer = None
+        self_mock._filter_conglomerate = None
+        self_mock.projection_cache = None
+        self_mock._principal_label = MagicMock()
+        self_mock._current_label = MagicMock()
+        self_mock._projected_label = MagicMock()
+        self_mock._rows_label = MagicMock()
+        return self_mock
+
+    def test_update_totals_with_full_cache(self) -> None:
+        self_mock = self._make_self_mock()
+        fake_inv = MagicMock()
+        self_mock.visible_investments.return_value = [fake_inv, fake_inv]
+
+        totals = {
+            "principal_total": _brl("350.00"),
+            "current_value_total": _brl("370.00"),
+            "gross_at_maturity_total": _brl("430.00"),
+            "row_count": 2,
+        }
+        with patch("justfixed.ui.main.compute_totals", return_value=totals):
+            MainWindow._update_totals(self_mock)
+
+        self_mock._principal_label.setText.assert_called_once_with("Principal: R$ 350,00")
+        self_mock._current_label.setText.assert_called_once_with("Current: R$ 370,00")
+        self_mock._projected_label.setText.assert_called_once_with("Projected: R$ 430,00")
+        self_mock._rows_label.setText.assert_called_once_with("Rows: 2")
+
+    def test_update_totals_no_cache_shows_dash_for_projected(self) -> None:
+        self_mock = self._make_self_mock()
+        fake_inv = MagicMock()
+        self_mock.visible_investments.return_value = [fake_inv]
+
+        totals = {
+            "principal_total": _brl("100.00"),
+            "current_value_total": None,
+            "gross_at_maturity_total": None,
+            "row_count": 1,
+        }
+        with patch("justfixed.ui.main.compute_totals", return_value=totals):
+            MainWindow._update_totals(self_mock)
+
+        self_mock._principal_label.setText.assert_called_once_with("Principal: R$ 100,00")
+        self_mock._current_label.setText.assert_called_once_with("Current: —")
+        self_mock._projected_label.setText.assert_called_once_with("Projected: —")
+        self_mock._rows_label.setText.assert_called_once_with("Rows: 1")
+
+    def test_update_totals_with_filter_shows_m_of_n(self) -> None:
+        self_mock = self._make_self_mock()
+        self_mock._filter_issuer = "BMG"
+
+        def visible_side_effect(*, apply_filter: bool = True):
+            return [MagicMock()] if apply_filter else [MagicMock(), MagicMock(), MagicMock()]
+
+        self_mock.visible_investments.side_effect = visible_side_effect
+
+        totals = {
+            "principal_total": _brl("100.00"),
+            "current_value_total": None,
+            "gross_at_maturity_total": None,
+            "row_count": 1,
+        }
+        with patch("justfixed.ui.main.compute_totals", return_value=totals):
+            MainWindow._update_totals(self_mock)
+
+        self_mock._rows_label.setText.assert_called_once_with("Rows: 1 of 3")

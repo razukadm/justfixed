@@ -392,6 +392,21 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._empty_label)  # index 1 — empty
         root.addWidget(self._stack, stretch=1)
 
+        # Totals strip — principal, current, projected, row count
+        totals_row = QHBoxLayout()
+        self._principal_label = QLabel("Principal: —")
+        self._current_label = QLabel("Current: —")
+        self._projected_label = QLabel("Projected: —")
+        self._rows_label = QLabel("Rows: 0")
+        totals_row.addWidget(self._principal_label)
+        totals_row.addSpacing(16)
+        totals_row.addWidget(self._current_label)
+        totals_row.addSpacing(16)
+        totals_row.addWidget(self._projected_label)
+        totals_row.addStretch()
+        totals_row.addWidget(self._rows_label)
+        root.addLayout(totals_row)
+
         # Bottom — action buttons
         bottom = QHBoxLayout()
         self._project_btn = QPushButton("Project as of today")
@@ -471,6 +486,35 @@ class MainWindow(QMainWindow):
         self._table.verticalScrollBar().setValue(scroll_y)
         self._stack.setCurrentIndex(0 if self._investments else 1)
         self._update_button_states()
+        self._update_totals()
+
+    def _update_totals(self) -> None:
+        visible = self.visible_investments()
+        totals = compute_totals(visible, self.projection_cache)
+
+        principal = totals["principal_total"].to_display()
+        current = (
+            totals["current_value_total"].to_display()
+            if totals["current_value_total"] is not None else "—"
+        )
+        projected = (
+            totals["gross_at_maturity_total"].to_display()
+            if totals["gross_at_maturity_total"] is not None else "—"
+        )
+
+        self._principal_label.setText(f"Principal: {principal}")
+        self._current_label.setText(f"Current: {current}")
+        self._projected_label.setText(f"Projected: {projected}")
+
+        filtered_count = len(visible)
+        filter_active = (
+            self._filter_issuer is not None or self._filter_conglomerate is not None
+        )
+        if filter_active:
+            unfiltered_count = len(self.visible_investments(apply_filter=False))
+            self._rows_label.setText(f"Rows: {filtered_count} of {unfiltered_count}")
+        else:
+            self._rows_label.setText(f"Rows: {filtered_count}")
 
     def _populate_filter_dropdowns(self) -> None:
         issuer_names = sorted({i.issuer.name for i in self._investments})
@@ -494,12 +538,13 @@ class MainWindow(QMainWindow):
         self._filter_conglomerate = None if text == "All" else text
         self.refresh_table()
 
-    def visible_investments(self) -> list:
+    def visible_investments(self, *, apply_filter: bool = True) -> list:
         result = self._investments
-        if self._filter_issuer is not None:
-            result = [i for i in result if i.issuer.name == self._filter_issuer]
-        if self._filter_conglomerate is not None:
-            result = [i for i in result if i.issuer.conglomerate == self._filter_conglomerate]
+        if apply_filter:
+            if self._filter_issuer is not None:
+                result = [i for i in result if i.issuer.name == self._filter_issuer]
+            if self._filter_conglomerate is not None:
+                result = [i for i in result if i.issuer.conglomerate == self._filter_conglomerate]
         if self._hide_matured:
             today = date.today()
             result = [i for i in result if i.maturity_date > today]
