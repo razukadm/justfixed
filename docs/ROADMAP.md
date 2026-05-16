@@ -398,6 +398,50 @@ This does not introduce a `Conglomerate` entity — pre-seeded
 mappings populate the same string-keyed curation-memory table that
 user-driven curation writes to.
 
+### B21. Auto-project after state changes
+
+**Source:** B′-companion design conversation. Deferred from Stage C
+discussion.
+
+**Why deferred:** Today, projections require an explicit "Project as
+of today" click. After import, Clear DB, Hide-matured toggle, or
+filter change, the cache is invalidated and the user has to click
+Project again to refresh the Current/Projected columns and FGC
+badges.
+
+Auto-projecting on these events would shift the mental model from
+"projections are explicit, expensive, run-when-needed" to
+"projections are always current, run automatically." Both models
+are valid; the explicit one is friendlier for users making rapid
+state changes (e.g., toggling filters) who don't want each toggle
+to trigger a fresh background projection.
+
+**Trigger to revisit:** When the explicit-project model proves
+annoying enough in practice that the user wants automatic
+projection. Or before a beta release to non-developer users, where
+"why are my values blank — oh, I have to click Project" is a
+predictable confusion point.
+
+**What it needs:**
+1. Decision on scope — auto-project after which events? Import is
+   the obvious one. Hide-matured toggle and filter changes are
+   real questions: filter changes don't change *what* would be
+   projected (the underlying investments are unchanged), only what
+   the user is *currently viewing*. Toggling Hide-matured doesn't
+   change the cached projections either, but it changes which are
+   visible. The right answer might be "auto-project on data
+   changes (import, Clear DB) but not on display changes (filter,
+   Hide-matured)."
+2. Status bar UX for chained background workers — import + project
+   running back-to-back means the status bar must communicate both
+   phases ("Importing..." → "Projecting..." → "Ready").
+3. Possibly a setting toggle for users who prefer the explicit
+   model.
+
+**Architectural note:** The Project flow already runs in a
+background worker (`_ProjectWorker`), so chaining is mechanically
+trivial. The hard part is the UX decisions in #1 and #2 above.
+
 ---
 
 ## Part 3 — Open questions
