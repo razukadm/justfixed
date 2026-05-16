@@ -15,10 +15,10 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Engine | Complete | 135 |
 | Importer (parser, mapper) | Complete | 80 |
 | Importer (loader / DB persistence) | Complete | 14 |
-| UI (PySide6) | B′ complete (curation, reactivity, highlight) | 17 |
+| UI (PySide6) | B′ and B′ companion complete (curation, filter dropdowns, totals strip) | 40 |
 | Exports (calendar / ICS) | Complete | 9 |
 
-494 tests pass in ~4 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+517 tests pass in ~4 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -364,7 +364,7 @@ Design choices:
 
 ### `main.py`
 
-PySide6 single-window desktop application. Imports an XP statement, displays investments in a table with per-row FGC concentration badges and an inline-editable Conglomerate column (B′ curation), projects current values as of today, and exports the maturity calendar to an `.ics` file. Background work (statement loading, projection) runs on `QThread` workers; a single `_set_busy` guard prevents overlapping operations. Empty state (no investments loaded) swaps the table for a centered prompt via `QStackedWidget`.
+PySide6 single-window desktop application. Imports an XP statement, displays investments in a table with per-row FGC concentration badges and an inline-editable Conglomerate column (B′ curation), filters by issuer and conglomerate via dropdowns with a totals strip below the table (B′ companion), projects current values as of today, and exports the maturity calendar to an `.ics` file. Background work (statement loading, projection) runs on `QThread` workers; a single `_set_busy` guard prevents overlapping operations. Empty state (no investments loaded) swaps the table for a centered prompt via `QStackedWidget`.
 
 The module imports from `domain`, `persistence`, `engine.projection`, `engine.fgc`, `exports.calendar`, and `importers.xp_loader`. It introduces no new architectural layer between itself and those — direct calls, no service or presenter layer.
 
@@ -378,7 +378,7 @@ See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′
 
 ## Test discipline
 
-**494 tests, ~4 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**517 tests, ~4 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
@@ -470,9 +470,8 @@ The project uses what's in `pyproject.toml` and nothing else. Don't add a new de
 
 In rough order:
 
-1. **UI — milestone B′ companion (filter and totals)** — text filter narrowing the table by issuer/conglomerate name; totals panel showing aggregate principal, current value, projected value across visible investments. Depends on B′ curation (shipped) to make the conglomerate namespace clean enough for filtering to be useful. ~1-2 sessions.
-2. **UI — milestone C′ (manual entry, detail view)** — manual-entry form for investments outside XP statements, per-investment detail view (accrual breakdown, IR tax, net at maturity). ~3-4 sessions.
-3. **Windows installer** — PyInstaller + Inno Setup. 1-2 sessions.
+1. **UI — milestone C′ (manual entry, detail view)** — manual-entry form for investments outside XP statements, per-investment detail view (accrual breakdown, IR tax, net at maturity). ~3-4 sessions.
+2. **Windows installer** — PyInstaller + Inno Setup. 1-2 sessions.
 
 Phase 2 (post-MVP):
 - DI-curve mark-to-market

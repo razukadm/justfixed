@@ -24,13 +24,8 @@ careful pace this project uses (2–4 hours each).
 
 ### 1. UI — PySide6
 
-**Status:** Milestones A′, A′-plus, and B′ complete. See
+**Status:** Milestones A′, A′-plus, B′, and B′ companion complete. See
 `docs/UI_DESIGN.md` and `docs/ARCHITECTURE.md` for what shipped.
-
-**B′ companion — filter and totals (~1-2 sessions).** Filter by
-issuer/conglomerate, totals panel. Depends on B′ being shipped
-(filtering by conglomerate is much less useful while
-`[unverified]` rows pollute the namespace).
 
 **C′ — manual entry and detail view (~3-4 sessions, deferred).**
 Manual-entry form for non-XP investments, per-investment detail

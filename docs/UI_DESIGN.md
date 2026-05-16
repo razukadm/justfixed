@@ -505,23 +505,28 @@ decision, not a design one.
 
 ### Filter and totals — milestone B′ companion
 
-After curation lands, the conglomerate namespace is clean enough
-to support filtering and aggregation.
+**Shipped** (commits `c987286`, `253a7c8`, `d08daa2`, `6afff76`,
+`684d44b`, `361f0a6`, `18ba8e0`, `0b88913`, `33173d6`).
+Filter dropdowns and totals strip.
 
-**Filter.** A text field at the top of the table that narrows
-visible rows by issuer name or conglomerate name (substring match,
-case-insensitive). Hidden-matured filter and this text filter
-combine (AND).
+**Filter.** Two `QComboBox` dropdowns above the table — one for
+issuer name, one for conglomerate name. Each lists the distinct
+values currently in the database plus an "All" sentinel that
+clears that filter. The two dropdowns combine with AND: selecting
+"Bank A" and "Group X" shows only investments where both match.
+The hidden-matured toggle combines with the dropdowns (also AND).
 
-**Totals panel.** A separate panel (not a table row — see
-discussion in the design conversation) showing aggregate values
-across the currently-visible investments:
+**Totals strip.** A row of labels below the table showing aggregate
+values across the currently-visible (post-filter) investments:
 - Total principal.
-- Total current value.
-- Total projected value (net at maturity).
-The panel updates as filter narrows the visible set. FGC badges
-do not appear in the panel (they're per-conglomerate, not
-aggregate).
+- Total current value ("—" until Project has run, or if the
+  projection cache is partial).
+- Total projected value at maturity — gross (pre-IR), to align
+  with FGC exposure semantics.
+- Row count, shown as "N of M" when a filter is active.
+The strip updates on every filter change and after every Project
+run. FGC badges do not appear in the strip (they're
+per-conglomerate, not aggregate).
 
 ## What this document is not
 

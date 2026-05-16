@@ -9,7 +9,7 @@ this file is the working-style and conventions summary.
 JustFixed is a Windows desktop portfolio tracker for Brazilian fixed-income investments
 (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, single-user. Engine,
 persistence, exports, and the XP importer are complete; the UI (PySide6) is through
-milestone B′ (read-only viewer + conglomerate curation). The README covers the
+milestone B′ and B′ companion (read-only viewer, conglomerate curation, filter dropdowns, and totals strip). The README covers the
 user-facing intent; ARCHITECTURE.md covers the internal shape.
 
 ## Architectural shape
@@ -34,7 +34,7 @@ Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 - **Domain types validate in `__post_init__`.** Corrupt data fails to load with a
   clear `ValueError`. The domain is the gatekeeper for invariants.
 - **Tests are the spec.** If behavior changes, the test changes first. Currently
-  494 tests, ~4 second runtime, no skips. Tests pass on every commit.
+  517 tests, ~4 second runtime, no skips. Tests pass on every commit.
 - **Hand-compute financial test expected values.** Show all decimals; don't approximate.
   Approximation has been a real source of bugs.
 - **Repositories are the only public access to persistence.** Engine, UI, and importers
