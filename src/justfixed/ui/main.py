@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
@@ -433,6 +434,19 @@ class MainWindow(QMainWindow):
         self._hide_matured_action.setChecked(True)
         self._hide_matured_action.triggered.connect(self._on_hide_matured_toggled)
         view_menu.addAction(self._hide_matured_action)
+        help_menu = menu_bar.addMenu("Help")
+        about_action = QAction("About JustFixed", self)
+        about_action.triggered.connect(self._on_about_clicked)
+        help_menu.addAction(about_action)
+
+    def _on_about_clicked(self) -> None:
+        QMessageBox.about(
+            self,
+            "About JustFixed",
+            f"Version: {VERSION}\n"
+            f"Build date: {BUILD_DATE:%Y-%m-%d}\n"
+            f"Expires: {EXPIRY_DATE:%Y-%m-%d}",
+        )
 
     # ── Busy state ────────────────────────────────────────────────────────────
 
