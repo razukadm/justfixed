@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION
+from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
@@ -776,6 +776,16 @@ class MainWindow(QMainWindow):
 
 def main() -> None:
     app = QApplication(sys.argv)
+    if is_expired():
+        box = QMessageBox()
+        box.setIcon(QMessageBox.Icon.Critical)
+        box.setWindowTitle("JustFixed")
+        box.setText(
+            f"This version (v{VERSION}) expired on {EXPIRY_DATE.isoformat()}.\n\n"
+            "Please contact the developer for an updated version."
+        )
+        box.exec()
+        sys.exit(1)
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
