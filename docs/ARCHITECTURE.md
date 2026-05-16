@@ -18,7 +18,7 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | UI (PySide6) | B′ and B′ companion complete (curation, filter dropdowns, totals strip) | 40 |
 | Exports (calendar / ICS) | Complete | 9 |
 
-517 tests pass in ~4 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+520 tests pass in ~4 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -378,7 +378,7 @@ See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′
 
 ## Test discipline
 
-**517 tests, ~4 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**520 tests, ~4 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
@@ -471,7 +471,6 @@ The project uses what's in `pyproject.toml` and nothing else. Don't add a new de
 In rough order:
 
 1. **UI — milestone C′ (manual entry, detail view)** — manual-entry form for investments outside XP statements, per-investment detail view (accrual breakdown, IR tax, net at maturity). ~3-4 sessions.
-2. **Windows installer** — PyInstaller + Inno Setup. 1-2 sessions.
 
 Phase 2 (post-MVP):
 - DI-curve mark-to-market

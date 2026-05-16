@@ -33,16 +33,8 @@ view with accrual breakdown and IR tax.
 
 ### 2. Windows installer
 
-**Status:** Not started. ~1–2 sessions.
-
-PyInstaller to bundle the app into an executable, Inno Setup to create
-a Windows installer. End state: a `.exe` installer the user (or a beta
-tester) can double-click to install JustFixed without touching Python.
-
-**Dependencies:**
-- UI must be built (no installer for a backend-only library).
-- Decision on whether SQLCipher encryption is included (see Backlog
-  item B7 — currently deferred, plain SQLite is in use).
+**Status:** Shipped. Commits `3152f63`–`b2e1ed9` (May 2026). See
+`docs/BUILD.md` for build and packaging details.
 
 ### 3. Phase 2 — post-MVP
 
