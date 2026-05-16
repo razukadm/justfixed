@@ -183,6 +183,102 @@ Same six steps as Pass 4a; documented here for future reference:
 
 ### Automation
 
-`build.py` (next section, when added) chains PyInstaller + ISCC into a single
+`build.py` (see section below) chains PyInstaller + ISCC into a single
 command. The manual steps above are for debugging the installer layer
 specifically, not the everyday build flow.
+
+---
+
+## Automated build with `build.py`
+
+`build.py` at repo root chains the PyInstaller bundle and the Inno Setup
+installer into a single command. This is the everyday build path; the
+manual sections above are for debugging when something breaks.
+
+### Default invocation
+
+From repo root:
+
+    python build.py
+
+This produces `dist\JustFixed-Setup-{version}.exe` using sensible defaults:
+
+- **Version** read from `pyproject.toml` `[project] version`.
+- **Build date** set to today.
+- **Expiry date** set to today + 15 days.
+
+The script prints what it's doing as it runs and reports the final installer
+path on success. Total time ~2 minutes.
+
+### Overriding defaults
+
+| Flag         | Purpose                                        | Default               |
+|--------------|------------------------------------------------|-----------------------|
+| `--version`  | Pin a specific version string                  | from `pyproject.toml` |
+| `--expiry`   | Pin an expiry date (`YYYY-MM-DD`)              | today + 15 days       |
+| `--no-clean` | Skip wiping `build/` and `dist/` before build  | clean (deterministic) |
+
+Examples:
+
+    python build.py --version 0.1.1
+    python build.py --expiry 2026-12-31
+    python build.py --version 0.1.1 --expiry 2026-12-31 --no-clean
+
+### What the script does
+
+1. Parses args; resolves defaults.
+2. Rewrites `src/justfixed/_build_info.py` with the resolved `VERSION`,
+   `BUILD_DATE`, and `EXPIRY_DATE`. Three `re.sub` calls, each asserting
+   exactly one substitution occurred — fails loudly if the file's format
+   has drifted.
+3. Wipes `build/` and `dist/` unless `--no-clean`.
+4. Runs PyInstaller against `justfixed.spec`.
+5. Runs ISCC against `installer\justfixed.iss` with `/DAppVersion=...`.
+6. Prints the absolute path of the produced installer.
+
+### Side effect: `_build_info.py` is rewritten
+
+Every `build.py` run modifies `src/justfixed/_build_info.py` in the working
+tree. This is intentional — the source file reflects the most recent build's
+values. The developer chooses whether to commit those values.
+
+Typical pattern: run `python build.py` to produce a beta-test installer,
+hand the installer to a tester, leave `_build_info.py` uncommitted until
+the next intentional build. If a build is genuinely the "release" snapshot,
+commit `_build_info.py` along with whatever other changes that release
+contains.
+
+### `--no-clean`: when and why
+
+PyInstaller's `build/` directory caches intermediate artifacts. With
+`--no-clean`, subsequent builds skip the wipe and reuse those artifacts,
+shaving ~20–30s off build time.
+
+The trade-off is determinism: the `build/` cache occasionally produces
+stale output when the spec or source has changed in a way PyInstaller
+doesn't detect. Symptoms include "icon doesn't update" or "data file
+isn't included." If a build produces unexpected output, wipe by re-running
+without `--no-clean`.
+
+Default to clean builds. Use `--no-clean` only when rapidly iterating on
+the spec itself.
+
+### ISCC discovery
+
+The script looks for `ISCC.exe` in this order:
+
+1. `PATH` (via `shutil.which`).
+2. `C:\Program Files (x86)\Inno Setup 6\ISCC.exe`.
+3. `C:\Program Files\Inno Setup 6\ISCC.exe`.
+
+If none of these work, the script exits with a message pointing to the
+Inno Setup download page. Add `ISCC.exe` to `PATH` or install Inno Setup
+to a standard location to resolve.
+
+### Prerequisites recap
+
+Same as the manual sections above:
+
+- Project venv at `.venv\` with PyInstaller installed.
+- Inno Setup 6 installed at standard path.
+- Run from repo root.
