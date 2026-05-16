@@ -5,7 +5,7 @@ from datetime import date
 
 VERSION     = "0.1.0"
 BUILD_DATE  = date(2026, 5, 16)
-EXPIRY_DATE = date(2026, 5, 31)
+EXPIRY_DATE = date(2026, 8, 31)
 
 
 def is_expired(today: date | None = None) -> bool:
