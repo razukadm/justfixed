@@ -484,6 +484,25 @@ sums, since they're no longer outstanding). Worth being explicit
 about whether totals include matured rows — that's a separate
 design question to resolve when this is picked up.
 
+### B23. Replace placeholder icon
+
+**Source:** Pass 3a (installer work). The current `assets/icon.ico` is a
+programmatically generated dark teal square with white "JF" lettering,
+produced by `tools/generate_placeholder_icon.py`. Functional but not a
+real design.
+
+**Why deferred:** Real icon design is a different kind of work
+(graphic design, not coding). Placeholder is fine for the beta where
+testers are trusted and expect rough edges.
+
+**Trigger to revisit:** Before any non-beta release. Or earlier if a
+designer's time becomes available.
+
+**Architectural note:** The icon path is referenced from `justfixed.spec`
+(EXE icon) and Pass 4's Inno Setup script (installer icon + Start Menu
+shortcut). Replacing the file at `assets/icon.ico` propagates everywhere
+automatically; no spec changes needed.
+
 ---
 
 ## Part 3 — Open questions
