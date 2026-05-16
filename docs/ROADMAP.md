@@ -548,20 +548,11 @@ than improvising five times across different file pickers.
 
 **Blocks:** UI work on the import flow.
 
-### Q5. Doc-update timing
+### Q5. Doc-update timing — Resolved
 
-**Surfaced in:** XP loader chat, "decisions worth thinking about".
-
-**Question:** Do `ARCHITECTURE.md` and `CLAUDE.md` get updated
-*during* feature work (small commit per layer change) or *after*
-(a sweep at the end)?
-
-**Why it matters:** The end-of-feature sweep was the source of one
-"claimed it but didn't" mistake during loader work. Per-step doc
-updates scale better but slow each session.
-
-**Blocks:** Nothing concrete. It's a process decision worth making
-explicit before the next feature, so we don't keep oscillating.
+Feature-specific docs updated per pass; cross-cutting docs swept at
+end of feature in a dedicated commit. See `CLAUDE.md`, "Doc-update
+timing."
 
 ---
 

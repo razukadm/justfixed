@@ -133,6 +133,17 @@ the importer, one entry is added with a focused test, ship.
   refactoring later. claude.ai is good for this; Claude Code is good for executing
   the plan once made.
 
+**Doc-update timing.** Feature-specific docs (the doc most directly
+describing this feature's surface — e.g. `BUILD.md` for the installer,
+`FGC_DESIGN.md` for FGC work) get updated per pass, as part of the same
+commit that lands the implementation pass they describe. Cross-cutting
+docs (`ARCHITECTURE.md`, `ROADMAP.md`, `CLAUDE.md`, `UI_DESIGN.md`) get
+swept once at the end of a feature in a dedicated commit.
+
+The cross-cutting sweep draws on the already-current feature-specific
+docs, not on memory of what shipped. This is what protects against the
+"claimed it but didn't" sweep-at-the-end failure mode.
+
 ## Things that have caused trouble
 
 - **Indentation on multi-line paste.** VS Code "Render Whitespace" should be on.
