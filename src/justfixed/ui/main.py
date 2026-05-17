@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QStatusBar,
     QStyledItemDelegate,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -340,8 +341,10 @@ class MainWindow(QMainWindow):
     # ── Layout ────────────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
+        self._tabs = QTabWidget()
+        self.setCentralWidget(self._tabs)
         central = QWidget()
-        self.setCentralWidget(central)
+        self._tabs.addTab(central, "Investments")
         root = QVBoxLayout(central)
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(6)
