@@ -18,6 +18,7 @@ from justfixed.domain.rates import Prefixed
 from justfixed.engine.conglomerate_report import (
     ConglomerateStatus,
     build_conglomerate_report,
+    build_conglomerate_report_from_projections,
 )
 from justfixed.engine.projection import project
 
@@ -221,3 +222,34 @@ def test_mixed_report_tesouro_and_bank() -> None:
     # Bank section evaluates FGC normally. R$80k gross < R$200k → UNDER.
     assert bank_section.summary_fgc_status == ConglomerateStatus.UNDER
     assert bank_section.rows[0].fgc_status == ConglomerateStatus.UNDER
+
+
+# ── Test 7: from_projections produces the same report as build_conglomerate_report ──
+
+def test_from_projections_matches_build_conglomerate_report() -> None:
+    bank = _bank("Banco Delta", "Delta S.A.")
+    invs = [
+        _cdb(bank, "40000", date(2026, 1, 2)),
+        _cdb(bank, "40000", date(2026, 7, 1)),
+        _tesouro("100000", date(2027, 1, 2)),
+    ]
+
+    report_direct = build_conglomerate_report(invs, as_of=PURCHASE, assumed_cdi=ASSUMED_CDI)
+
+    projections = [project(inv, as_of=PURCHASE, assumed_cdi=ASSUMED_CDI) for inv in invs]
+    report_from_proj = build_conglomerate_report_from_projections(projections, as_of=PURCHASE)
+
+    assert len(report_from_proj.sections) == len(report_direct.sections)
+    assert report_from_proj.as_of == report_direct.as_of
+
+    for s_fp, s_d in zip(report_from_proj.sections, report_direct.sections):
+        assert s_fp.conglomerate_name == s_d.conglomerate_name
+        assert s_fp.investment_count  == s_d.investment_count
+        assert s_fp.total_principal   == s_d.total_principal
+        assert s_fp.total_projected_value == s_d.total_projected_value
+        assert s_fp.summary_fgc_status    == s_d.summary_fgc_status
+        assert s_fp.next_maturity         == s_d.next_maturity
+        for r_fp, r_d in zip(s_fp.rows, s_d.rows):
+            assert r_fp.projected_value   == r_d.projected_value
+            assert r_fp.projected_balance == r_d.projected_balance
+            assert r_fp.fgc_status        == r_d.fgc_status

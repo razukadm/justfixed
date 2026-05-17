@@ -26,6 +26,7 @@ class TestProjectionCachePopulation:
     def test_project_done_populates_cache(self) -> None:
         self_mock = MagicMock(spec=MainWindow)
         self_mock.projection_cache = None
+        self_mock._ts_label = MagicMock()
         fake_results = []
         fake_fgc = MagicMock()
         fake_fgc.conglomerates = []
@@ -40,6 +41,7 @@ class TestProjectionCacheInvalidation:
         self_mock = MagicMock(spec=MainWindow)
         self_mock.projection_cache = [MagicMock()]
         self_mock._status_label = MagicMock()
+        self_mock._ts_label = MagicMock()
         fake_result = MagicMock()
         fake_result.inserted = 3
         fake_result.skipped = 0
@@ -55,6 +57,7 @@ class TestProjectionCacheInvalidation:
         self_mock._repo = MagicMock()
         self_mock._repo.delete_all.return_value = (1, 0)
         self_mock._status_label = MagicMock()
+        self_mock._ts_label = MagicMock()
 
         with patch("justfixed.ui.main.QMessageBox.question",
                    return_value=QMessageBox.StandardButton.Yes):

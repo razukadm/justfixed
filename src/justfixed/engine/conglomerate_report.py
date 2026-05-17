@@ -27,7 +27,7 @@ from justfixed.domain.issuer import IssuerKind
 from justfixed.domain.money import Money
 from justfixed.domain.product import ProductType
 from justfixed.engine.fgc import FGC_APPROACHING_THRESHOLD, FGC_PER_CONGLOMERATE_LIMIT
-from justfixed.engine.projection import project
+from justfixed.engine.projection import ProjectionResult, project
 
 
 # ── Status enum ───────────────────────────────────────────────────────────────
@@ -85,28 +85,32 @@ def build_conglomerate_report(
     assumed_cdi: Decimal,
     assumed_ipca: Decimal | None = None,
 ) -> ConglomerateReport:
-    """Produce the conglomerate consolidated report.
+    """Produce the conglomerate consolidated report by projecting investments first.
 
-    Args:
-        investments: Investments to include. No filtering is applied; the
-            caller is responsible for applying the Hide-matured toggle or any
-            other filter before calling. Tesouro investments are included and
-            rendered with NOT_FGC status.
-        as_of: Valuation date for current_value. Passed to project() unchanged.
-        assumed_cdi: Annualized CDI rate (e.g. Decimal("0.12") for 12%).
-            Required by project() for PostFixedCDI/PostFixedCDIPlusSpread.
-        assumed_ipca: Annualized IPCA rate. Required for PostFixedIPCA.
-
-    Returns:
-        ConglomerateReport with sections sorted alphabetically by name.
+    Thin wrapper: projects each investment then delegates to
+    build_conglomerate_report_from_projections.
     """
     if not investments:
         return ConglomerateReport(sections=[], as_of=as_of)
-
     projections = [
         project(inv, as_of=as_of, assumed_cdi=assumed_cdi, assumed_ipca=assumed_ipca)
         for inv in investments
     ]
+    return build_conglomerate_report_from_projections(projections, as_of=as_of)
+
+
+def build_conglomerate_report_from_projections(
+    projections: list[ProjectionResult],
+    as_of: date,
+) -> ConglomerateReport:
+    """Produce the conglomerate consolidated report from already-computed projections.
+
+    Parallels fgc_concentration_report_from_projections in fgc.py. Use when
+    projections are cached to avoid re-projecting on tab switches or filter
+    changes.
+    """
+    if not projections:
+        return ConglomerateReport(sections=[], as_of=as_of)
 
     groups: dict[str, list] = defaultdict(list)
     for proj in projections:

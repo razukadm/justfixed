@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -38,7 +38,12 @@ from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
-from justfixed.engine.conglomerate_report import ConglomerateSection, ConglomerateStatus, build_conglomerate_report
+from justfixed.engine.conglomerate_report import (
+    ConglomerateSection,
+    ConglomerateStatus,
+    build_conglomerate_report,
+    build_conglomerate_report_from_projections,
+)
 from justfixed.engine.fgc import ExposureStatus, FGCReport, fgc_concentration_report_from_projections
 from justfixed.engine.projection import ProjectionResult, project
 from justfixed.exports.calendar import export_maturity_calendar
@@ -333,19 +338,19 @@ class MainWindow(QMainWindow):
         self._hide_matured: bool = True
         self._filter_issuer: str | None = None
         self._filter_conglomerate: str | None = None
-        self._has_projected: bool = False
-        # projection_cache holds the most recent projection results. It's used to
-        # update FGC badges on conglomerate edits without forcing a re-projection.
-        # Invalidated on: project completion (replaced), import done, Clear DB,
-        # Hide matured toggle. Conglomerate edits do NOT invalidate — that's the
-        # whole point. Future invalidations when those features exist: investment
-        # add/edit/delete, assumed-CDI/IPCA change.
+        # projection_cache holds the most recent projection results. Kept as a
+        # list to match the worker return type and from_projections overload
+        # signatures. Invalidated on: import done, Clear DB. Not invalidated on
+        # Hide matured toggle — _refresh_conglomerates filters the cached list
+        # to the currently visible set on each render.
         self.projection_cache: list[ProjectionResult] | None = None
         self._highlight_timer: QTimer | None = None  # keeps highlight timer alive for cancellation
         self._worker: QThread | None = None  # keeps worker alive during run
 
         self._build_ui()
         self.refresh_table()
+        if self._investments:
+            self._on_project_clicked()
 
     # ── Layout ────────────────────────────────────────────────────────────────
 
@@ -449,7 +454,10 @@ class MainWindow(QMainWindow):
         bottom.addWidget(self._export_btn)
         root.addLayout(bottom)
 
-        self.setStatusBar(QStatusBar())
+        status_bar = QStatusBar()
+        self._ts_label = QLabel("")
+        status_bar.addPermanentWidget(self._ts_label)
+        self.setStatusBar(status_bar)
 
         # Menu bar — File (Clear DB when JUSTFIXED_DEV set) + View
         menu_bar = self.menuBar()
@@ -550,27 +558,21 @@ class MainWindow(QMainWindow):
 
         return row_widget
 
-    def _reset_conglomerates_to_placeholder(self) -> None:
-        self._clear_cong_layout()
-        placeholder = QLabel('Press "Project as of today" to populate.')
-        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._cong_layout.addWidget(placeholder)
-
     def _refresh_conglomerates(self) -> None:
         self._clear_cong_layout()
-        investments = self.visible_investments(apply_filter=False)
-        if not investments:
+        if self.projection_cache is None:
+            placeholder = QLabel('Press "Project as of today" to populate.')
+            placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._cong_layout.addWidget(placeholder)
+            return
+        visible_ids = {inv.id for inv in self.visible_investments(apply_filter=False)}
+        projections = [p for p in self.projection_cache if p.investment.id in visible_ids]
+        if not projections:
             empty = QLabel("No investments to display.")
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._cong_layout.addWidget(empty)
             return
-
-        report = build_conglomerate_report(
-            investments,
-            as_of=date.today(),
-            assumed_cdi=_ASSUMED_CDI,
-            assumed_ipca=_ASSUMED_IPCA,
-        )
+        report = build_conglomerate_report_from_projections(projections, as_of=date.today())
         self._cong_layout.addWidget(self._make_summary_header())
         for idx, section in enumerate(report.sections):
             self._cong_layout.addWidget(self._make_summary_row(section, idx))
@@ -638,7 +640,7 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(0 if self._investments else 1)
         self._update_button_states()
         self._update_totals()
-        self._reset_conglomerates_to_placeholder()
+        self._refresh_conglomerates()
 
     def _update_totals(self) -> None:
         visible = self.visible_investments()
@@ -787,10 +789,7 @@ class MainWindow(QMainWindow):
 
     def _on_hide_matured_toggled(self, checked: bool) -> None:
         self._hide_matured = checked
-        self.projection_cache = None
         self.refresh_table()
-        if self._has_projected:
-            self._on_project_clicked()
 
     def _on_clear_db_clicked(self) -> None:
         count = len(self._investments)
@@ -808,8 +807,8 @@ class MainWindow(QMainWindow):
         if reply != QMessageBox.StandardButton.Yes:
             return
         deleted_investments, _ = self._repo.delete_all()
-        self._has_projected = False
         self.projection_cache = None
+        self._ts_label.setText("")
         self.refresh_table()
         self._status_label.setText("Ready.")
         self.statusBar().showMessage(f"Cleared {deleted_investments} investments.")
@@ -846,8 +845,8 @@ class MainWindow(QMainWindow):
             f"Loaded {result.inserted + result.skipped} investments "
             f"({result.inserted} new, {result.skipped} unchanged)."
         )
-        self._has_projected = False
         self.projection_cache = None
+        self._ts_label.setText("")
         self.refresh_table()
 
     def _on_import_error(self, message: str) -> None:
@@ -880,10 +879,10 @@ class MainWindow(QMainWindow):
                 projected_value=result.net_at_maturity,
                 fgc_status=status_map.get(inv.issuer.conglomerate),
             )
+        self._ts_label.setText(f"Projected: {datetime.now():%Y-%m-%d %H:%M}")
         self.statusBar().showMessage(
             f"Projected {len(results)} investments as of {date.today():%d/%m/%Y}.", 6000
         )
-        self._has_projected = True
         self.projection_cache = results
         self._update_totals()
         self._refresh_conglomerates()
