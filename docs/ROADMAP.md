@@ -538,19 +538,17 @@ Columns:
 - Product (CDB, LCI, LCA, LCD, LC, Tesouro)
 - Principal
 - Current value (accrued to today)
-- Projected value (net at maturity for this investment)
-- Projected Balance (cumulative net-at-maturity: this investment's
-  net_at_maturity plus all later-maturing investments' net_at_maturity in
-  this conglomerate; decreases row-by-row as investments mature off the
-  front of the list. This is the user-facing "what cash will I have left
-  in this conglomerate when this row matures" column.)
-- FGC status badge — evaluates against the row's gross peak balance
-  (the cumulative gross_at_maturity, computed in parallel with Projected
-  Balance but not displayed). FGC protection covers gross owed amounts,
-  not post-tax payouts; using net values for the badge would produce a
-  "false UNDER" — i.e. say the user is protected when they actually
-  aren't. The Projected Balance column the user sees is in net values;
-  the FGC badge evaluation is in gross values. Documented duality.
+- Projected value (gross_at_maturity for this investment — pre-tax owed
+  amount at maturity)
+- Projected Balance (cumulative gross: this investment's projected value
+  plus all later-maturing investments' projected values in this
+  conglomerate; decreases row-by-row as investments mature off the front
+  of the list. This is what the per-row FGC badge evaluates against —
+  "if I held everything to maturity, what would the conglomerate's
+  pre-tax balance be at the moment this row matures?")
+- FGC status badge — evaluates against Projected Balance (which is
+  gross). FGC protection covers gross owed amounts; the displayed value
+  matches the FGC evaluation directly. No net/gross duality.
   ("OVER" / "APPROACHING" / "UNDER")
 
 **Tesouro investments:** Tesouro is not FGC-covered. Tesouro investments
@@ -562,21 +560,22 @@ every row including the summary header. No FGC badge.
 - Hide matured toggle (currently in the Investments tab) is shared
   state — applies to the Conglomerates tab too. Single source of truth
   via `_visible_investments()`, matching B17's resolution pattern.
-- Projected Balance uses net-at-maturity values for display. Sequential
-  drawdown: after sorting detail rows by maturity ascending, row N's
-  projected_balance = sum of net_at_maturity for rows N, N+1, ..., end.
-- FGC badge per row evaluates against a separately computed gross peak
-  balance (same sequential drawdown, but on gross_at_maturity instead
-  of net_at_maturity). The gross peak is not displayed to the user; it
-  is internal to the badge computation. Rationale: FGC protection
-  covers gross amounts owed, not post-tax payouts. Using net for the
-  badge would produce false-UNDER (the worst failure mode for a safety
-  check). The duality between net-display and gross-FGC is intentional
-  and documented in this entry's Detail rows section above.
-- Both Projected Balance and gross peak are sequential-drawdown and are
-  identical to snapshot-at-each-maturity under the current constant-rate
-  engine (would diverge only after B9/B10 introduce time-varying rate
-  models, at which point revisit).
+- Projected Balance uses gross_at_maturity values throughout (display
+  and FGC evaluation). Sequential drawdown: after sorting detail rows
+  by maturity ascending, row N's projected_balance = sum of
+  gross_at_maturity for rows N, N+1, ..., end.
+- FGC badge per row evaluates against the row's projected_balance
+  directly. No duality — the user sees the same number FGC sees.
+  Rationale: FGC protection covers gross amounts owed; displaying gross
+  keeps the displayed value and FGC evaluation aligned. Cost: the
+  displayed "Projected value" overstates cash-in-hand by the IR amount,
+  which the user should know to mentally subtract. Trade-off accepted
+  in favor of internal consistency.
+- Tesouro investments remain NOT_FGC at both summary and row level
+  (unchanged from original spec).
+- Sequential-drawdown semantic is identical to snapshot-at-each-maturity
+  under the current constant-rate engine. Would diverge only after B9/B10
+  introduce time-varying rate models, at which point revisit.
 - No coupon events shown. Coupon-paying investments appear once at
   their maturity date with their final payout.
 
