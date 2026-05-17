@@ -45,7 +45,7 @@ from justfixed.engine.conglomerate_report import (
     build_conglomerate_report,
     build_conglomerate_report_from_projections,
 )
-from justfixed.engine.fgc import ExposureStatus, FGCReport, fgc_concentration_report_from_projections
+from justfixed.engine.fgc import ExposureStatus, fgc_concentration_report_from_projections
 from justfixed.engine.projection import ProjectionResult, project
 from justfixed.exports.calendar import export_maturity_calendar
 from justfixed.importers.xp_loader import LoadResult, load_xp_statement
@@ -194,7 +194,7 @@ class _ImportWorker(QThread):
 
 
 class _ProjectWorker(QThread):
-    finished = Signal(object, object)  # list[ProjectionResult], FGCReport
+    finished = Signal(object)  # list[ProjectionResult]
     error    = Signal(str)
 
     def __init__(self, investments: list) -> None:
@@ -208,8 +208,7 @@ class _ProjectWorker(QThread):
                 project(inv, as_of=today, assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA)
                 for inv in self._investments
             ]
-            fgc_report = fgc_concentration_report_from_projections(results)
-            self.finished.emit(results, fgc_report)
+            self.finished.emit(results)
         except Exception as exc:
             self.error.emit(str(exc))
 
@@ -983,7 +982,7 @@ class MainWindow(QMainWindow):
         self._worker.error.connect(self._on_project_error)
         self._worker.start()
 
-    def _on_project_done(self, results: list, _fgc_report: FGCReport) -> None:
+    def _on_project_done(self, results: list) -> None:
         self._set_busy(False)
         self._ts_label.setText(f"Projected: {datetime.now():%Y-%m-%d %H:%M}")
         self.statusBar().showMessage(

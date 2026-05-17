@@ -28,10 +28,8 @@ class TestProjectionCachePopulation:
         self_mock.projection_cache = None
         self_mock._ts_label = MagicMock()
         fake_results = []
-        fake_fgc = MagicMock()
-        fake_fgc.conglomerates = []
 
-        MainWindow._on_project_done(self_mock, fake_results, fake_fgc)
+        MainWindow._on_project_done(self_mock, fake_results)
 
         assert self_mock.projection_cache is fake_results
 
