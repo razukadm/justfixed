@@ -12,10 +12,10 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 |---|---|---|
 | Domain | Complete | 153 |
 | Persistence | Complete | 86 |
-| Engine | Complete | 135 |
+| Engine | Complete | 142 |
 | Importer (parser, mapper) | Complete | 80 |
 | Importer (loader / DB persistence) | Complete | 14 |
-| UI (PySide6) | B′, B′ companion, and B24 complete (curation, filter dropdowns, totals strip, Conglomerates accordion tab) | 47 |
+| UI (PySide6) | B′, B′ companion, and B24 complete (curation, filter dropdowns, totals strip, Conglomerates accordion tab) | 40 |
 | Exports (calendar / ICS) | Complete | 9 |
 
 527 tests pass in ~4 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
