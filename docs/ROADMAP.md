@@ -539,14 +539,19 @@ Columns:
 - Principal
 - Current value (accrued to today)
 - Projected value (net at maturity for this investment)
-- Projected Balance (cumulative: this investment's projected value plus
-  all later-maturing investments' projected values in this conglomerate;
-  decreases row-by-row as investments mature off the front of the list.
-  This is what the per-row FGC badge evaluates against — "if I held
-  everything to maturity, what would the conglomerate's balance be at
-  the moment this row matures?")
-- FGC status badge (evaluating Projected Balance against the R$ 250k
-  FGC limit — "OVER" / "APPROACHING" / "UNDER")
+- Projected Balance (cumulative net-at-maturity: this investment's
+  net_at_maturity plus all later-maturing investments' net_at_maturity in
+  this conglomerate; decreases row-by-row as investments mature off the
+  front of the list. This is the user-facing "what cash will I have left
+  in this conglomerate when this row matures" column.)
+- FGC status badge — evaluates against the row's gross peak balance
+  (the cumulative gross_at_maturity, computed in parallel with Projected
+  Balance but not displayed). FGC protection covers gross owed amounts,
+  not post-tax payouts; using net values for the badge would produce a
+  "false UNDER" — i.e. say the user is protected when they actually
+  aren't. The Projected Balance column the user sees is in net values;
+  the FGC badge evaluation is in gross values. Documented duality.
+  ("OVER" / "APPROACHING" / "UNDER")
 
 **Tesouro investments:** Tesouro is not FGC-covered. Tesouro investments
 appear as a separate conglomerate section (issuer column reads "Tesouro
@@ -557,13 +562,21 @@ every row including the summary header. No FGC badge.
 - Hide matured toggle (currently in the Investments tab) is shared
   state — applies to the Conglomerates tab too. Single source of truth
   via `_visible_investments()`, matching B17's resolution pattern.
-- Projected Balance uses projected-at-maturity values, not
-  current-accrued values. This makes the FGC badge per-row read as "if
-  I held everything to maturity, what would my exposure be at the moment
-  this row matures." Sequential-drawdown semantic; identical to
-  snapshot-at-each-maturity under the current constant-rate engine
-  (would diverge only after B9/B10 introduce time-varying rate models,
-  at which point revisit).
+- Projected Balance uses net-at-maturity values for display. Sequential
+  drawdown: after sorting detail rows by maturity ascending, row N's
+  projected_balance = sum of net_at_maturity for rows N, N+1, ..., end.
+- FGC badge per row evaluates against a separately computed gross peak
+  balance (same sequential drawdown, but on gross_at_maturity instead
+  of net_at_maturity). The gross peak is not displayed to the user; it
+  is internal to the badge computation. Rationale: FGC protection
+  covers gross amounts owed, not post-tax payouts. Using net for the
+  badge would produce false-UNDER (the worst failure mode for a safety
+  check). The duality between net-display and gross-FGC is intentional
+  and documented in this entry's Detail rows section above.
+- Both Projected Balance and gross peak are sequential-drawdown and are
+  identical to snapshot-at-each-maturity under the current constant-rate
+  engine (would diverge only after B9/B10 introduce time-varying rate
+  models, at which point revisit).
 - No coupon events shown. Coupon-paying investments appear once at
   their maturity date with their final payout.
 
