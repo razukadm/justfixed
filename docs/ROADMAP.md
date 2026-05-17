@@ -220,23 +220,16 @@ user.
 **Trigger to revisit:** Before beta release. A non-developer user
 needs a "back up your data" button somewhere in the UI.
 
-### B12. FGC engine — per-investment timeline view
+### B12. FGC engine — per-investment timeline view — CLOSED
 
-**Source:** `docs/FGC_DESIGN.md`. The engine already returns
-per-investment exposure data inside each `ConglomerateExposure`,
-deliberately, so this UI can be built without engine changes.
-
-**Why deferred:** Phase 1's report summarizes by conglomerate. The
-timeline view would render per-investment: when each investment in a
-conglomerate matures, what the running exposure looks like as each
-pays out.
-
-**Trigger to revisit:** When the FGC concentration UI is being
-designed and the user wants to see "how does my exposure to this
-conglomerate decay over time?"
-
-**Architectural note:** Engine work is already done. This is purely
-a UI/visualization addition.
+**Closed:** Superseded by B24 (the conglomerate consolidated report).
+The per-investment timeline view's purpose — showing per-investment
+exposure data within a conglomerate — is delivered by B24's detail rows.
+B12's architectural note ("engine work is already done; this is purely
+a UI addition") remains accurate: the underlying `ConglomerateExposure`
+data structure was deliberately designed to return per-investment data,
+and that's what B24's detail rows read from. No separate B12
+implementation needed.
 
 ### B13. Curated issuer-to-conglomerate lookup table — CLOSED
 
@@ -494,6 +487,96 @@ designer's time becomes available.
 (EXE icon) and Pass 4's Inno Setup script (installer icon + Start Menu
 shortcut). Replacing the file at `assets/icon.ico` propagates everywhere
 automatically; no spec changes needed.
+
+### B24. Conglomerate consolidated report (tab)
+
+**Source:** Identified after installer thread closure (May 2026) as a
+view dimension the app doesn't currently provide. FGC concentration is
+the project's central feature; the per-investment FGC badge is the
+atomic version of "are you safe"; this is the consolidated version.
+
+This item supersedes the original B12. B12's engine work (per-investment
+exposure data inside `ConglomerateExposure`) is the basis for this view's
+detail rows; the UI scope is unified into B24.
+
+**What it is:** A new "Conglomerates" tab in the main window, positioned
+as the first tab and the default landing tab on app launch. The existing
+per-investment view becomes the second tab labeled "Investments" and
+stays unchanged (filter dropdowns, totals strip, Hide matured toggle,
+per-row FGC badges — all preserved).
+
+**Layout:** Accordion-style. Stacked sections, one per conglomerate, all
+closed by default with a visible "+" icon to expand. Click the section
+header to expand its detail table.
+
+**Sort order:** Alphabetical by conglomerate name.
+
+**Conglomerate header (summary row, visible when collapsed):**
+Same column structure as the detail rows, using aggregates. Issuer and
+Product columns blank at the summary level since multiple may roll up.
+The detail-rows' Projected Balance column is omitted at summary level
+since it would duplicate Projected value.
+
+- "+" icon to expand
+- Conglomerate name
+- Next maturity (earliest upcoming maturity in this conglomerate,
+  honoring the Hide matured toggle)
+- (Issuer column blank)
+- (Product column blank)
+- Total Principal
+- Total Current value
+- Total Projected value
+- FGC status badge (per conglomerate, evaluating total exposure against
+  R$ 250k limit)
+
+**Detail rows (visible when section expanded):**
+One row per investment in the conglomerate, in maturity-date order.
+Columns:
+- (no "+" icon — indent under the section header)
+- Maturity date
+- Issuer
+- Product (CDB, LCI, LCA, LCD, LC, Tesouro)
+- Principal
+- Current value (accrued to today)
+- Projected value (net at maturity for this investment)
+- Projected Balance (cumulative: this investment's projected value plus
+  all later-maturing investments' projected values in this conglomerate;
+  decreases row-by-row as investments mature off the front of the list.
+  This is what the per-row FGC badge evaluates against — "if I held
+  everything to maturity, what would the conglomerate's balance be at
+  the moment this row matures?")
+- FGC status badge (evaluating Projected Balance against the R$ 250k
+  FGC limit — "OVER" / "APPROACHING" / "UNDER")
+
+**Tesouro investments:** Tesouro is not FGC-covered. Tesouro investments
+appear as a separate conglomerate section (issuer column reads "Tesouro
+Nacional" at detail level), with the FGC column reading "Not FGC" at
+every row including the summary header. No FGC badge.
+
+**Pinned semantic decisions:**
+- Hide matured toggle (currently in the Investments tab) is shared
+  state — applies to the Conglomerates tab too. Single source of truth
+  via `_visible_investments()`, matching B17's resolution pattern.
+- Projected Balance uses projected-at-maturity values, not
+  current-accrued values. This makes the FGC badge per-row read as "if
+  I held everything to maturity, what would my exposure be at the moment
+  this row matures." Sequential-drawdown semantic; identical to
+  snapshot-at-each-maturity under the current constant-rate engine
+  (would diverge only after B9/B10 introduce time-varying rate models,
+  at which point revisit).
+- No coupon events shown. Coupon-paying investments appear once at
+  their maturity date with their final payout.
+
+**Effort:** ~4-6 calibrated sessions. Engine work is small (reuses
+existing `ConglomerateExposure` data, adds one aggregator for the
+summary headers). UI work is the real cost: new tab infrastructure
+(the app is single-tab today), the accordion widget pattern, the
+section/detail row layout, sorting, expand/collapse state, and
+verifying totals match the Investments tab to the cent.
+
+**Architectural note:** B12 is closed as superseded; its engine work
+("per-investment exposure data inside `ConglomerateExposure`") is what
+this view's detail rows are built on. No separate B12 implementation.
 
 ---
 
