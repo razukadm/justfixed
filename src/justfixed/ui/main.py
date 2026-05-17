@@ -91,18 +91,24 @@ _HEADERS = [
 
 _PT_BR = QLocale(QLocale.Language.Portuguese, QLocale.Country.Brazil)
 
-_FGC_COLORS: dict[ExposureStatus, tuple[QColor, str]] = {
-    ExposureStatus.UNDER:       (QColor("#2ecc71"), "● UNDER"),
-    ExposureStatus.APPROACHING: (QColor("#e67e22"), "● APPROACHING"),
-    ExposureStatus.OVER:        (QColor("#e74c3c"), "● OVER"),
+# Unified badge data for both ExposureStatus and ConglomerateStatus.
+# Keyed by .value string — both enums share "under"/"approaching"/"over".
+_BADGE_STYLE: dict[str, tuple[str, str]] = {
+    "under":       ("● UNDER",       "#2ecc71"),
+    "approaching": ("● APPROACHING", "#e67e22"),
+    "over":        ("● OVER",        "#e74c3c"),
+    "not_fgc":     ("N/A",           "#aaaaaa"),
 }
 
-_CONG_BADGE: dict[ConglomerateStatus, tuple[str, str]] = {
-    ConglomerateStatus.UNDER:       ("● UNDER",       "#2ecc71"),
-    ConglomerateStatus.APPROACHING: ("● APPROACHING", "#e67e22"),
-    ConglomerateStatus.OVER:        ("● OVER",        "#e74c3c"),
-    ConglomerateStatus.NOT_FGC:     ("N/A",           "#aaaaaa"),
-}
+
+def _make_fgc_badge(status, width: int) -> QLabel:
+    """Return a styled FGC badge QLabel for either ExposureStatus or ConglomerateStatus."""
+    text, color = _BADGE_STYLE[status.value]
+    lbl = QLabel(text)
+    lbl.setFixedWidth(width)
+    lbl.setStyleSheet(f"color: {color};")
+    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    return lbl
 
 _HIGHLIGHT_COLOR = QColor("#FFF8DC")
 
@@ -518,12 +524,7 @@ class MainWindow(QMainWindow):
         projected_lbl.setFixedWidth(120)
         h.addWidget(projected_lbl)
 
-        badge_text, badge_color = _CONG_BADGE[section.summary_fgc_status]
-        badge = QLabel(badge_text)
-        badge.setFixedWidth(130)
-        badge.setStyleSheet(f"color: {badge_color};")
-        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        h.addWidget(badge)
+        h.addWidget(_make_fgc_badge(section.summary_fgc_status, 130))
 
         return row_widget, plus
 
@@ -632,12 +633,7 @@ class MainWindow(QMainWindow):
             lbl.setFixedWidth(width)
             h.addWidget(lbl)
 
-        badge_text, badge_color = _CONG_BADGE[row.fgc_status]
-        badge = QLabel(badge_text)
-        badge.setFixedWidth(110)
-        badge.setStyleSheet(f"color: {badge_color};")
-        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        h.addWidget(badge)
+        h.addWidget(_make_fgc_badge(row.fgc_status, 110))
 
         return w
 
@@ -865,9 +861,9 @@ class MainWindow(QMainWindow):
         elif fgc_status is None:
             badge = QTableWidgetItem("—")
         else:
-            color, label = _FGC_COLORS[fgc_status]
+            label, color = _BADGE_STYLE[fgc_status.value]
             badge = QTableWidgetItem(label)
-            badge.setForeground(color)
+            badge.setForeground(QColor(color))
         badge.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self._table.setItem(row, _COL_FGC, badge)
 
