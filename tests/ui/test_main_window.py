@@ -409,7 +409,7 @@ class TestComputeTotals:
 
         assert result["principal_total"] == Money.zero()
         assert result["current_value_total"] is None
-        assert result["gross_at_maturity_total"] is None
+        assert result["projected_total"] is None
         assert result["row_count"] == 0
 
     def test_empty_investments_with_cache(self) -> None:
@@ -418,7 +418,7 @@ class TestComputeTotals:
 
         assert result["principal_total"] == Money.zero()
         assert result["current_value_total"] == Money.zero()
-        assert result["gross_at_maturity_total"] == Money.zero()
+        assert result["projected_total"] == Money.zero()
         assert result["row_count"] == 0
 
     def test_investments_no_cache_returns_principal_only(self) -> None:
@@ -429,7 +429,7 @@ class TestComputeTotals:
 
         assert result["principal_total"] == _brl("350.00")
         assert result["current_value_total"] is None
-        assert result["gross_at_maturity_total"] is None
+        assert result["projected_total"] is None
         assert result["row_count"] == 2
 
     def test_all_investments_in_cache_sums_projections(self) -> None:
@@ -442,7 +442,7 @@ class TestComputeTotals:
 
         assert result["principal_total"] == _brl("350.00")
         assert result["current_value_total"] == _brl("370.00")
-        assert result["gross_at_maturity_total"] == _brl("430.00")
+        assert result["projected_total"] == _brl("430.00")
         assert result["row_count"] == 2
 
     def test_partial_cache_returns_none_for_projected(self) -> None:
@@ -454,7 +454,7 @@ class TestComputeTotals:
 
         assert result["principal_total"] == _brl("350.00")
         assert result["current_value_total"] is None
-        assert result["gross_at_maturity_total"] is None
+        assert result["projected_total"] is None
         assert result["row_count"] == 2
 
 
@@ -478,7 +478,7 @@ class TestUpdateTotals:
         totals = {
             "principal_total": _brl("350.00"),
             "current_value_total": _brl("370.00"),
-            "gross_at_maturity_total": _brl("430.00"),
+            "projected_total": _brl("430.00"),
             "row_count": 2,
         }
         with patch("justfixed.ui.main.compute_totals", return_value=totals):
@@ -497,7 +497,7 @@ class TestUpdateTotals:
         totals = {
             "principal_total": _brl("100.00"),
             "current_value_total": None,
-            "gross_at_maturity_total": None,
+            "projected_total": None,
             "row_count": 1,
         }
         with patch("justfixed.ui.main.compute_totals", return_value=totals):
@@ -520,7 +520,7 @@ class TestUpdateTotals:
         totals = {
             "principal_total": _brl("100.00"),
             "current_value_total": None,
-            "gross_at_maturity_total": None,
+            "projected_total": None,
             "row_count": 1,
         }
         with patch("justfixed.ui.main.compute_totals", return_value=totals):

@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QStackedWidget,
     QStatusBar,
     QStyledItemDelegate,
@@ -37,6 +38,7 @@ from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
+from justfixed.engine.conglomerate_report import ConglomerateSection, ConglomerateStatus, build_conglomerate_report
 from justfixed.engine.fgc import ExposureStatus, FGCReport, fgc_concentration_report_from_projections
 from justfixed.engine.projection import ProjectionResult, project
 from justfixed.exports.calendar import export_maturity_calendar
@@ -89,6 +91,13 @@ _FGC_COLORS: dict[ExposureStatus, tuple[QColor, str]] = {
     ExposureStatus.OVER:        (QColor("#e74c3c"), "● OVER"),
 }
 
+_CONG_BADGE: dict[ConglomerateStatus, tuple[str, str]] = {
+    ConglomerateStatus.UNDER:       ("● UNDER",       "#2ecc71"),
+    ConglomerateStatus.APPROACHING: ("● APPROACHING", "#e67e22"),
+    ConglomerateStatus.OVER:        ("● OVER",        "#e74c3c"),
+    ConglomerateStatus.NOT_FGC:     ("N/A",           "#aaaaaa"),
+}
+
 _HIGHLIGHT_COLOR = QColor("#FFF8DC")
 
 
@@ -101,10 +110,10 @@ def compute_totals(
     """Summarise visible investments and their projection data.
 
     Returns a dict with four keys:
-      principal_total        — always a Money (sum of inv.principal).
-      current_value_total    — Money if all investments are in cache, else None.
-      gross_at_maturity_total — Money if all investments are in cache, else None.
-      row_count              — int, always len(investments).
+      principal_total     — always a Money (sum of inv.principal).
+      current_value_total — Money if all investments are in cache, else None.
+      projected_total     — Money (gross_at_maturity) if all in cache, else None.
+      row_count           — int, always len(investments).
 
     None semantics: "we have investments but the cache doesn't cover all of
     them." Zero investments with a cache present gives zero totals, not None
@@ -115,11 +124,11 @@ def compute_totals(
 
     if not investments:
         current_value_total = Money.zero() if cache is not None else None
-        gross_at_maturity_total = Money.zero() if cache is not None else None
+        projected_total = Money.zero() if cache is not None else None
         return {
             "principal_total": principal_total,
             "current_value_total": current_value_total,
-            "gross_at_maturity_total": gross_at_maturity_total,
+            "projected_total": projected_total,
             "row_count": row_count,
         }
 
@@ -127,29 +136,29 @@ def compute_totals(
         return {
             "principal_total": principal_total,
             "current_value_total": None,
-            "gross_at_maturity_total": None,
+            "projected_total": None,
             "row_count": row_count,
         }
 
     proj_by_id = {p.investment.id: p for p in cache}
     current_values: list[Money] = []
-    gross_values: list[Money] = []
+    projected_values: list[Money] = []
     for inv in investments:
         proj = proj_by_id.get(inv.id)
         if proj is None:
             return {
                 "principal_total": principal_total,
                 "current_value_total": None,
-                "gross_at_maturity_total": None,
+                "projected_total": None,
                 "row_count": row_count,
             }
         current_values.append(proj.current_value)
-        gross_values.append(proj.gross_at_maturity)
+        projected_values.append(proj.gross_at_maturity)
 
     return {
         "principal_total": principal_total,
         "current_value_total": sum(current_values, Money.zero()),
-        "gross_at_maturity_total": sum(gross_values, Money.zero()),
+        "projected_total": sum(projected_values, Money.zero()),
         "row_count": row_count,
     }
 
@@ -344,10 +353,15 @@ class MainWindow(QMainWindow):
         self._tabs = QTabWidget()
         self.setCentralWidget(self._tabs)
         self._conglomerates_tab = QWidget()
-        _cong_layout = QVBoxLayout(self._conglomerates_tab)
-        _cong_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _cong_label = QLabel("Conglomerates — not yet implemented")
-        _cong_layout.addWidget(_cong_label)
+        _cong_outer = QVBoxLayout(self._conglomerates_tab)
+        _cong_outer.setContentsMargins(0, 0, 0, 0)
+        self._cong_scroll = QScrollArea()
+        self._cong_scroll.setWidgetResizable(True)
+        self._cong_body = QWidget()
+        self._cong_layout = QVBoxLayout(self._cong_body)
+        self._cong_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._cong_scroll.setWidget(self._cong_body)
+        _cong_outer.addWidget(self._cong_scroll)
         self._tabs.addTab(self._conglomerates_tab, "Conglomerates")
         central = QWidget()
         self._tabs.addTab(central, "Investments")
@@ -448,6 +462,68 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._on_about_clicked)
         help_menu.addAction(about_action)
 
+    def _make_summary_row(self, section: ConglomerateSection) -> QWidget:
+        row_widget = QWidget()
+        h = QHBoxLayout(row_widget)
+        h.setContentsMargins(6, 4, 6, 4)
+
+        plus = QLabel("+")
+        plus.setFixedWidth(20)
+        h.addWidget(plus)
+
+        name = QLabel(section.conglomerate_name)
+        h.addWidget(name, stretch=1)
+
+        d = section.next_maturity
+        next_lbl = QLabel(
+            _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat)
+        )
+        next_lbl.setFixedWidth(120)
+        h.addWidget(next_lbl)
+
+        principal_lbl = QLabel(section.total_principal.to_display())
+        principal_lbl.setFixedWidth(120)
+        h.addWidget(principal_lbl)
+
+        current_lbl = QLabel(section.total_current_value.to_display())
+        current_lbl.setFixedWidth(120)
+        h.addWidget(current_lbl)
+
+        projected_lbl = QLabel(section.total_projected_value.to_display())
+        projected_lbl.setFixedWidth(120)
+        h.addWidget(projected_lbl)
+
+        badge_text, badge_color = _CONG_BADGE[section.summary_fgc_status]
+        badge = QLabel(badge_text)
+        badge.setFixedWidth(130)
+        badge.setStyleSheet(f"color: {badge_color};")
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h.addWidget(badge)
+
+        return row_widget
+
+    def _refresh_conglomerates(self) -> None:
+        while self._cong_layout.count():
+            item = self._cong_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        investments = self.visible_investments(apply_filter=False)
+        if not investments:
+            empty = QLabel("No investments to display.")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._cong_layout.addWidget(empty)
+            return
+
+        report = build_conglomerate_report(
+            investments,
+            as_of=date.today(),
+            assumed_cdi=_ASSUMED_CDI,
+            assumed_ipca=_ASSUMED_IPCA,
+        )
+        for section in report.sections:
+            self._cong_layout.addWidget(self._make_summary_row(section))
+
     def _on_about_clicked(self) -> None:
         QMessageBox.about(
             self,
@@ -510,6 +586,7 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(0 if self._investments else 1)
         self._update_button_states()
         self._update_totals()
+        self._refresh_conglomerates()
 
     def _update_totals(self) -> None:
         visible = self.visible_investments()
@@ -521,8 +598,8 @@ class MainWindow(QMainWindow):
             if totals["current_value_total"] is not None else "—"
         )
         projected = (
-            totals["gross_at_maturity_total"].to_display()
-            if totals["gross_at_maturity_total"] is not None else "—"
+            totals["projected_total"].to_display()
+            if totals["projected_total"] is not None else "—"
         )
 
         self._principal_label.setText(f"Principal: {principal}")
@@ -756,6 +833,7 @@ class MainWindow(QMainWindow):
         self._has_projected = True
         self.projection_cache = results
         self._update_totals()
+        self._refresh_conglomerates()
 
     def _on_project_error(self, message: str) -> None:
         self._set_busy(False)
