@@ -39,6 +39,7 @@ from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
 from justfixed.engine.conglomerate_report import (
+    ConglomerateDetailRow,
     ConglomerateSection,
     ConglomerateStatus,
     build_conglomerate_report,
@@ -344,6 +345,8 @@ class MainWindow(QMainWindow):
         # Hide matured toggle — _refresh_conglomerates filters the cached list
         # to the currently visible set on each render.
         self.projection_cache: list[ProjectionResult] | None = None
+        self._expanded_conglomerates: set[str] = set()
+        self._cong_section_widgets: dict[str, tuple] = {}  # cname → (plus_label, detail_container)
         self._highlight_timer: QTimer | None = None  # keeps highlight timer alive for cancellation
         self._worker: QThread | None = None  # keeps worker alive during run
 
@@ -477,7 +480,9 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._on_about_clicked)
         help_menu.addAction(about_action)
 
-    def _make_summary_row(self, section: ConglomerateSection, index: int = 0) -> QWidget:
+    def _make_summary_row(
+        self, section: ConglomerateSection, index: int = 0
+    ) -> tuple[QWidget, QLabel]:
         row_widget = QWidget()
         bg = "#ffffff" if index % 2 == 0 else "#f5f5f5"
         row_widget.setObjectName(f"congRow{index}")
@@ -520,7 +525,121 @@ class MainWindow(QMainWindow):
         badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         h.addWidget(badge)
 
-        return row_widget
+        return row_widget, plus
+
+    def _make_section_widget(self, section: ConglomerateSection, idx: int) -> QWidget:
+        expanded = section.conglomerate_name in self._expanded_conglomerates
+        wrapper = QWidget()
+        vbox = QVBoxLayout(wrapper)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+
+        summary_row, plus_label = self._make_summary_row(section, idx)
+        plus_label.setText("−" if expanded else "+")
+
+        detail = self._make_detail_container(section)
+        detail.setVisible(expanded)
+
+        cname = section.conglomerate_name
+        summary_row.setCursor(Qt.CursorShape.PointingHandCursor)
+        summary_row.mousePressEvent = lambda event, n=cname: self._toggle_section(n)
+
+        vbox.addWidget(summary_row)
+        vbox.addWidget(detail)
+
+        self._cong_section_widgets[cname] = (plus_label, detail)
+        return wrapper
+
+    def _toggle_section(self, cname: str) -> None:
+        if cname not in self._cong_section_widgets:
+            return
+        plus_label, detail_container = self._cong_section_widgets[cname]
+        if cname in self._expanded_conglomerates:
+            self._expanded_conglomerates.discard(cname)
+            detail_container.setVisible(False)
+            plus_label.setText("+")
+        else:
+            self._expanded_conglomerates.add(cname)
+            detail_container.setVisible(True)
+            plus_label.setText("−")
+
+    def _make_detail_container(self, section: ConglomerateSection) -> QWidget:
+        container = QWidget()
+        vbox = QVBoxLayout(container)
+        vbox.setContentsMargins(20, 0, 0, 0)
+        vbox.setSpacing(0)
+        vbox.addWidget(self._make_detail_header())
+        for idx, row in enumerate(section.rows):
+            vbox.addWidget(self._make_detail_row(row, idx))
+        return container
+
+    def _make_detail_header(self) -> QWidget:
+        w = QWidget()
+        w.setObjectName("detailHeader")
+        w.setStyleSheet(
+            "#detailHeader { background-color: #f0f0f0; border-bottom: 1px solid #dddddd; }"
+            " QLabel { font-weight: bold; }"
+        )
+        h = QHBoxLayout(w)
+        h.setContentsMargins(8, 4, 8, 4)
+        for text, width, stretch in [
+            ("Maturity",            100, 0),
+            ("Issuer",                0, 1),
+            ("Product",             100, 0),
+            ("Principal",           110, 0),
+            ("Current value",       110, 0),
+            ("Projected value",     110, 0),
+            ("Projected Balance",   120, 0),
+            ("FGC",                 110, 0),
+        ]:
+            lbl = QLabel(text)
+            if width:
+                lbl.setFixedWidth(width)
+            h.addWidget(lbl, stretch=stretch)
+        return w
+
+    def _make_detail_row(self, row: ConglomerateDetailRow, idx: int) -> QWidget:
+        w = QWidget()
+        bg = "#fafafa" if idx % 2 == 0 else "#f0f0f0"
+        w.setObjectName(f"detailRow{idx}")
+        w.setStyleSheet(
+            f"#detailRow{idx} {{ background-color: {bg}; border-bottom: 1px solid #eeeeee; }}"
+        )
+        h = QHBoxLayout(w)
+        h.setContentsMargins(8, 4, 8, 4)
+
+        d = row.maturity_date
+        mat_lbl = QLabel(
+            _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat)
+        )
+        mat_lbl.setFixedWidth(100)
+        h.addWidget(mat_lbl)
+
+        issuer_lbl = QLabel(row.issuer_name)
+        h.addWidget(issuer_lbl, stretch=1)
+
+        product_lbl = QLabel(rules_for(row.product).display_name)
+        product_lbl.setFixedWidth(100)
+        h.addWidget(product_lbl)
+
+        for val, width in [
+            (row.principal.to_display(),        110),
+            (row.current_value.to_display(),     110),
+            (row.projected_value.to_display(),   110),
+            (row.projected_balance.to_display(), 120),
+        ]:
+            lbl = QLabel(val)
+            lbl.setFixedWidth(width)
+            h.addWidget(lbl)
+
+        badge_text, badge_color = _CONG_BADGE[row.fgc_status]
+        badge = QLabel(badge_text)
+        badge.setFixedWidth(110)
+        badge.setStyleSheet(f"color: {badge_color};")
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h.addWidget(badge)
+
+        return w
 
     def _clear_cong_layout(self) -> None:
         while self._cong_layout.count():
@@ -560,6 +679,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_conglomerates(self) -> None:
         self._clear_cong_layout()
+        self._cong_section_widgets = {}
         if self.projection_cache is None:
             placeholder = QLabel('Press "Project as of today" to populate.')
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -575,7 +695,7 @@ class MainWindow(QMainWindow):
         report = build_conglomerate_report_from_projections(projections, as_of=date.today())
         self._cong_layout.addWidget(self._make_summary_header())
         for idx, section in enumerate(report.sections):
-            self._cong_layout.addWidget(self._make_summary_row(section, idx))
+            self._cong_layout.addWidget(self._make_section_widget(section, idx))
 
     def _on_about_clicked(self) -> None:
         QMessageBox.about(
@@ -808,6 +928,7 @@ class MainWindow(QMainWindow):
             return
         deleted_investments, _ = self._repo.delete_all()
         self.projection_cache = None
+        self._expanded_conglomerates.clear()
         self._ts_label.setText("")
         self.refresh_table()
         self._status_label.setText("Ready.")
@@ -846,6 +967,7 @@ class MainWindow(QMainWindow):
             f"({result.inserted} new, {result.skipped} unchanged)."
         )
         self.projection_cache = None
+        self._expanded_conglomerates.clear()
         self._ts_label.setText("")
         self.refresh_table()
 
