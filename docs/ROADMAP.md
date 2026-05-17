@@ -490,105 +490,29 @@ automatically; no spec changes needed.
 
 ### B24. Conglomerate consolidated report (tab)
 
-**Source:** Identified after installer thread closure (May 2026) as a
-view dimension the app doesn't currently provide. FGC concentration is
-the project's central feature; the per-investment FGC badge is the
-atomic version of "are you safe"; this is the consolidated version.
+**Status:** Shipped. Commits `30d6a00`–`3859f73` (May 2026).
 
-This item supersedes the original B12. B12's engine work (per-investment
-exposure data inside `ConglomerateExposure`) is the basis for this view's
-detail rows; the UI scope is unified into B24.
+Conglomerates tab added as first tab (default landing). Accordion layout:
+one section per conglomerate, collapsed by default, click to expand.
+Summary row shows total principal, current value, projected value, next
+maturity, and FGC status badge. Detail rows (one per investment) add
+per-row Projected Balance (sequential drawdown, maturity-ascending) and
+per-row FGC badge. All values gross. Tesouro section shows "N/A" for FGC.
+Projection cache shared with the Investments tab; a single "Project as of
+today" button populates both tabs.
 
-**What it is:** A new "Conglomerates" tab in the main window, positioned
-as the first tab and the default landing tab on app launch. The existing
-per-investment view becomes the second tab labeled "Investments" and
-stays unchanged (filter dropdowns, totals strip, Hide matured toggle,
-per-row FGC badges — all preserved).
+### B25. Sticky conglomerate summary-row header
 
-**Layout:** Accordion-style. Stacked sections, one per conglomerate, all
-closed by default with a visible "+" icon to expand. Click the section
-header to expand its detail table.
+When a conglomerate section is expanded and the user scrolls down through
+many detail rows, the section's summary row scrolls off the top. A sticky
+header (section header stays pinned while its detail rows are visible)
+would improve readability for large sections.
 
-**Sort order:** Alphabetical by conglomerate name.
-
-**Conglomerate header (summary row, visible when collapsed):**
-Same column structure as the detail rows, using aggregates. Issuer and
-Product columns blank at the summary level since multiple may roll up.
-The detail-rows' Projected Balance column is omitted at summary level
-since it would duplicate Projected value.
-
-- "+" icon to expand
-- Conglomerate name
-- Next maturity (earliest upcoming maturity in this conglomerate,
-  honoring the Hide matured toggle)
-- (Issuer column blank)
-- (Product column blank)
-- Total Principal
-- Total Current value
-- Total Projected value
-- FGC status badge (per conglomerate, evaluating total exposure against
-  R$ 250k limit)
-
-**Detail rows (visible when section expanded):**
-One row per investment in the conglomerate, in maturity-date order.
-Columns:
-- (no "+" icon — indent under the section header)
-- Maturity date
-- Issuer
-- Product (CDB, LCI, LCA, LCD, LC, Tesouro)
-- Principal
-- Current value (accrued to today)
-- Projected value (gross_at_maturity for this investment — pre-tax owed
-  amount at maturity)
-- Projected Balance (cumulative gross: this investment's projected value
-  plus all later-maturing investments' projected values in this
-  conglomerate; decreases row-by-row as investments mature off the front
-  of the list. This is what the per-row FGC badge evaluates against —
-  "if I held everything to maturity, what would the conglomerate's
-  pre-tax balance be at the moment this row matures?")
-- FGC status badge — evaluates against Projected Balance (which is
-  gross). FGC protection covers gross owed amounts; the displayed value
-  matches the FGC evaluation directly. No net/gross duality.
-  ("OVER" / "APPROACHING" / "UNDER")
-
-**Tesouro investments:** Tesouro is not FGC-covered. Tesouro investments
-appear as a separate conglomerate section (issuer column reads "Tesouro
-Nacional" at detail level), with the FGC column reading "Not FGC" at
-every row including the summary header. No FGC badge.
-
-**Pinned semantic decisions:**
-- Hide matured toggle (currently in the Investments tab) is shared
-  state — applies to the Conglomerates tab too. Single source of truth
-  via `_visible_investments()`, matching B17's resolution pattern.
-- Projected Balance uses gross_at_maturity values throughout (display
-  and FGC evaluation). Sequential drawdown: after sorting detail rows
-  by maturity ascending, row N's projected_balance = sum of
-  gross_at_maturity for rows N, N+1, ..., end.
-- FGC badge per row evaluates against the row's projected_balance
-  directly. No duality — the user sees the same number FGC sees.
-  Rationale: FGC protection covers gross amounts owed; displaying gross
-  keeps the displayed value and FGC evaluation aligned. Cost: the
-  displayed "Projected value" overstates cash-in-hand by the IR amount,
-  which the user should know to mentally subtract. Trade-off accepted
-  in favor of internal consistency.
-- Tesouro investments remain NOT_FGC at both summary and row level
-  (unchanged from original spec).
-- Sequential-drawdown semantic is identical to snapshot-at-each-maturity
-  under the current constant-rate engine. Would diverge only after B9/B10
-  introduce time-varying rate models, at which point revisit.
-- No coupon events shown. Coupon-paying investments appear once at
-  their maturity date with their final payout.
-
-**Effort:** ~4-6 calibrated sessions. Engine work is small (reuses
-existing `ConglomerateExposure` data, adds one aggregator for the
-summary headers). UI work is the real cost: new tab infrastructure
-(the app is single-tab today), the accordion widget pattern, the
-section/detail row layout, sorting, expand/collapse state, and
-verifying totals match the Investments tab to the cent.
-
-**Architectural note:** B12 is closed as superseded; its engine work
-("per-investment exposure data inside `ConglomerateExposure`") is what
-this view's detail rows are built on. No separate B12 implementation.
+**Deferred:** Qt's `QScrollArea` has no native CSS `position: sticky`
+equivalent. Implementing it requires either a custom `QAbstractScrollArea`
+subclass with manual header repositioning on scroll events, or a two-panel
+layout (fixed header, scrollable body). Both approaches add significant
+complexity. Defer until real user feedback confirms this is a pain point.
 
 ---
 

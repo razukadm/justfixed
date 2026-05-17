@@ -15,10 +15,10 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Engine | Complete | 135 |
 | Importer (parser, mapper) | Complete | 80 |
 | Importer (loader / DB persistence) | Complete | 14 |
-| UI (PySide6) | B′ and B′ companion complete (curation, filter dropdowns, totals strip) | 40 |
+| UI (PySide6) | B′, B′ companion, and B24 complete (curation, filter dropdowns, totals strip, Conglomerates accordion tab) | 47 |
 | Exports (calendar / ICS) | Complete | 9 |
 
-520 tests pass in ~4 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+527 tests pass in ~4 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -364,7 +364,7 @@ Design choices:
 
 ### `main.py`
 
-PySide6 single-window desktop application. Imports an XP statement, displays investments in a table with per-row FGC concentration badges and an inline-editable Conglomerate column (B′ curation), filters by issuer and conglomerate via dropdowns with a totals strip below the table (B′ companion), projects current values as of today, and exports the maturity calendar to an `.ics` file. Background work (statement loading, projection) runs on `QThread` workers; a single `_set_busy` guard prevents overlapping operations. Empty state (no investments loaded) swaps the table for a centered prompt via `QStackedWidget`.
+PySide6 single-window desktop application. Two tabs: **Conglomerates** (default landing, B24) and **Investments**. The Conglomerates tab shows an accordion layout — one collapsible section per conglomerate with summary totals, FGC status badge, and expandable detail rows (per-investment projected balance via sequential drawdown). The Investments tab imports an XP statement, displays investments in a table with per-row FGC concentration badges and an inline-editable Conglomerate column (B′ curation), and filters by conglomerate and issuer via dropdowns with a totals strip below the table (B′ companion). Both tabs share a projection cache populated by a single "Project as of today" button. Background work (statement loading, projection) runs on `QThread` workers; a single `_set_busy` guard prevents overlapping operations. Empty state (no investments loaded) swaps the table for a centered prompt via `QStackedWidget`.
 
 The module imports from `domain`, `persistence`, `engine.projection`, `engine.fgc`, `exports.calendar`, and `importers.xp_loader`. It introduces no new architectural layer between itself and those — direct calls, no service or presenter layer.
 
@@ -378,7 +378,7 @@ See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′
 
 ## Test discipline
 
-**520 tests, ~4 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**527 tests, ~4 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 

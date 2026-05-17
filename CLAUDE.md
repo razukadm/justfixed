@@ -9,7 +9,7 @@ this file is the working-style and conventions summary.
 JustFixed is a Windows desktop portfolio tracker for Brazilian fixed-income investments
 (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, single-user. Engine,
 persistence, exports, and the XP importer are complete; the UI (PySide6) is through
-milestone B′ and B′ companion (read-only viewer, conglomerate curation, filter dropdowns, and totals strip). The README covers the
+milestone B24 (read-only viewer, conglomerate curation, filter dropdowns, totals strip, and Conglomerates accordion tab). The README covers the
 user-facing intent; ARCHITECTURE.md covers the internal shape.
 
 ## Architectural shape
@@ -22,7 +22,7 @@ Strict layer ordering, no upward dependencies:
 - `importers/` — three layers: parser (xlsx → strings), mapper (strings → typed),
   loader (typed → persisted).
 - `exports/` — calendar.py: iCalendar (.ics) export. Depends on domain + engine, not persistence.
-- `ui/` — PySide6 single-window app. Milestones A′ and B′ shipped (read-only viewer + conglomerate curation). See docs/UI_DESIGN.md.
+- `ui/` — PySide6 single-window app. Milestones A′, B′, and B24 shipped (read-only viewer, conglomerate curation, Conglomerates accordion tab). See docs/UI_DESIGN.md.
 
 Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 
@@ -34,7 +34,7 @@ Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 - **Domain types validate in `__post_init__`.** Corrupt data fails to load with a
   clear `ValueError`. The domain is the gatekeeper for invariants.
 - **Tests are the spec.** If behavior changes, the test changes first. Currently
-  520 tests, ~4 second runtime, no skips. Tests pass on every commit.
+  527 tests, ~4 second runtime, no skips. Tests pass on every commit.
 - **Hand-compute financial test expected values.** Show all decimals; don't approximate.
   Approximation has been a real source of bugs.
 - **Repositories are the only public access to persistence.** Engine, UI, and importers
