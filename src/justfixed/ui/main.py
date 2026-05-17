@@ -860,32 +860,19 @@ class MainWindow(QMainWindow):
     def _on_project_clicked(self) -> None:
         self._set_busy(True)
 
-        self._worker = _ProjectWorker(self.visible_investments())
+        self._worker = _ProjectWorker(self.visible_investments(apply_filter=False))
         self._worker.finished.connect(self._on_project_done)
         self._worker.error.connect(self._on_project_error)
         self._worker.start()
 
-    def _on_project_done(self, results: list, fgc_report: FGCReport) -> None:
+    def _on_project_done(self, results: list, _fgc_report: FGCReport) -> None:
         self._set_busy(False)
-        status_map = {
-            c.conglomerate_name: c.current_status
-            for c in fgc_report.conglomerates
-        }
-        for row, result in enumerate(results):
-            inv = result.investment
-            self._populate_row(
-                row, inv,
-                current_value=result.current_value,
-                projected_value=result.net_at_maturity,
-                fgc_status=status_map.get(inv.issuer.conglomerate),
-            )
         self._ts_label.setText(f"Projected: {datetime.now():%Y-%m-%d %H:%M}")
         self.statusBar().showMessage(
             f"Projected {len(results)} investments as of {date.today():%d/%m/%Y}.", 6000
         )
         self.projection_cache = results
-        self._update_totals()
-        self._refresh_conglomerates()
+        self.refresh_table()
 
     def _on_project_error(self, message: str) -> None:
         self._set_busy(False)
