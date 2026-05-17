@@ -343,6 +343,12 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         self._tabs = QTabWidget()
         self.setCentralWidget(self._tabs)
+        self._conglomerates_tab = QWidget()
+        _cong_layout = QVBoxLayout(self._conglomerates_tab)
+        _cong_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _cong_label = QLabel("Conglomerates — not yet implemented")
+        _cong_layout.addWidget(_cong_label)
+        self._tabs.addTab(self._conglomerates_tab, "Conglomerates")
         central = QWidget()
         self._tabs.addTab(central, "Investments")
         root = QVBoxLayout(central)
