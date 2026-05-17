@@ -354,7 +354,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._tabs)
         self._conglomerates_tab = QWidget()
         _cong_outer = QVBoxLayout(self._conglomerates_tab)
-        _cong_outer.setContentsMargins(0, 0, 0, 0)
+        _cong_outer.setContentsMargins(8, 8, 8, 8)
+        _cong_outer.setSpacing(6)
         self._cong_scroll = QScrollArea()
         self._cong_scroll.setWidgetResizable(True)
         self._cong_body = QWidget()
@@ -362,6 +363,12 @@ class MainWindow(QMainWindow):
         self._cong_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self._cong_scroll.setWidget(self._cong_body)
         _cong_outer.addWidget(self._cong_scroll)
+        cong_bottom = QHBoxLayout()
+        self._cong_project_btn = QPushButton("Project as of today")
+        self._cong_project_btn.clicked.connect(self._on_project_clicked)
+        cong_bottom.addStretch()
+        cong_bottom.addWidget(self._cong_project_btn)
+        _cong_outer.addLayout(cong_bottom)
         self._tabs.addTab(self._conglomerates_tab, "Conglomerates")
         central = QWidget()
         self._tabs.addTab(central, "Investments")
@@ -380,17 +387,17 @@ class MainWindow(QMainWindow):
 
         # Filter row — issuer and conglomerate dropdowns
         filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel("Issuer:"))
-        self._issuer_combo = QComboBox()
-        self._issuer_combo.addItem("All")
-        self._issuer_combo.textActivated.connect(self._on_issuer_filter_changed)
-        filter_row.addWidget(self._issuer_combo)
-        filter_row.addSpacing(12)
         filter_row.addWidget(QLabel("Conglomerate:"))
         self._conglomerate_combo = QComboBox()
         self._conglomerate_combo.addItem("All")
         self._conglomerate_combo.textActivated.connect(self._on_conglomerate_filter_changed)
         filter_row.addWidget(self._conglomerate_combo)
+        filter_row.addSpacing(12)
+        filter_row.addWidget(QLabel("Issuer:"))
+        self._issuer_combo = QComboBox()
+        self._issuer_combo.addItem("All")
+        self._issuer_combo.textActivated.connect(self._on_issuer_filter_changed)
+        filter_row.addWidget(self._issuer_combo)
         filter_row.addStretch()
         root.addLayout(filter_row)
 
@@ -462,10 +469,15 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._on_about_clicked)
         help_menu.addAction(about_action)
 
-    def _make_summary_row(self, section: ConglomerateSection) -> QWidget:
+    def _make_summary_row(self, section: ConglomerateSection, index: int = 0) -> QWidget:
         row_widget = QWidget()
+        bg = "#ffffff" if index % 2 == 0 else "#f5f5f5"
+        row_widget.setObjectName(f"congRow{index}")
+        row_widget.setStyleSheet(
+            f"#congRow{index} {{ background-color: {bg}; border-bottom: 1px solid #dddddd; }}"
+        )
         h = QHBoxLayout(row_widget)
-        h.setContentsMargins(6, 4, 6, 4)
+        h.setContentsMargins(8, 6, 8, 6)
 
         plus = QLabel("+")
         plus.setFixedWidth(20)
@@ -502,12 +514,50 @@ class MainWindow(QMainWindow):
 
         return row_widget
 
-    def _refresh_conglomerates(self) -> None:
+    def _clear_cong_layout(self) -> None:
         while self._cong_layout.count():
             item = self._cong_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
 
+    def _make_summary_header(self) -> QWidget:
+        row_widget = QWidget()
+        row_widget.setObjectName("congHeader")
+        row_widget.setStyleSheet(
+            "#congHeader { background-color: #eaeaea; border-bottom: 1px solid #dddddd; }"
+            " QLabel { font-weight: bold; }"
+        )
+        h = QHBoxLayout(row_widget)
+        h.setContentsMargins(8, 6, 8, 6)
+
+        spacer = QLabel()
+        spacer.setFixedWidth(20)
+        h.addWidget(spacer)
+
+        h.addWidget(QLabel("Conglomerate"), stretch=1)
+
+        for text, width in [
+            ("Next maturity",   120),
+            ("Principal",       120),
+            ("Current value",   120),
+            ("Projected value", 120),
+            ("FGC",             130),
+        ]:
+            lbl = QLabel(text)
+            lbl.setFixedWidth(width)
+            h.addWidget(lbl)
+
+        return row_widget
+
+    def _reset_conglomerates_to_placeholder(self) -> None:
+        self._clear_cong_layout()
+        placeholder = QLabel('Press "Project as of today" to populate.')
+        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._cong_layout.addWidget(placeholder)
+
+    def _refresh_conglomerates(self) -> None:
+        self._clear_cong_layout()
         investments = self.visible_investments(apply_filter=False)
         if not investments:
             empty = QLabel("No investments to display.")
@@ -521,8 +571,9 @@ class MainWindow(QMainWindow):
             assumed_cdi=_ASSUMED_CDI,
             assumed_ipca=_ASSUMED_IPCA,
         )
-        for section in report.sections:
-            self._cong_layout.addWidget(self._make_summary_row(section))
+        self._cong_layout.addWidget(self._make_summary_header())
+        for idx, section in enumerate(report.sections):
+            self._cong_layout.addWidget(self._make_summary_row(section, idx))
 
     def _on_about_clicked(self) -> None:
         QMessageBox.about(
@@ -546,6 +597,7 @@ class MainWindow(QMainWindow):
         self._import_btn.setEnabled(not busy)
         if busy:
             self._project_btn.setEnabled(False)
+            self._cong_project_btn.setEnabled(False)
             self._export_btn.setEnabled(False)
         else:
             self._update_button_states()
@@ -586,7 +638,7 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(0 if self._investments else 1)
         self._update_button_states()
         self._update_totals()
-        self._refresh_conglomerates()
+        self._reset_conglomerates_to_placeholder()
 
     def _update_totals(self) -> None:
         visible = self.visible_investments()
@@ -709,6 +761,7 @@ class MainWindow(QMainWindow):
     def _update_button_states(self) -> None:
         today = date.today()
         self._project_btn.setEnabled(bool(self._investments))
+        self._cong_project_btn.setEnabled(bool(self._investments))
         self._export_btn.setEnabled(
             any(inv.maturity_date >= today for inv in self._investments)
         )
