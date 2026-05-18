@@ -168,21 +168,75 @@ follow XP's footprint. If a third importer is ever built, that's the
 moment to consider whether common parser/mapper utilities should be
 extracted — not before.
 
-### B9. DI-curve mark-to-market
+### B9. DI-curve mark-to-market — SPLIT
 
-**Source:** Phase 2 list in `ARCHITECTURE.md`. Long-standing
-commitment from the original vision doc.
+**Split:** This entry was split into B9a (engine: curve fetch and
+accrual integration) and B9b (UI: MtM display). See those entries
+for current status.
 
-**Why deferred:** Real mark-to-market for Tesouro Prefixado mid-life
-requires discounting future cash flows by the current DI curve from
-B3. Phase 1's accrual-only valuation is honest but not market-true.
+### B9a. DI curve: fetch and use for accrual
 
-**Trigger to revisit:** When the user wants to know "what could I
-sell this for today" rather than "what has it accrued to today."
+**Source:** Split from original B9 in May 2026. The original B9 was
+"DI-curve mark-to-market," which combined two distinct things: getting
+the forward CDI curve (which is engine work) and displaying MtM values
+(which is UI work). B9a is the engine half.
 
-**Note:** This decision has UI consequences (see Open Question Q3).
-If MtM lands, the projection screen needs either two view modes or
-a per-investment toggle.
+**What it is:** Fetch the DI futures curve (daily settlements from B3),
+parse contract maturities and implied rates, build a forward CDI curve,
+use that curve for accrual projection of PostFixedCDI investments.
+
+The current engine uses `_ASSUMED_CDI` — a single hardcoded rate applied
+uniformly. B9a replaces this with a curve-based projection: for each
+future date in an investment's accrual schedule, the curve provides
+the implied CDI rate.
+
+**Source data:** B3 daily settlement files, fetched via HTTP. Public,
+no authentication. Published end-of-day; the most recent business day's
+file is what's used. Cached locally so the app works offline.
+
+**Pinned decisions:**
+- No MtM display (that's B9b). Curve is used silently to improve the
+  existing "Projected value" column.
+- Cache stored at `~/.justfixed/di_curve.json` (or similar; final path
+  TBD in pass 1 read-and-report).
+- Fetch on app launch; fall back to cache on network failure; show
+  cache freshness in status bar.
+- Forward-rate lookup interpolates between contract maturities for
+  dates that don't align with a published contract.
+
+**Effort:** ~5-8 calibrated sessions. Engine work (curve object,
+fetcher, parser, projection-integration); no new UI.
+
+**Trigger to revisit:** Whenever started.
+
+**Architectural note:** Replaces `_ASSUMED_CDI` usage throughout the
+projection engine. Per-investment current accrual uses past CDI (held
+constant or fetched from BC API as a separate future improvement);
+future accrual to maturity uses the curve.
+
+### B9b. DI curve: mark-to-market display
+
+**Source:** Split from original B9 in May 2026. The display half.
+
+**What it is:** Use the curve (from B9a) to compute mark-to-market
+values for each investment — "what could I sell this for today,
+based on current market rates." Display somewhere in the UI.
+
+**Why deferred:** Two reasons.
+1. Q3 (projection screen design) is unresolved — the right place for
+   an MtM view depends on whether per-investment detail views exist
+   (which is C′'s scope).
+2. For retail Brazilian fixed-income (CDB/LCI/LCA) which can't be
+   sold on a secondary market, MtM is informational only. The user
+   value of a column they can't act on is unclear without seeing how
+   C′ shapes the per-investment view.
+
+**Trigger to revisit:** After C′ (per-investment detail view) ships.
+At that point Q3 gets answered in context, and B9b can be designed as
+"add MtM to the detail view C′ built."
+
+**Architectural note:** Engine support is already complete (B9a). B9b
+is UI work only.
 
 ### B10. Real index data fetching (B3 for CDI history, IBGE for IPCA)
 
@@ -539,7 +593,7 @@ view, and curation deferred to B′/C′. See `docs/UI_DESIGN.md`.
 
 **Surfaced in:** XP loader chat, "decisions worth thinking about".
 
-**Question:** When DI-curve MtM is added (B9 above), how does the
+**Question:** When DI-curve MtM is added (B9b above), how does the
 projection screen present "today's value" — accrual-based,
 market-based, or both?
 
