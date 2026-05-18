@@ -38,6 +38,8 @@ from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
+from justfixed.engine.curve import Curve
+from justfixed.engine.fetcher import FetchResult, fetch_curves
 from justfixed.engine.conglomerate_report import (
     ConglomerateDetailRow,
     ConglomerateSection,
@@ -197,15 +199,22 @@ class _ProjectWorker(QThread):
     finished = Signal(object)  # list[ProjectionResult]
     error    = Signal(str)
 
-    def __init__(self, investments: list) -> None:
+    def __init__(self, investments: list, *, cdi_curve: Curve | None = None) -> None:
         super().__init__()
         self._investments = investments
+        self._cdi_curve = cdi_curve
 
     def run(self) -> None:
         try:
             today = date.today()
             results = [
-                project(inv, as_of=today, assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA)
+                project(
+                    inv,
+                    as_of=today,
+                    assumed_cdi=_ASSUMED_CDI,
+                    assumed_ipca=_ASSUMED_IPCA,
+                    cdi_curve=self._cdi_curve,
+                )
                 for inv in self._investments
             ]
             self.finished.emit(results)
@@ -350,6 +359,7 @@ class MainWindow(QMainWindow):
         # Hide matured toggle — _refresh_conglomerates filters the cached list
         # to the currently visible set on each render.
         self.projection_cache: list[ProjectionResult] | None = None
+        self._cdi_curve: Curve | None = None
         self._expanded_conglomerates: set[str] = set()
         self._cong_section_widgets: dict[str, tuple] = {}  # cname → (plus_label, detail_container)
         self._highlight_timer: QTimer | None = None  # keeps highlight timer alive for cancellation
@@ -357,6 +367,7 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self.refresh_table()
+        self._fetch_curve()
         if self._investments:
             self._on_project_clicked()
 
@@ -463,6 +474,8 @@ class MainWindow(QMainWindow):
         root.addLayout(bottom)
 
         status_bar = QStatusBar()
+        self._curve_label = QLabel("")
+        status_bar.addPermanentWidget(self._curve_label)
         self._ts_label = QLabel("")
         status_bar.addPermanentWidget(self._ts_label)
         self.setStatusBar(status_bar)
@@ -974,10 +987,29 @@ class MainWindow(QMainWindow):
 
     # ── Project ───────────────────────────────────────────────────────────────
 
+    def _fetch_curve(self) -> None:
+        result = fetch_curves()
+        self._cdi_curve = result.curve
+        if result.source == "live":
+            if result.curve and result.curve.vertices:
+                self._curve_label.setText(f"Curve: live ({result.curve.anchor:%Y-%m-%d})")
+            else:
+                self._curve_label.setText("Curve: live (no data)")
+        elif result.source == "cached":
+            if result.curve and result.curve.vertices:
+                self._curve_label.setText(f"Curve: cached ({result.curve.anchor:%Y-%m-%d})")
+            else:
+                self._curve_label.setText("Curve: cached (no data)")
+        else:
+            self._curve_label.setText("Curve: unavailable")
+
     def _on_project_clicked(self) -> None:
         self._set_busy(True)
 
-        self._worker = _ProjectWorker(self.visible_investments(apply_filter=False))
+        self._worker = _ProjectWorker(
+            self.visible_investments(apply_filter=False),
+            cdi_curve=self._cdi_curve,
+        )
         self._worker.finished.connect(self._on_project_done)
         self._worker.error.connect(self._on_project_error)
         self._worker.start()
