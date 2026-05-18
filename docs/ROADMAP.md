@@ -659,6 +659,33 @@ already wired up via B28.
 
 **Trigger to revisit:** With B9a Phase 3 (dev view tab).
 
+### B30. Dev view: load curve from file
+
+**Source:** User request 2026-05-17 during B9a Phase 2 discussion.
+
+**What it is:** Dev view (introduced in B9a Phase 3) gains a "Load
+curve from file..." action. User selects a JSON file matching the
+data-repo format; the app parses it and uses it as the active curve
+for the current session. On next launch, the GitHub fetch resumes.
+
+Purpose: override the published curve with local data — useful for
+testing scenarios, manually-prepared curves, or operating when the
+data repo is unreachable.
+
+**Pinned decisions:**
+- Visible only when `JUSTFIXED_DEV` env var is set (dev view pattern).
+- JSON format matches the data-repo's `curves/latest.json` schema.
+- Session-scoped: file load doesn't write to `~/.justfixed/curve_cache.json`.
+  To persist across restarts, the user can manually copy the file
+  to that path (documented).
+- Adds a new "manual" status to the curve label (alongside live/cached/
+  unavailable).
+
+**Effort:** ~1-2 calibrated sessions, riding on B9a Phase 3's dev view
+scaffolding.
+
+**Trigger to revisit:** With B9a Phase 3.
+
 ---
 
 ## Part 3 — Open questions
