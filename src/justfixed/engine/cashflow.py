@@ -37,6 +37,7 @@ from justfixed.engine.calendar import (
     business_days_between,
     next_business_day,
 )
+from justfixed.engine.curve import Curve
 
 
 class CashFlowKind(Enum):
@@ -107,6 +108,7 @@ def schedule(
     *,
     assumed_cdi: Decimal | None = None,
     assumed_ipca: Decimal | None = None,
+    cdi_curve: Curve | None = None,
 ) -> list[CashFlow]:
     """Generate the full cash flow schedule for an investment.
 
@@ -129,11 +131,16 @@ def schedule(
         bizdays = business_days_between(
             investment.purchase_date, investment.maturity_date
         )
+        effective_cdi = (
+            cdi_curve.rate_at(investment.maturity_date)
+            if (cdi_curve is not None and cdi_curve.vertices)
+            else assumed_cdi
+        )
         gross = accrue(
             investment.principal,
             investment.rate,
             bizdays,
-            assumed_cdi=assumed_cdi,
+            assumed_cdi=effective_cdi,
             assumed_ipca=assumed_ipca,
         )
         return [
@@ -153,11 +160,16 @@ def schedule(
     # Each coupon: interest accrued over [period_start, coupon_date].
     for coupon_date in coupon_ds:
         bizdays = business_days_between(period_start, coupon_date)
+        effective_cdi = (
+            cdi_curve.rate_at(coupon_date)
+            if (cdi_curve is not None and cdi_curve.vertices)
+            else assumed_cdi
+        )
         accrued = accrue(
             investment.principal,
             investment.rate,
             bizdays,
-            assumed_cdi=assumed_cdi,
+            assumed_cdi=effective_cdi,
             assumed_ipca=assumed_ipca,
         )
         coupon_amount = accrued - investment.principal
@@ -172,11 +184,16 @@ def schedule(
 
     # Final payment: last coupon + principal.
     bizdays = business_days_between(period_start, investment.maturity_date)
+    effective_cdi = (
+        cdi_curve.rate_at(investment.maturity_date)
+        if (cdi_curve is not None and cdi_curve.vertices)
+        else assumed_cdi
+    )
     accrued = accrue(
         investment.principal,
         investment.rate,
         bizdays,
-        assumed_cdi=assumed_cdi,
+        assumed_cdi=effective_cdi,
         assumed_ipca=assumed_ipca,
     )
     final_coupon = accrued - investment.principal

@@ -29,6 +29,7 @@ from justfixed.domain.product import rules_for
 from justfixed.engine.accrual import accrue
 from justfixed.engine.calendar import business_days_between
 from justfixed.engine.cashflow import CashFlow, schedule
+from justfixed.engine.curve import Curve
 from justfixed.engine.tax import TaxResult, compute_ir
 
 
@@ -61,6 +62,7 @@ def project(
     as_of: date,
     assumed_cdi: Decimal | None = None,
     assumed_ipca: Decimal | None = None,
+    cdi_curve: Curve | None = None,
 ) -> ProjectionResult:
     """Project an investment's value as of a given date and at maturity.
 
@@ -83,12 +85,18 @@ def project(
     """
     # ----- 1. Current value (accrual from purchase to as_of) -----
     current_value = _compute_current_value(
-        investment, as_of, assumed_cdi=assumed_cdi, assumed_ipca=assumed_ipca
+        investment, as_of,
+        assumed_cdi=assumed_cdi,
+        assumed_ipca=assumed_ipca,
+        cdi_curve=cdi_curve,
     )
 
     # ----- 2. Cash flow schedule -----
     flows = schedule(
-        investment, assumed_cdi=assumed_cdi, assumed_ipca=assumed_ipca
+        investment,
+        assumed_cdi=assumed_cdi,
+        assumed_ipca=assumed_ipca,
+        cdi_curve=cdi_curve,
     )
 
     # ----- 3. Gross at maturity (sum of all cash flows) -----
@@ -123,6 +131,7 @@ def _compute_current_value(
     *,
     assumed_cdi: Decimal | None,
     assumed_ipca: Decimal | None,
+    cdi_curve: Curve | None = None,
 ) -> Money:
     """Accrual from purchase_date to as_of, capped at maturity_date."""
     if as_of <= investment.purchase_date:
@@ -132,11 +141,16 @@ def _compute_current_value(
     # Don't accrue past maturity.
     effective_date = min(as_of, investment.maturity_date)
     bizdays = business_days_between(investment.purchase_date, effective_date)
+    effective_cdi = (
+        cdi_curve.rate_at(effective_date)
+        if (cdi_curve is not None and cdi_curve.vertices)
+        else assumed_cdi
+    )
     return accrue(
         investment.principal,
         investment.rate,
         bizdays,
-        assumed_cdi=assumed_cdi,
+        assumed_cdi=effective_cdi,
         assumed_ipca=assumed_ipca,
     )
 
