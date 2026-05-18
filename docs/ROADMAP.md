@@ -601,6 +601,64 @@ per-rate-type formatter functions, tests for each format pattern.
 **Trigger to revisit:** Any time after B9a Phase 1. Optimistic delivery
 after B9a Phase 5 to get curve-aware effective rates in one shot.
 
+### B28. XLSX export for Investments and Conglomerates tabs
+
+**Source:** User request 2026-05-17.
+
+**What it is:** User-facing "Export to XLSX" action on each tab. The
+exported file contains the same data the user sees, in a format
+suitable for sharing, accountant handoff, or external analysis in
+Excel/LibreOffice.
+
+**Pinned decisions:**
+- Format: XLSX (modern Excel; not legacy XLS).
+- Investments tab: all visible rows (respecting filter dropdowns and
+  Hide matured), all columns currently shown.
+- Conglomerates tab: summary rows only. Detail rows for expanded
+  sections are NOT included — the Investments tab itself is the
+  per-investment export.
+- Trigger: button next to the existing "Project as of today" button,
+  or via a tab-level menu action. Final placement decided at
+  implementation time.
+- Filename: defaults to `justfixed-{tab}-{YYYY-MM-DD}.xlsx`. User can
+  override in the save dialog.
+
+**Effort:** ~2-3 calibrated sessions. New action handler per tab,
+`openpyxl` for XLSX generation (already a dependency from the seed
+files / installer work), tests for column-mapping correctness.
+
+**Trigger to revisit:** Any time. Independent of B9a's progress.
+
+### B29. Dev view: active curves display and XLSX export
+
+**Source:** User request 2026-05-17. Paired with B28 but distinct in
+scope: this is diagnostic / validation tooling, not user-facing.
+
+**What it is:** The dev view tab (introduced in B9a Phase 3 alongside
+the data-repo links) gains a "currently active curves" section showing
+which CDI/PRE/IPCA curves the app is using right now: as-of date,
+vertex count, source URL, fetch timestamp.
+
+Adds an "Export curve data as XLSX" button. The exported file has one
+sheet per curve (CDI, PRE, IPCA), each containing the vertices
+(business_days, rate) in tabular form. Purpose: external validation —
+the user or admin can verify the app's projections are using the
+intended curve.
+
+**Pinned decisions:**
+- Visible only when `JUSTFIXED_DEV` env var is set (consistent with
+  existing dev view pattern).
+- Exports the *active in-memory* curve (what's actually driving
+  projection), not the on-disk cache. If those differ, the active one
+  is what matters for verification.
+- Format: XLSX. One sheet per curve.
+
+**Effort:** ~1-2 calibrated sessions, riding on B9a Phase 3's dev
+view scaffolding. The export logic itself is small once openpyxl is
+already wired up via B28.
+
+**Trigger to revisit:** With B9a Phase 3 (dev view tab).
+
 ---
 
 ## Part 3 — Open questions
