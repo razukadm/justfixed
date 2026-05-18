@@ -176,43 +176,63 @@ for current status.
 
 ### B9a. DI curve: fetch and use for accrual
 
-**Source:** Split from original B9 in May 2026. The original B9 was
-"DI-curve mark-to-market," which combined two distinct things: getting
-the forward CDI curve (which is engine work) and displaying MtM values
-(which is UI work). B9a is the engine half.
+**Source:** Split from original B9 in May 2026. Original framing was
+"DI-curve mark-to-market"; further investigation in May 2026 found
+that the DI/CDI curve lives at B3 (now PDF-only in their public path)
+while ETTJ PRE and IPCA curves live at ANBIMA. The two sources are
+complementary, not substitutes. The architectural decision: route all
+external data (curves and seed DB) through a separate public GitHub
+repo (`razukadm/justfixed-data`) that the admin populates manually
+from upstream sources. The app fetches from that repo. This trades
+end-to-end automation for format control and decoupling from upstream
+publishing changes.
 
-**What it is:** Fetch the DI futures curve (daily settlements from B3),
-parse contract maturities and implied rates, build a forward CDI curve,
-use that curve for accrual projection of PostFixedCDI investments.
+**What it is:** App fetches reference data from
+`https://raw.githubusercontent.com/razukadm/justfixed-data/main/`
+on launch. Two payloads:
 
-The current engine uses `_ASSUMED_CDI` — a single hardcoded rate applied
-uniformly. B9a replaces this with a curve-based projection: for each
-future date in an investment's accrual schedule, the curve provides
-the implied CDI rate.
-
-**Source data:** B3 daily settlement files, fetched via HTTP. Public,
-no authentication. Published end-of-day; the most recent business day's
-file is what's used. Cached locally so the app works offline.
+- `curves/latest.json` — unified yield curves (CDI, PRE, IPCA). Used
+  for accrual projection of PostFixedCDI, Prefixado, and IPCA-linked
+  investments.
+- `seed/issuers.json` — initial issuer/conglomerate reference data.
+  Loaded **only on first run** (when the user's database is empty).
+  After first run, never re-applied; user's curation is preserved.
 
 **Pinned decisions:**
-- No MtM display (that's B9b). Curve is used silently to improve the
-  existing "Projected value" column.
-- Cache stored at `~/.justfixed/di_curve.json` (or similar; final path
-  TBD in pass 1 read-and-report).
-- Fetch on app launch; fall back to cache on network failure; show
-  cache freshness in status bar.
-- Forward-rate lookup interpolates between contract maturities for
-  dates that don't align with a published contract.
+- GitHub repo: public, no authentication. Hosting is GitHub's raw URL
+  CDN.
+- Fetch on app launch. Cache locally at `~/.justfixed/curve_cache.json`
+  (and similar for seed). Fall back to cache on network failure;
+  fall back to hardcoded defaults if no cache exists.
+- Status bar shows curve freshness: "Curves: 2026-05-15 (live)" /
+  "(cached)" / "(defaults)".
+- Seed DB load is first-run-only. After app has any conglomerates/issuers
+  in its DB, the seed is never re-applied. No "sync from repo" button.
+- No MtM display (that's B9b). Curves are used silently to improve
+  the existing "Projected value" column.
+- Admin tooling (script that ingests ANBIMA CSV + B3 PDF, builds the
+  unified JSON, commits + pushes to data repo) is an external CLI
+  tool, not in-app. Documented in the source repo's `docs/` directory.
 
-**Effort:** ~5-8 calibrated sessions. Engine work (curve object,
-fetcher, parser, projection-integration); no new UI.
+**Effort:** ~6-9 calibrated sessions. Roughly:
+- Phase 1: Engine curve infrastructure (Curve data structure,
+  interpolation, integration with `_effective_annual_rate`).
+- Phase 2: HTTP fetcher + cache (with status bar indicator).
+- Phase 3: Seed DB first-run loader (absorbs B20's scope).
+- Phase 4: Admin script (external CLI).
+- Phase 5: Housekeeping (dev view tab for status/links, docs).
 
-**Trigger to revisit:** Whenever started.
+**Trigger to revisit:** Started May 2026 after B24 close.
 
-**Architectural note:** Replaces `_ASSUMED_CDI` usage throughout the
-projection engine. Per-investment current accrual uses past CDI (held
-constant or fetched from BC API as a separate future improvement);
-future accrual to maturity uses the curve.
+**Architectural notes:**
+- Engine seam is `_effective_annual_rate` in `engine/accrual.py`.
+  Currently takes a single Decimal; will accept a curve object (or
+  fall back to single value for compatibility).
+- Past accrual continues to use the curve's spot value (no historical
+  daily series). True historical past accrual is out of scope; would
+  be a separate future item.
+- Data repo lives at https://github.com/razukadm/justfixed-data
+  (public, placeholder content already committed pre-B9a).
 
 ### B9b. DI curve: mark-to-market display
 
@@ -393,44 +413,12 @@ If issuers become keyed on a stable CNPJ root rather than name, the
 name-edit case stops needing curation-memory migration entirely.
 Resolving B14 first would simplify B19.
 
-### B20. Pre-seeded issuer/conglomerate table
+### B20. Pre-seeded issuer/conglomerate table — CLOSED
 
-**Source:** `docs/UI_DESIGN.md` § "Deferred from A′ — milestone plan",
-and the B′ design conversation (this chat).
-
-**Why deferred:** B′ delivers user-driven curation via a
-curation-memory table that survives Clear DB (keyed on issuer natural
-key, not a `Conglomerate` entity — `Issuer.conglomerate` remains a
-free-form string per the UI_DESIGN.md "Conglomerate model" decision).
-The pre-seed feature lets new users skip most of the curation work
-entirely by shipping with cumulative curation knowledge of prior
-users (or the developer).
-
-**What it needs:**
-1. A `seed_curations.json` (or `.yaml`) file in the repo with
-   `{raw_issuer_name: conglomerate}` mappings — e.g., `"BMG"` →
-   `"Banco BMG"`, `"CEF"` → `"Caixa Econômica Federal"`, `"Itaú"`
-   and `"Unibanco"` → `"Itaú Unibanco Holding"`.
-2. First-time DB init reads the seed file and populates the
-   curation-memory table.
-3. Subsequent imports auto-apply via the existing curation-lookup
-   path — no special-case code in the importer.
-4. Decision on the update path: does shipping a new version of the
-   seed file update curation memory in existing installs? Default to
-   no (user's curation is sovereign once installed); a separate
-   "refresh from seed" action could re-merge.
-
-**Trigger to revisit:** After B′ ships and there's accumulated
-curation worth bottling. Or earlier if the curation workflow proves
-painful enough during B′ usage to want the burden lifted.
-
-**Architectural note:** This supersedes the original B13 proposal
-(loader consults a hardcoded dict and emits the conglomerate
-directly). The B′-era design is cleaner: seed the curation-memory
-table, let the existing path handle it. B13 closes when B20 is added.
-This does not introduce a `Conglomerate` entity — pre-seeded
-mappings populate the same string-keyed curation-memory table that
-user-driven curation writes to.
+**Closed:** Absorbed into B9a. The "pre-seeded" concept is delivered
+via the GitHub data repo's `seed/issuers.json` file, loaded on first
+app launch when the database is empty. The schema and population are
+designed as part of B9a Phase 3. No separate B20 implementation.
 
 ### B21. Auto-project after state changes
 
