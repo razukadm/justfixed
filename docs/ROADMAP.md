@@ -556,6 +556,51 @@ subclass with manual header repositioning on scroll events, or a two-panel
 layout (fixed header, scrollable body). Both approaches add significant
 complexity. Defer until real user feedback confirms this is a pain point.
 
+### B27. Investments tab: Type and Rate columns
+
+**Source:** User request 2026-05-17, mid-B9a Phase 1.
+
+**What it is:** Add two new columns to the Investments tab, between
+"Product" and "Principal":
+
+- "Type" — short rate-type category label (Pré / Pós / Pós+ / IPCA+).
+  Single source of truth: the investment's rate type from
+  `domain/rates.py`. No computation; mapping table from rate-type
+  class to display string.
+
+- "Taxa" — the configured rate followed by the effective annualized
+  rate in parentheses on a single line. Format examples:
+  - PostFixedCDI(1.12): "112% CDI (16.13% a.a.)"
+  - PostFixedCDIPlusSpread(0.0205): "CDI + 2.05% (16.85% a.a.)"
+  - Prefixado(0.125): "12.5% a.a. (12.5% a.a.)" — for prefixed, configured == effective; consider deduplicating display in this case
+  - IPCALinkedSpread(0.06): "IPCA + 6% (10.34% a.a.)"
+
+**Pinned decisions:**
+- Column headers in Portuguese ("Taxa") to match existing UI style.
+  Type column header tentatively also Portuguese ("Tipo"); confirm
+  in implementation.
+- Single-line format: configured rate, then effective in parens.
+- Effective rate computation:
+  - Pre-B9a-Phase-5 (i.e., before curve integration completes): use
+    the hardcoded `_ASSUMED_CDI` / `_ASSUMED_IPCA` constants to compute
+    effective rates. Slightly inaccurate but stable.
+  - Post-B9a-Phase-5: when a curve is available, use
+    `curve.rate_at(maturity_date)` for the per-investment effective
+    rate. More accurate; varies per investment.
+- For Prefixado rates where configured == effective, consider displaying
+  only one value rather than redundant text. Final formatting decision
+  in implementation.
+
+**Why deferred:** UI feature, depends on B9a Phase 1's curve infrastructure
+being available (for the eventual curve-driven effective rate) but doesn't
+require it as a hard dependency. Could land any time after B9a Phase 1.
+
+**Effort:** ~1-2 calibrated sessions. New columns in `QTableWidget`,
+per-rate-type formatter functions, tests for each format pattern.
+
+**Trigger to revisit:** Any time after B9a Phase 1. Optimistic delivery
+after B9a Phase 5 to get curve-aware effective rates in one shot.
+
 ---
 
 ## Part 3 — Open questions
