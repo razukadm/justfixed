@@ -60,6 +60,7 @@ def make_investment_row(issuer_id: uuid.UUID, **overrides) -> InvestmentRow:
         "issue_date": date(2024, 1, 15),
         "coupon_frequency": "none",
         "description": "",
+        "source": "xp_import",
     }
     defaults.update(overrides)
     return InvestmentRow(**defaults)

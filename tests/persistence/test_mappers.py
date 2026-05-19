@@ -8,7 +8,7 @@ from decimal import Decimal
 
 import pytest
 
-from justfixed.domain.investment import Investment
+from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.issuer import Issuer, IssuerKind
 from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType
@@ -274,6 +274,7 @@ class TestInvestmentFromRow:
             issue_date=date(2024, 1, 15),
             coupon_frequency="none",
             description="",
+            source="xp_import",
         )
         with pytest.raises(ValueError, match="Unknown rate_kind"):
             investment_from_row(row, issuer)
@@ -295,6 +296,23 @@ class TestInvestmentFromRow:
             issue_date=date(2024, 1, 15),
             coupon_frequency="none",
             description="",
+            source="xp_import",
         )
         with pytest.raises(ValueError):
             investment_from_row(row, issuer)
+
+    def test_source_round_trips(self) -> None:
+        issuer = commercial_bank()
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=issuer,
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            source=InvestmentSource.MANUAL,
+        )
+        row = investment_to_row(inv)
+        assert row.source == "manual"
+        restored = investment_from_row(row, issuer)
+        assert restored.source == InvestmentSource.MANUAL

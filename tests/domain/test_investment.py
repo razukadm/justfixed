@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from justfixed.domain.investment import Investment
+from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.issuer import Issuer, IssuerKind
 from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType
@@ -552,3 +552,39 @@ class TestTermProperties:
         # get the holding period (the most common engine-relevant term).
         inv = make_cdb(purchase=date(2024, 1, 15), maturity=date(2025, 1, 15))
         assert inv.term_days == inv.holding_term_days
+
+
+# ------------------------------------------------------------------
+# Provenance
+# ------------------------------------------------------------------
+
+
+class TestProvenance:
+    def test_default_source_is_xp_import(self) -> None:
+        inv = make_cdb()
+        assert inv.source == InvestmentSource.XP_IMPORT
+
+    def test_manual_source_accepted(self) -> None:
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            source=InvestmentSource.MANUAL,
+        )
+        assert inv.source == InvestmentSource.MANUAL
+
+    def test_source_survives_post_init(self) -> None:
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("1000"),
+            rate=Prefixed.from_percent("12"),
+            purchase_date=date(2024, 1, 1),
+            maturity_date=date(2026, 1, 1),
+            source=InvestmentSource.MANUAL,
+        )
+        assert inv.source == InvestmentSource.MANUAL
+        assert isinstance(inv.source, InvestmentSource)

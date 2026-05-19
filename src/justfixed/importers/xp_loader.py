@@ -23,7 +23,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from justfixed.domain.investment import Investment
+from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.importers.xp import read_renda_fixa_rows
 from justfixed.importers.xp_mapper import parse_row
@@ -128,6 +128,7 @@ def load_xp_statement(
             purchase_date=parsed.purchase_date,
             maturity_date=parsed.maturity_date,
             coupon_frequency=parsed.coupon_frequency,
+            source=InvestmentSource.XP_IMPORT,
         )
         investment_repo.save(investment)
         inserted += 1

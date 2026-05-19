@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from justfixed.domain.investment import InvestmentSource
 from justfixed.domain.issuer import Issuer, IssuerKind
 from justfixed.domain.product import CouponFrequency
 from justfixed.domain.rates import (
@@ -330,3 +331,11 @@ class TestInvestmentFields:
 
         assert len(monthly) == 1
         assert monthly[0].issuer.name == "PINE"
+
+    def test_loaded_investments_have_xp_import_source(
+        self, factory, investment_repo
+    ) -> None:
+        load_xp_statement(FIXTURE_PATH, factory)
+        all_investments = investment_repo.list_all()
+        assert all_investments
+        assert all(inv.source == InvestmentSource.XP_IMPORT for inv in all_investments)

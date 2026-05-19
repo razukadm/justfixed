@@ -103,6 +103,7 @@ class InvestmentRow(Base):
 
     coupon_frequency: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False, default="")
+    source: Mapped[str] = mapped_column(String, nullable=False, default="xp_import")
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utc_now

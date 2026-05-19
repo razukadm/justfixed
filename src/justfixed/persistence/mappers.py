@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from justfixed.domain.investment import Investment
+from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.issuer import Issuer, IssuerKind
 from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType
@@ -126,6 +126,7 @@ def investment_to_row(inv: Investment) -> InvestmentRow:
         issue_date=inv.issue_date,
         coupon_frequency=inv.coupon_frequency.value,
         description=inv.description,
+        source=inv.source.value,
     )
 
 
@@ -152,4 +153,5 @@ def investment_from_row(row: InvestmentRow, issuer: Issuer) -> Investment:
         issue_date=row.issue_date,
         coupon_frequency=CouponFrequency(row.coupon_frequency),
         description=row.description,
+        source=InvestmentSource(row.source),
     )
