@@ -186,9 +186,9 @@ def parse_b3(pdf_path: Path, as_of: date) -> list[Vertex]:
     """
     all_vertices: list[Vertex] = []
 
-    print(f"Opening {pdf_path} ...")
+    print(f"Opening {pdf_path} ...", flush=True)
     with pdfplumber.open(str(pdf_path)) as pdf:
-        print(f"  {len(pdf.pages)} pages — scanning for DI1 rows ...")
+        print(f"  {len(pdf.pages)} pages — scanning for DI1 rows ...", flush=True)
         for page in pdf.pages:
             text = page.extract_text() or ""
             if "DI1" not in text:
@@ -266,14 +266,14 @@ def main() -> None:
         if not p.exists():
             sys.exit(f"{label}: path not found: {p}")
 
-    print(f"Publishing curves for {as_of.isoformat()}")
+    print(f"Publishing curves for {as_of.isoformat()}", flush=True)
 
-    print(f"\nParsing ANBIMA CSV: {anbima_path}")
+    print(f"\nParsing ANBIMA CSV: {anbima_path}", flush=True)
     pre_vertices, ipca_vertices = parse_anbima(anbima_path, as_of)
     print(f"  PRE: {len(pre_vertices)} vertices")
     print(f"  IPCA real: {len(ipca_vertices)} vertices")
 
-    print(f"\nParsing B3 PDF: {b3_path}")
+    print(f"\nParsing B3 PDF: {b3_path}", flush=True)
     cdi_vertices = parse_b3(b3_path, as_of)
     print(f"  CDI: {len(cdi_vertices)} vertices")
 
