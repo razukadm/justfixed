@@ -122,6 +122,31 @@ _BADGE_STYLE: dict[str, tuple[str, str]] = {
     "not_fgc":     ("N/A",           "#aaaaaa"),
 }
 
+TOOLBAR_BUTTON_GREEN             = "#58d68d"
+TOOLBAR_BUTTON_GREEN_HOVER       = "#6fdc9f"
+TOOLBAR_BUTTON_GREEN_PRESSED     = "#4cae6a"
+TOOLBAR_BUTTON_GREEN_BORDER      = "#4cae6a"
+TOOLBAR_BUTTON_GREEN_DISABLED_BG = "#c8e6c9"
+TOOLBAR_BUTTON_GREEN_DISABLED_FG = "#888888"
+
+TOOLBAR_BUTTON_STYLE = f"""QPushButton {{
+    background-color: {TOOLBAR_BUTTON_GREEN};
+    border: 1px solid {TOOLBAR_BUTTON_GREEN_BORDER};
+    border-radius: 4px;
+    padding: 6px 12px;
+    color: #1a1a1a;
+}}
+QPushButton:hover {{
+    background-color: {TOOLBAR_BUTTON_GREEN_HOVER};
+}}
+QPushButton:pressed {{
+    background-color: {TOOLBAR_BUTTON_GREEN_PRESSED};
+}}
+QPushButton:disabled {{
+    background-color: {TOOLBAR_BUTTON_GREEN_DISABLED_BG};
+    color: {TOOLBAR_BUTTON_GREEN_DISABLED_FG};
+}}"""
+
 
 def _make_fgc_badge(status, width: int) -> QLabel:
     """Return a styled FGC badge QLabel for either ExposureStatus or ConglomerateStatus."""
@@ -471,14 +496,28 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(6)
 
-        # Top — import controls
-        top = QHBoxLayout()
+        # Toolbar — action buttons + status label
+        toolbar = QHBoxLayout()
         self._import_btn = QPushButton("Import XP statement…")
         self._import_btn.clicked.connect(self._on_import_clicked)
+        self._import_btn.setStyleSheet(TOOLBAR_BUTTON_STYLE)
+        self._add_btn = QPushButton("Add investment…")
+        self._add_btn.clicked.connect(self._on_add_investment_clicked)
+        self._add_btn.setStyleSheet(TOOLBAR_BUTTON_STYLE)
+        self._project_btn = QPushButton("Project as of today")
+        self._project_btn.clicked.connect(self._on_project_clicked)
+        self._project_btn.setStyleSheet(TOOLBAR_BUTTON_STYLE)
+        self._export_btn = QPushButton("Export calendar…")
+        self._export_btn.clicked.connect(self._on_export_clicked)
+        self._export_btn.setStyleSheet(TOOLBAR_BUTTON_STYLE)
         self._status_label = QLabel("Ready.")
-        top.addWidget(self._import_btn)
-        top.addWidget(self._status_label, stretch=1)
-        root.addLayout(top)
+        toolbar.addWidget(self._import_btn)
+        toolbar.addWidget(self._add_btn)
+        toolbar.addWidget(self._project_btn)
+        toolbar.addWidget(self._export_btn)
+        toolbar.addStretch()
+        toolbar.addWidget(self._status_label)
+        root.addLayout(toolbar)
 
         # Filter row — issuer and conglomerate dropdowns
         filter_row = QHBoxLayout()
@@ -534,17 +573,6 @@ class MainWindow(QMainWindow):
         totals_row.addStretch()
         totals_row.addWidget(self._rows_label)
         root.addLayout(totals_row)
-
-        # Bottom — action buttons
-        bottom = QHBoxLayout()
-        self._project_btn = QPushButton("Project as of today")
-        self._project_btn.clicked.connect(self._on_project_clicked)
-        self._export_btn = QPushButton("Export calendar…")
-        self._export_btn.clicked.connect(self._on_export_clicked)
-        bottom.addStretch()
-        bottom.addWidget(self._project_btn)
-        bottom.addWidget(self._export_btn)
-        root.addLayout(bottom)
 
         status_bar = QStatusBar()
         self._curve_label = QLabel("")
@@ -820,6 +848,7 @@ class MainWindow(QMainWindow):
         needs a future maturity) are re-evaluated against the current list.
         """
         self._import_btn.setEnabled(not busy)
+        self._add_btn.setEnabled(not busy)
         if busy:
             self._project_btn.setEnabled(False)
             self._cong_project_btn.setEnabled(False)
