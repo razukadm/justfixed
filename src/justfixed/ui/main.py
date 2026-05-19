@@ -437,6 +437,7 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self.refresh_table()
+        self._set_startup_tab()
         self._fetch_curve()
         if self._investments:
             self._on_project_clicked()
@@ -515,13 +516,8 @@ class MainWindow(QMainWindow):
         self._table.setItemDelegateForColumn(_COL_CONGLOMERATE, self._delegate)
         self._table.cellDoubleClicked.connect(self._on_cell_double_clicked)
 
-        self._empty_label = QLabel(
-            "Import an XP statement to see your investments."
-        )
-        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self._stack.addWidget(self._table)        # index 0 — has data
-        self._stack.addWidget(self._empty_label)  # index 1 — empty
+        self._stack.addWidget(self._table)                      # index 0 — has data
+        self._stack.addWidget(self._build_empty_state_widget()) # index 1 — empty
         root.addWidget(self._stack, stretch=1)
 
         # Totals strip — principal, current, projected, row count
@@ -576,6 +572,26 @@ class MainWindow(QMainWindow):
         about_action = QAction("About JustFixed", self)
         about_action.triggered.connect(self._on_about_clicked)
         help_menu.addAction(about_action)
+
+    def _build_empty_state_widget(self) -> QWidget:
+        self._empty_widget = QWidget()
+        _ew_layout = QVBoxLayout(self._empty_widget)
+        _ew_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _ew_label = QLabel(
+            "No investments yet.\n"
+            "Import an XP statement, or add an investment manually."
+        )
+        _ew_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _ew_layout.addWidget(_ew_label)
+        _ew_layout.addSpacing(12)
+        self._empty_import_btn = QPushButton("Import XP statement…")
+        self._empty_import_btn.clicked.connect(self._on_import_clicked)
+        self._empty_add_btn = QPushButton("Add investment…")
+        self._empty_add_btn.clicked.connect(self._on_add_investment_clicked)
+        _ew_layout.addWidget(self._empty_import_btn)
+        _ew_layout.addSpacing(4)
+        _ew_layout.addWidget(self._empty_add_btn)
+        return self._empty_widget
 
     def _make_summary_row(
         self, section: ConglomerateSection, index: int = 0
@@ -1065,6 +1081,14 @@ class MainWindow(QMainWindow):
         self._set_busy(False)
         self._status_label.setText("Ready.")
         QMessageBox.critical(self, "Import failed", message)
+
+    def _on_add_investment_clicked(self) -> None:
+        pass  # filled in commit 6
+
+    # ── Startup helpers ───────────────────────────────────────────────────────
+
+    def _set_startup_tab(self) -> None:
+        self._tabs.setCurrentIndex(1 if not self._investments else 0)
 
     # ── Project ───────────────────────────────────────────────────────────────
 

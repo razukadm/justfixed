@@ -9,13 +9,15 @@ no QApplication or database setup is needed.
 from __future__ import annotations
 
 import json
+import sys
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, call, patch
 
+import pytest
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from justfixed.domain.issuer import IssuerKind
 from justfixed.domain.money import Money
@@ -971,3 +973,53 @@ class TestFormatRate:
         with_curve = _format_rate(rate, _make_curve_13(), self._MATURITY)
         without_curve = _format_rate(rate, None, self._MATURITY)
         assert with_curve == without_curve
+
+
+# ── Startup tab selection ─────────────────────────────────────────────────────
+
+class TestStartupTabSelection:
+    def test_opens_investments_tab_when_db_empty(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._investments = []
+        self_mock._tabs = MagicMock()
+
+        MainWindow._set_startup_tab(self_mock)
+
+        self_mock._tabs.setCurrentIndex.assert_called_once_with(1)
+
+    def test_opens_conglomerates_tab_when_investments_present(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._investments = [MagicMock()]
+        self_mock._tabs = MagicMock()
+
+        MainWindow._set_startup_tab(self_mock)
+
+        self_mock._tabs.setCurrentIndex.assert_called_once_with(0)
+
+
+# ── Empty-state widget wiring ─────────────────────────────────────────────────
+
+@pytest.fixture(scope="session")
+def qapp():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+    yield app
+
+
+class TestEmptyStateButtonWiring:
+    def test_empty_state_import_button_wired_to_import_handler(self, qapp) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+
+        MainWindow._build_empty_state_widget(self_mock)
+
+        self_mock._empty_import_btn.click()
+        self_mock._on_import_clicked.assert_called_once()
+
+    def test_empty_state_add_button_wired_to_add_handler(self, qapp) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+
+        MainWindow._build_empty_state_widget(self_mock)
+
+        self_mock._empty_add_btn.click()
+        self_mock._on_add_investment_clicked.assert_called_once()
