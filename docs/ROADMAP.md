@@ -31,6 +31,11 @@ careful pace this project uses (2–4 hours each).
 Manual-entry form for non-XP investments, per-investment detail
 view with accrual breakdown and IR tax.
 
+Deferred scope (from B27, 2026-05-19): display payment frequency for
+each investment (Mensal / Vencimento / Trimestral / Semestral / Anual).
+Investments tab column count is at its visual density limit; the detail
+view is the natural home for per-investment metadata like payment frequency.
+
 ### 2. Windows installer
 
 **Status:** Shipped. Commits `3152f63`–`b2e1ed9` (May 2026). See
