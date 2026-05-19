@@ -9,7 +9,7 @@ from urllib.error import URLError
 
 import pytest
 
-from justfixed.engine.fetcher import fetch_curves
+from justfixed.engine.fetcher import fetch_curves, fetch_seed_data
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -114,3 +114,37 @@ class TestParsing:
         with patch("justfixed.engine.fetcher.urlopen", _mock_urlopen(no_anchor)):
             result = fetch_curves(cache_path=cache)
         assert result.curve is None
+
+
+# ── fetch_seed_data ───────────────────────────────────────────────────────────
+
+SAMPLE_SEED_PAYLOAD = {
+    "as_of": "2026-05-15",
+    "schema_version": 1,
+    "issuers": [
+        {"name": "Banco Inter", "conglomerate": "Banco Inter S.A.", "kind": "commercial_bank"},
+    ],
+}
+
+
+class TestFetchSeedData:
+    def test_live_success_returns_dict(self, tmp_path: Path) -> None:
+        cache = tmp_path / "seed_cache.json"
+        with patch("justfixed.engine.fetcher.urlopen", _mock_urlopen(SAMPLE_SEED_PAYLOAD)):
+            result = fetch_seed_data(cache_path=cache)
+        assert result is not None
+        assert result["issuers"][0]["name"] == "Banco Inter"
+
+    def test_falls_back_to_cache_on_network_error(self, tmp_path: Path) -> None:
+        cache = tmp_path / "seed_cache.json"
+        cache.write_text(json.dumps(SAMPLE_SEED_PAYLOAD), encoding="utf-8")
+        with patch("justfixed.engine.fetcher.urlopen", side_effect=URLError("timeout")):
+            result = fetch_seed_data(cache_path=cache)
+        assert result is not None
+        assert "issuers" in result
+
+    def test_returns_none_on_no_cache_no_network(self, tmp_path: Path) -> None:
+        cache = tmp_path / "seed_cache.json"
+        with patch("justfixed.engine.fetcher.urlopen", side_effect=URLError("timeout")):
+            result = fetch_seed_data(cache_path=cache)
+        assert result is None

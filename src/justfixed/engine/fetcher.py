@@ -30,7 +30,11 @@ _log = logging.getLogger(__name__)
 CURVES_URL = (
     "https://raw.githubusercontent.com/razukadm/justfixed-data/main/curves/latest.json"
 )
+SEED_URL = (
+    "https://raw.githubusercontent.com/razukadm/justfixed-data/main/seed/issuers.json"
+)
 _DEFAULT_CACHE_PATH = Path.home() / ".justfixed" / "curve_cache.json"
+_DEFAULT_SEED_CACHE_PATH = Path.home() / ".justfixed" / "seed_cache.json"
 _TIMEOUT = 5  # seconds
 
 
@@ -74,6 +78,25 @@ def fetch_curves(
         return FetchResult(curve=None, source="unavailable")
 
     return FetchResult(curve=_parse_cdi_curve(raw), source=source)
+
+
+def fetch_seed_data(
+    *,
+    url: str = SEED_URL,
+    cache_path: Path = _DEFAULT_SEED_CACHE_PATH,
+) -> dict | None:
+    """Fetch issuer seed data and return the raw JSON dict.
+
+    Tries the live URL first; on failure falls back to the on-disk cache.
+    Returns None if both the network and cache are unavailable.
+    """
+    try:
+        raw = _fetch_json(url)
+        _write_cache(raw, cache_path)
+        return raw
+    except Exception:
+        _log.debug("Seed fetch failed; falling back to cache", exc_info=True)
+        return _read_cache(cache_path)
 
 
 def _fetch_json(url: str) -> dict:

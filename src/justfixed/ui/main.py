@@ -39,7 +39,8 @@ from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
 from justfixed.engine.curve import Curve
-from justfixed.engine.fetcher import FetchResult, fetch_curves
+from justfixed.engine.fetcher import FetchResult, fetch_curves, fetch_seed_data
+from justfixed.engine.seed import load_seed_if_empty
 from justfixed.engine.conglomerate_report import (
     ConglomerateDetailRow,
     ConglomerateSection,
@@ -345,6 +346,15 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.critical(None, "Database error", str(exc))
             sys.exit(1)
+
+        # Seed DB on first run (empty DB only; no-op on every subsequent launch).
+        try:
+            _seed_data = fetch_seed_data()
+            _inserted = load_seed_if_empty(IssuerRepository(self._session_factory), _seed_data)
+            if _inserted > 0:
+                print(f"Seeded {_inserted} issuers on first run.", file=sys.stderr)
+        except Exception as exc:
+            print(f"Seed load failed (continuing): {exc}", file=sys.stderr)
 
         # Loaded investments — only mutated by refresh_table(), never by
         # error handlers, so a failed import/project leaves the previous
