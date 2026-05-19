@@ -22,6 +22,9 @@ dev = [
     "ruff>=0.6,<1.0",
     "mypy>=1.10,<2.0",
 ]
+tools = [
+    "pdfplumber>=0.11,<1.0",
+]
 
 [project.scripts]
 justfixed = "justfixed.ui.main:main"
