@@ -19,9 +19,10 @@ from PySide6.QtWidgets import QMessageBox
 
 from justfixed.domain.issuer import IssuerKind
 from justfixed.domain.money import Money
+from justfixed.domain.rates import Prefixed, PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA
 from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fgc import ExposureStatus
-from justfixed.ui.main import ConglomerateEditDelegate, MainWindow, compute_totals
+from justfixed.ui.main import ConglomerateEditDelegate, MainWindow, compute_totals, _format_type, _format_rate
 
 
 class TestProjectionCachePopulation:
@@ -899,3 +900,74 @@ class TestLoadCurveFromFile:
 
         mock_warn.assert_called_once()
         self_mock._on_project_clicked.assert_not_called()
+
+
+# ── _format_type (B27) ────────────────────────────────────────────────────────
+
+class TestFormatType:
+    def test_prefixed(self) -> None:
+        assert _format_type(Prefixed.from_percent("12.5")) == "Pré"
+
+    def test_post_fixed_cdi(self) -> None:
+        assert _format_type(PostFixedCDI.from_percent("112")) == "Pós"
+
+    def test_post_fixed_cdi_plus_spread(self) -> None:
+        assert _format_type(PostFixedCDIPlusSpread.from_percent("2.05")) == "Pós+"
+
+    def test_post_fixed_ipca(self) -> None:
+        assert _format_type(PostFixedIPCA.from_percent("6")) == "IPCA+"
+
+
+# ── _format_rate (B27) ────────────────────────────────────────────────────────
+
+def _make_curve_13() -> Curve:
+    return Curve(
+        anchor=date(2026, 5, 15),
+        vertices=(CurveVertex(business_days=252, rate=Decimal("0.13")),),
+    )
+
+
+class TestFormatRate:
+    _MATURITY = date(2027, 5, 15)
+
+    def test_prefixed_no_parenthetical(self) -> None:
+        # Prefixed: just the percent, no "a.a." suffix, no parens
+        rate = Prefixed.from_percent("12.5")
+        assert _format_rate(rate, None, self._MATURITY) == "12,50%"
+
+    def test_post_fixed_cdi_with_curve(self) -> None:
+        # effective = 1.12 × 0.13 = 0.1456 → 14,56%
+        rate = PostFixedCDI.from_percent("112")
+        result = _format_rate(rate, _make_curve_13(), self._MATURITY)
+        assert result == "112,00% do CDI (14,56%)"
+
+    def test_post_fixed_cdi_without_curve(self) -> None:
+        # effective = 1.12 × 0.144 (_ASSUMED_CDI) = 0.16128 → 16,13%
+        rate = PostFixedCDI.from_percent("112")
+        result = _format_rate(rate, None, self._MATURITY)
+        assert result == "112,00% do CDI (16,13%)"
+
+    def test_post_fixed_cdi_plus_spread_with_curve(self) -> None:
+        # effective = 0.13 + 0.0205 + (0.13 × 0.0205) = 0.153165 → 15,32%
+        rate = PostFixedCDIPlusSpread.from_percent("2.05")
+        result = _format_rate(rate, _make_curve_13(), self._MATURITY)
+        assert result == "CDI + 2,05% (15,32%)"
+
+    def test_post_fixed_cdi_plus_spread_without_curve(self) -> None:
+        # effective = 0.144 + 0.0205 + (0.144 × 0.0205) = 0.167452 → 16,75%
+        rate = PostFixedCDIPlusSpread.from_percent("2.05")
+        result = _format_rate(rate, None, self._MATURITY)
+        assert result == "CDI + 2,05% (16,75%)"
+
+    def test_post_fixed_ipca(self) -> None:
+        # effective = 0.0414 + 0.06 + (0.0414 × 0.06) = 0.103884 → 10,39%
+        rate = PostFixedIPCA.from_percent("6")
+        result = _format_rate(rate, None, self._MATURITY)
+        assert result == "IPCA + 6,00% (10,39%)"
+
+    def test_post_fixed_ipca_curve_not_used(self) -> None:
+        # IPCA effective rate uses _ASSUMED_IPCA regardless of curve presence
+        rate = PostFixedIPCA.from_percent("6")
+        with_curve = _format_rate(rate, _make_curve_13(), self._MATURITY)
+        without_curve = _format_rate(rate, None, self._MATURITY)
+        assert with_curve == without_curve

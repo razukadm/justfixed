@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -40,6 +41,14 @@ from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
+from justfixed.domain.rates import (
+    Prefixed,
+    PostFixedCDI,
+    PostFixedCDIPlusSpread,
+    PostFixedIPCA,
+    Rate,
+    _format_brazilian_percent,
+)
 from justfixed.engine.curve import Curve
 from justfixed.engine.fetcher import (
     CURVES_URL,
@@ -88,15 +97,17 @@ _ASSUMED_IPCA = Decimal("0.0414")
 _COL_ISSUER       = 0
 _COL_CONGLOMERATE = 1
 _COL_PRODUCT      = 2
-_COL_PRINCIPAL    = 3
-_COL_MATURITY     = 4
-_COL_CURRENT      = 5
-_COL_PROJECTED    = 6
-_COL_FGC          = 7
-_NCOLS            = 8
+_COL_TYPE         = 3
+_COL_RATE         = 4
+_COL_PRINCIPAL    = 5
+_COL_MATURITY     = 6
+_COL_CURRENT      = 7
+_COL_PROJECTED    = 8
+_COL_FGC          = 9
+_NCOLS            = 10
 
 _HEADERS = [
-    "Issuer", "Conglomerate", "Product",
+    "Issuer", "Conglomerate", "Product", "Type", "Rate",
     "Principal", "Maturity", "Current value", "Projected value", "FGC",
 ]
 
@@ -122,6 +133,36 @@ def _make_fgc_badge(status, width: int) -> QLabel:
     return lbl
 
 _HIGHLIGHT_COLOR = QColor("#FFF8DC")
+
+
+def _format_type(rate: Rate) -> str:
+    match rate:
+        case Prefixed():               return "Pré"
+        case PostFixedCDI():           return "Pós"
+        case PostFixedCDIPlusSpread(): return "Pós+"
+        case PostFixedIPCA():          return "IPCA+"
+    return "?"
+
+
+def _format_rate(rate: Rate, cdi_curve: Curve | None, maturity_date: date) -> str:
+    if isinstance(rate, Prefixed):
+        return _format_brazilian_percent(rate.annual_rate * 100)
+    configured = rate.to_display()
+    cdi = (
+        cdi_curve.rate_at(maturity_date)
+        if (cdi_curve is not None and cdi_curve.vertices)
+        else _ASSUMED_CDI
+    )
+    match rate:
+        case PostFixedCDI(cdi_percentage=p):
+            effective = p * cdi
+        case PostFixedCDIPlusSpread(spread=s):
+            effective = cdi + s + (cdi * s)
+        case PostFixedIPCA(spread=s):
+            effective = _ASSUMED_IPCA + s + (_ASSUMED_IPCA * s)
+        case _:
+            return configured
+    return f"{configured} ({_format_brazilian_percent(effective * 100)})"
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
@@ -456,8 +497,15 @@ class MainWindow(QMainWindow):
         self._table.setHorizontalHeaderLabels(_HEADERS)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
-        self._table.horizontalHeader().setStretchLastSection(True)
         self._table.verticalHeader().setVisible(False)
+        hdr = self._table.horizontalHeader()
+        _Stretch = QHeaderView.ResizeMode.Stretch
+        _Fixed   = QHeaderView.ResizeMode.Fixed
+        for col in (_COL_ISSUER, _COL_CONGLOMERATE, _COL_RATE):
+            hdr.setSectionResizeMode(col, _Stretch)
+        for col, px in ((_COL_PRODUCT, 80), (_COL_TYPE, 60), (_COL_FGC, 110)):
+            hdr.setSectionResizeMode(col, _Fixed)
+            self._table.setColumnWidth(col, px)
         self._delegate = ConglomerateEditDelegate(self, self._session_factory)
         self._table.setItemDelegateForColumn(_COL_CONGLOMERATE, self._delegate)
         self._table.cellDoubleClicked.connect(self._on_cell_double_clicked)
@@ -881,6 +929,8 @@ class MainWindow(QMainWindow):
         self._table.setItem(row, _COL_CONGLOMERATE, cong_item)
 
         self._cell(row, _COL_PRODUCT, rules_for(inv.product).display_name)
+        self._cell(row, _COL_TYPE, _format_type(inv.rate))
+        self._cell(row, _COL_RATE, _format_rate(inv.rate, self._cdi_curve, inv.maturity_date))
         self._cell(row, _COL_PRINCIPAL, inv.principal.to_display())
 
         d = inv.maturity_date
