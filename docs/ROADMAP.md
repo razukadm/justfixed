@@ -174,65 +174,31 @@ extracted — not before.
 accrual integration) and B9b (UI: MtM display). See those entries
 for current status.
 
-### B9a. DI curve: fetch and use for accrual
+### B9a. DI curve: fetch and use for accrual — SHIPPED
 
-**Source:** Split from original B9 in May 2026. Original framing was
-"DI-curve mark-to-market"; further investigation in May 2026 found
-that the DI/CDI curve lives at B3 (now PDF-only in their public path)
-while ETTJ PRE and IPCA curves live at ANBIMA. The two sources are
-complementary, not substitutes. The architectural decision: route all
-external data (curves and seed DB) through a separate public GitHub
-repo (`razukadm/justfixed-data`) that the admin populates manually
-from upstream sources. The app fetches from that repo. This trades
-end-to-end automation for format control and decoupling from upstream
-publishing changes.
+**Shipped:** May 2026. Curve infrastructure complete: engine integration,
+HTTP fetcher with disk cache, seed DB first-run loader, admin script for
+publishing curves from ANBIMA + B3, and dev view with curve/seed status
+plus B30 manual override.
 
-**What it is:** App fetches reference data from
-`https://raw.githubusercontent.com/razukadm/justfixed-data/main/`
-on launch. Two payloads:
+**Commit range:** `6d4fd20` (Phase 1, curve engine) through `ca1efbd`
+(Phase 5a, dev view). Five phases plus admin script and ancillary work.
 
-- `curves/latest.json` — unified yield curves (CDI, PRE, IPCA). Used
-  for accrual projection of PostFixedCDI, Prefixado, and IPCA-linked
-  investments.
-- `seed/issuers.json` — initial issuer/conglomerate reference data.
-  Loaded **only on first run** (when the user's database is empty).
-  After first run, never re-applied; user's curation is preserved.
-
-**Pinned decisions:**
-- GitHub repo: public, no authentication. Hosting is GitHub's raw URL
-  CDN.
-- Fetch on app launch. Cache locally at `~/.justfixed/curve_cache.json`
-  (and similar for seed). Fall back to cache on network failure;
-  fall back to hardcoded defaults if no cache exists.
-- Status bar shows curve freshness: "Curves: 2026-05-15 (live)" /
-  "(cached)" / "(defaults)".
-- Seed DB load is first-run-only. After app has any conglomerates/issuers
-  in its DB, the seed is never re-applied. No "sync from repo" button.
-- No MtM display (that's B9b). Curves are used silently to improve
-  the existing "Projected value" column.
-- Admin tooling (script that ingests ANBIMA CSV + B3 PDF, builds the
-  unified JSON, commits + pushes to data repo) is an external CLI
-  tool, not in-app. Documented in the source repo's `docs/` directory.
-
-**Effort:** ~6-9 calibrated sessions. Roughly:
-- Phase 1: Engine curve infrastructure (Curve data structure,
-  interpolation, integration with `_effective_annual_rate`).
-- Phase 2: HTTP fetcher + cache (with status bar indicator).
-- Phase 3: Seed DB first-run loader (absorbs B20's scope).
-- Phase 4: Admin script (external CLI).
-- Phase 5: Housekeeping (dev view tab for status/links, docs).
-
-**Trigger to revisit:** Started May 2026 after B24 close.
+**Data repo:** `github.com/razukadm/justfixed-data` is the public source
+of curves and seed data. Admin updates manually via `tools/publish_curves.py`.
 
 **Architectural notes:**
-- Engine seam is `_effective_annual_rate` in `engine/accrual.py`.
-  Currently takes a single Decimal; will accept a curve object (or
-  fall back to single value for compatibility).
-- Past accrual continues to use the curve's spot value (no historical
-  daily series). True historical past accrual is out of scope; would
-  be a separate future item.
-- Data repo lives at https://github.com/razukadm/justfixed-data
-  (public, placeholder content already committed pre-B9a).
+- The `_effective_annual_rate` seam in `engine/accrual.py` was preserved
+  as scalar-rate; curve lookup happens at higher-level callers in
+  `cashflow.py` and `projection.py` (Option A integration, per-period rate
+  per Option 5b).
+- `Curve` is a frozen dataclass with business-day vertices, linear
+  interpolation, flat extension beyond bounds.
+- Three curves are fetched (CDI, PRE, IPCA real). Only CDI is currently
+  wired into projection; PRE and IPCA are stored for future Prefixado /
+  IPCA-linked projection work.
+- Seed DB schema is flat (no ConglomerateRow); first-run loader inserts
+  IssuerRow records only.
 
 ### B9b. DI curve: mark-to-market display
 
@@ -580,26 +546,20 @@ complexity. Defer until real user feedback confirms this is a pain point.
   Type column header tentatively also Portuguese ("Tipo"); confirm
   in implementation.
 - Single-line format: configured rate, then effective in parens.
-- Effective rate computation:
-  - Pre-B9a-Phase-5 (i.e., before curve integration completes): use
-    the hardcoded `_ASSUMED_CDI` / `_ASSUMED_IPCA` constants to compute
-    effective rates. Slightly inaccurate but stable.
-  - Post-B9a-Phase-5: when a curve is available, use
-    `curve.rate_at(maturity_date)` for the per-investment effective
-    rate. More accurate; varies per investment.
+- Effective rate computation: use `curve.rate_at(maturity_date)` for the
+  per-investment effective rate when a curve is available (B9a shipped);
+  fall back to `_ASSUMED_CDI` / `_ASSUMED_IPCA` when not.
 - For Prefixado rates where configured == effective, consider displaying
   only one value rather than redundant text. Final formatting decision
   in implementation.
 
-**Why deferred:** UI feature, depends on B9a Phase 1's curve infrastructure
-being available (for the eventual curve-driven effective rate) but doesn't
-require it as a hard dependency. Could land any time after B9a Phase 1.
+**Why deferred:** UI feature. Curve infrastructure (B9a) is now shipped;
+this is ready to implement any time.
 
 **Effort:** ~1-2 calibrated sessions. New columns in `QTableWidget`,
 per-rate-type formatter functions, tests for each format pattern.
 
-**Trigger to revisit:** Any time after B9a Phase 1. Optimistic delivery
-after B9a Phase 5 to get curve-aware effective rates in one shot.
+**Trigger to revisit:** Any time. Curve infrastructure is ready (B9a shipped).
 
 ### B28. XLSX export for Investments and Conglomerates tabs
 
@@ -629,21 +589,21 @@ files / installer work), tests for column-mapping correctness.
 
 **Trigger to revisit:** Any time. Independent of B9a's progress.
 
-### B29. Dev view: active curves display and XLSX export
+### B29. Dev view: XLSX curve export
 
 **Source:** User request 2026-05-17. Paired with B28 but distinct in
 scope: this is diagnostic / validation tooling, not user-facing.
 
-**What it is:** The dev view tab (introduced in B9a Phase 3 alongside
-the data-repo links) gains a "currently active curves" section showing
-which CDI/PRE/IPCA curves the app is using right now: as-of date,
-vertex count, source URL, fetch timestamp.
+**Note:** The "currently active curves" display (CDI/PRE/IPCA status:
+source, anchor date, vertex count, fetch timestamp) was delivered as
+part of B9a Phase 5a (commit `ca1efbd`). What remains here is the
+XLSX export button only.
 
-Adds an "Export curve data as XLSX" button. The exported file has one
-sheet per curve (CDI, PRE, IPCA), each containing the vertices
-(business_days, rate) in tabular form. Purpose: external validation —
-the user or admin can verify the app's projections are using the
-intended curve.
+**What it is:** Dev view gains an "Export curve data as XLSX" button.
+The exported file has one sheet per curve (CDI, PRE, IPCA), each
+containing the vertices (business_days, rate) in tabular form. Purpose:
+external validation — the user or admin can verify the app's projections
+are using the intended curve.
 
 **Pinned decisions:**
 - Visible only when `JUSTFIXED_DEV` env var is set (consistent with
@@ -653,38 +613,14 @@ intended curve.
   is what matters for verification.
 - Format: XLSX. One sheet per curve.
 
-**Effort:** ~1-2 calibrated sessions, riding on B9a Phase 3's dev
-view scaffolding. The export logic itself is small once openpyxl is
-already wired up via B28.
+**Effort:** ~1 calibrated session. Dev view scaffolding and openpyxl
+(via B28) are already in place.
 
-**Trigger to revisit:** With B9a Phase 3 (dev view tab).
+**Trigger to revisit:** Any time after B28 ships (openpyxl dependency).
 
-### B30. Dev view: load curve from file
+### B30. Dev view: load curve from file — CLOSED
 
-**Source:** User request 2026-05-17 during B9a Phase 2 discussion.
-
-**What it is:** Dev view (introduced in B9a Phase 3) gains a "Load
-curve from file..." action. User selects a JSON file matching the
-data-repo format; the app parses it and uses it as the active curve
-for the current session. On next launch, the GitHub fetch resumes.
-
-Purpose: override the published curve with local data — useful for
-testing scenarios, manually-prepared curves, or operating when the
-data repo is unreachable.
-
-**Pinned decisions:**
-- Visible only when `JUSTFIXED_DEV` env var is set (dev view pattern).
-- JSON format matches the data-repo's `curves/latest.json` schema.
-- Session-scoped: file load doesn't write to `~/.justfixed/curve_cache.json`.
-  To persist across restarts, the user can manually copy the file
-  to that path (documented).
-- Adds a new "manual" status to the curve label (alongside live/cached/
-  unavailable).
-
-**Effort:** ~1-2 calibrated sessions, riding on B9a Phase 3's dev view
-scaffolding.
-
-**Trigger to revisit:** With B9a Phase 3.
+**Closed:** Absorbed into B9a Phase 5a. Shipped in commit `ca1efbd`.
 
 ---
 

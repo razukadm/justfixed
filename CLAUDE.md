@@ -9,8 +9,9 @@ this file is the working-style and conventions summary.
 JustFixed is a Windows desktop portfolio tracker for Brazilian fixed-income investments
 (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, single-user. Engine,
 persistence, exports, and the XP importer are complete; the UI (PySide6) is through
-milestone B24 (read-only viewer, conglomerate curation, filter dropdowns, totals strip, and Conglomerates accordion tab). The README covers the
-user-facing intent; ARCHITECTURE.md covers the internal shape.
+B24 (read-only viewer, conglomerate curation, filter dropdowns, totals strip,
+Conglomerates accordion tab) plus B9a (live curve fetch, seed DB loader, dev view tab).
+The README covers the user-facing intent; ARCHITECTURE.md covers the internal shape.
 
 ## Architectural shape
 
@@ -22,7 +23,7 @@ Strict layer ordering, no upward dependencies:
 - `importers/` — three layers: parser (xlsx → strings), mapper (strings → typed),
   loader (typed → persisted).
 - `exports/` — calendar.py: iCalendar (.ics) export. Depends on domain + engine, not persistence.
-- `ui/` — PySide6 single-window app. Milestones A′, B′, and B24 shipped (read-only viewer, conglomerate curation, Conglomerates accordion tab). See docs/UI_DESIGN.md.
+- `ui/` — PySide6 single-window app. Milestones A′, B′, B24, and B9a shipped (read-only viewer, conglomerate curation, Conglomerates accordion tab, dev view with curve/seed status). See docs/UI_DESIGN.md.
 
 Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 
@@ -34,7 +35,7 @@ Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 - **Domain types validate in `__post_init__`.** Corrupt data fails to load with a
   clear `ValueError`. The domain is the gatekeeper for invariants.
 - **Tests are the spec.** If behavior changes, the test changes first. Currently
-  527 tests, ~4 second runtime, no skips. Tests pass on every commit.
+  622 tests, ~4 second runtime, no skips. Tests pass on every commit.
 - **Hand-compute financial test expected values.** Show all decimals; don't approximate.
   Approximation has been a real source of bugs.
 - **Repositories are the only public access to persistence.** Engine, UI, and importers
@@ -104,9 +105,9 @@ structures. A third mechanism (curation memory) is database-backed, not hardcode
   on the **create branch only** — if a curated entry exists for the normalized name,
   the new issuer is created with that conglomerate instead of `[unverified] {name}`.
   Existing issuers are never overwritten; the find branch ignores curation memory
-  entirely. Entries are populated by the B′ curation UI (shipped) and future B20
-  pre-seed for bundled defaults. The repository is also writable directly, which
-  is how tests seed curation memory.
+  entirely. Entries are populated by the B′ curation UI (shipped) and the seed
+  loader's first-run import (B9a Phase 3, shipped). The repository is also writable
+  directly, which is how tests seed curation memory.
 - **Development-bank set** (xp_loader.py `_DEVELOPMENT_BANK_NAMES`): issuers in this
   set get `IssuerKind.DEVELOPMENT_BANK` instead of the `COMMERCIAL_BANK` default.
 - **Section-terminator set** (xp.py `_RENDA_FIXA_TERMINATORS`): row text matching

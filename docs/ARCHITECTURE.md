@@ -12,13 +12,14 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 |---|---|---|
 | Domain | Complete | 153 |
 | Persistence | Complete | 86 |
-| Engine | Complete | 142 |
+| Engine | Complete | 181 |
 | Importer (parser, mapper) | Complete | 80 |
 | Importer (loader / DB persistence) | Complete | 14 |
-| UI (PySide6) | B′, B′ companion, and B24 complete (curation, filter dropdowns, totals strip, Conglomerates accordion tab) | 40 |
+| UI (PySide6) | B′, B′ companion, B24, and B9a complete (curve infrastructure, dev view, B30 load-from-file) | 48 |
 | Exports (calendar / ICS) | Complete | 9 |
+| Tools (admin scripts) | Complete | 48 |
 
-527 tests pass in ~4 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+622 tests pass in ~4 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -368,7 +369,7 @@ PySide6 single-window desktop application. Two tabs: **Conglomerates** (default 
 
 The module imports from `domain`, `persistence`, `engine.projection`, `engine.fgc`, `exports.calendar`, and `importers.xp_loader`. It introduces no new architectural layer between itself and those — direct calls, no service or presenter layer.
 
-CDI is hardcoded as a module-level constant (`_ASSUMED_CDI`) for postfixed-rate projections. Replace with the current Selic/CDI value at each rebuild until ROADMAP B10 (real index data fetching) is implemented.
+CDI curve is fetched from `razukadm/justfixed-data` on launch (`engine/fetcher.py`); cached at `~/.justfixed/curve_cache.json`. The projection path uses the live curve when available; `_ASSUMED_CDI` is the offline fallback. (B9a shipped May 2026.)
 
 UI tests live in `tests/ui/` and use a "real method, MagicMock self" pattern: actual `MainWindow` or `ConglomerateEditDelegate` methods are called with a `MagicMock(spec=...)` stand-in for `self`, avoiding Qt window instantiation entirely. Layout and interaction verification remains a human "build, run, look at it" loop.
 
@@ -378,7 +379,7 @@ See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′
 
 ## Test discipline
 
-**527 tests, ~4 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**622 tests, ~4 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
