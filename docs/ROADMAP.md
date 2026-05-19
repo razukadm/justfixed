@@ -622,6 +622,38 @@ are using the intended curve.
 
 **Closed:** Absorbed into B9a Phase 5a. Shipped in commit `ca1efbd`.
 
+### B31. Dev view: edit assumed CDI and IPCA constants
+
+**Source:** User request 2026-05-19 during B27 discussion.
+
+**What it is:** Dev view tab gains editable fields for `_ASSUMED_CDI` and
+`_ASSUMED_IPCA` constants. These are the fallback values used when the
+curve is unavailable (curve fetch failed AND no cache) or for rate types
+not yet curve-wired (PostFixedIPCA always; PostFixedCDI/PostFixedCDIPlusSpread
+when curve unavailable).
+
+The Dev tab shows the current values as editable fields. Saving the new
+values updates the runtime constants and re-projects. Optionally persists
+to disk for next session.
+
+**Pinned decisions (tentative, refine at implementation):**
+- Visible only when `JUSTFIXED_DEV` env var is set.
+- Two editable fields with current values pre-filled.
+- "Apply" button triggers re-projection with new constants.
+- Persistence across sessions: TBD at implementation (probably JSON sidecar
+  in `~/.justfixed/` mirroring the curve cache pattern).
+- Validation: rates must be in (0, 0.30) range, same as the admin script's
+  validation.
+
+**Why deferred:** Convenience feature, not blocking. The current hardcoded
+constants are adequate for typical use. This entry surfaces the capability
+as a low-priority improvement.
+
+**Effort:** ~1-2 calibrated sessions, riding on B9a Phase 5a's dev view
+scaffolding.
+
+**Trigger to revisit:** Any time. Independent of other roadmap items.
+
 ---
 
 ## Part 3 — Open questions
