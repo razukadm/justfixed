@@ -1,23 +1,24 @@
-"""HTTP fetcher for live yield curve data (B9a Phase 2).
+"""HTTP fetcher for live yield curve data (B9a Phase 2 + Phase 5a).
 
 Fetches curves/latest.json from the justfixed-data GitHub repository,
 caches to ~/.justfixed/curve_cache.json, and returns a FetchResult.
 
 On network failure the on-disk cache is used. If both fail, returns
-source="unavailable" with curve=None. The caller passes result.curve
+source="unavailable" with all curves None. The caller passes result.curve
 to project(cdi_curve=...) — the engine handles None and empty-vertices
 Curves identically (falls back to assumed_cdi).
 
-PRE and IPCA sections are fetched and cached here but not parsed;
-they are deferred to B9a Phase 4.
+parse_curve_payload() is a public convenience for the B30 "load from file"
+handler: given a full curves/latest.json payload dict, it returns the CDI
+Curve (or None).
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, field
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from urllib.error import URLError
@@ -38,17 +39,23 @@ _DEFAULT_SEED_CACHE_PATH = Path.home() / ".justfixed" / "seed_cache.json"
 _TIMEOUT = 5  # seconds
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class FetchResult:
     """Result of a fetch_curves() call.
 
-    curve:  Parsed CDI Curve, or None when vertices are empty or parse fails.
-            Pass directly to project(cdi_curve=...).
-    source: "live" | "cached" | "unavailable"
+    curve:       Parsed CDI Curve, or None when vertices are empty or parse fails.
+                 Pass directly to project(cdi_curve=...).
+    source:      "live" | "cached" | "unavailable"
+    pre:         Parsed PRE curve, or None.
+    ipca_real:   Parsed IPCA-real curve, or None.
+    source_time: When the fetch completed (None when source="unavailable").
     """
 
     curve: Curve | None
     source: str
+    pre: Curve | None = None
+    ipca_real: Curve | None = None
+    source_time: datetime | None = None
 
 
 def fetch_curves(
@@ -56,7 +63,7 @@ def fetch_curves(
     url: str = CURVES_URL,
     cache_path: Path = _DEFAULT_CACHE_PATH,
 ) -> FetchResult:
-    """Fetch yield curve data and return the CDI Curve.
+    """Fetch yield curve data and return all three parsed curves.
 
     Tries the live URL first; on any failure falls back to the on-disk
     cache. Returns FetchResult(curve=None, source="unavailable") if both
@@ -77,7 +84,13 @@ def fetch_curves(
     if raw is None:
         return FetchResult(curve=None, source="unavailable")
 
-    return FetchResult(curve=_parse_cdi_curve(raw), source=source)
+    return FetchResult(
+        curve=_parse_cdi_curve(raw),
+        source=source,
+        pre=_parse_pre_curve(raw),
+        ipca_real=_parse_ipca_real_curve(raw),
+        source_time=datetime.now(),
+    )
 
 
 def fetch_seed_data(
@@ -99,6 +112,16 @@ def fetch_seed_data(
         return _read_cache(cache_path)
 
 
+def parse_curve_payload(data: dict) -> Curve | None:
+    """Parse the CDI curve from a curves/latest.json payload dict.
+
+    Public entry point for the B30 'load from file' handler. Returns None
+    if the CDI section is absent, the anchor is missing, vertices are empty,
+    or any value is malformed.
+    """
+    return _parse_cdi_curve(data)
+
+
 def _fetch_json(url: str) -> dict:
     req = Request(url, headers={"User-Agent": "justfixed/1.0"})
     with urlopen(req, timeout=_TIMEOUT) as resp:
@@ -117,17 +140,12 @@ def _read_cache(cache_path: Path) -> dict | None:
         return None
 
 
-def _parse_cdi_curve(data: dict) -> Curve | None:
-    """Parse the 'cdi' section of the JSON payload into a Curve, or None.
-
-    Returns None if the CDI section is absent, the anchor is missing,
-    the vertices list is empty, or any value is malformed. PRE and IPCA
-    sections are intentionally ignored (Phase 4).
-    """
+def _parse_section_curve(data: dict, key: str) -> Curve | None:
+    """Parse a named section (cdi/pre/ipca_real) from the JSON payload."""
     try:
-        cdi = data.get("cdi", {})
-        anchor_str = cdi.get("anchor")
-        vertices_raw = cdi.get("vertices", [])
+        section = data.get(key, {})
+        anchor_str = section.get("anchor")
+        vertices_raw = section.get("vertices", [])
         if not anchor_str or not vertices_raw:
             return None
         anchor = date.fromisoformat(anchor_str)
@@ -140,5 +158,17 @@ def _parse_cdi_curve(data: dict) -> Curve | None:
         )
         return Curve(anchor=anchor, vertices=vertices)
     except Exception:
-        _log.debug("CDI curve parse failed", exc_info=True)
+        _log.debug("%s curve parse failed", key, exc_info=True)
         return None
+
+
+def _parse_cdi_curve(data: dict) -> Curve | None:
+    return _parse_section_curve(data, "cdi")
+
+
+def _parse_pre_curve(data: dict) -> Curve | None:
+    return _parse_section_curve(data, "pre")
+
+
+def _parse_ipca_real_curve(data: dict) -> Curve | None:
+    return _parse_section_curve(data, "ipca_real")

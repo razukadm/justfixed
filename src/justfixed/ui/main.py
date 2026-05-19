@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sys
@@ -11,12 +12,13 @@ from decimal import Decimal
 from pathlib import Path
 
 from PySide6.QtCore import QDate, QLocale, QStandardPaths, QStringListModel, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QAction, QColor
+from PySide6.QtGui import QAction, QColor, QFont
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QCompleter,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -39,7 +41,13 @@ from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
 from justfixed.engine.curve import Curve
-from justfixed.engine.fetcher import FetchResult, fetch_curves, fetch_seed_data
+from justfixed.engine.fetcher import (
+    CURVES_URL,
+    FetchResult,
+    fetch_curves,
+    fetch_seed_data,
+    parse_curve_payload,
+)
 from justfixed.engine.seed import load_seed_if_empty
 from justfixed.engine.conglomerate_report import (
     ConglomerateDetailRow,
@@ -348,11 +356,12 @@ class MainWindow(QMainWindow):
             sys.exit(1)
 
         # Seed DB on first run (empty DB only; no-op on every subsequent launch).
+        _seed_count = 0
         try:
             _seed_data = fetch_seed_data()
-            _inserted = load_seed_if_empty(IssuerRepository(self._session_factory), _seed_data)
-            if _inserted > 0:
-                print(f"Seeded {_inserted} issuers on first run.", file=sys.stderr)
+            _seed_count = load_seed_if_empty(IssuerRepository(self._session_factory), _seed_data)
+            if _seed_count > 0:
+                print(f"Seeded {_seed_count} issuers on first run.", file=sys.stderr)
         except Exception as exc:
             print(f"Seed load failed (continuing): {exc}", file=sys.stderr)
 
@@ -370,6 +379,11 @@ class MainWindow(QMainWindow):
         # to the currently visible set on each render.
         self.projection_cache: list[ProjectionResult] | None = None
         self._cdi_curve: Curve | None = None
+        self._pre_curve: Curve | None = None
+        self._ipca_curve: Curve | None = None
+        self._fetch_result: FetchResult | None = None
+        self._curve_source: str = "unavailable"
+        self._seed_loaded_count: int = _seed_count
         self._expanded_conglomerates: set[str] = set()
         self._cong_section_widgets: dict[str, tuple] = {}  # cname → (plus_label, detail_container)
         self._highlight_timer: QTimer | None = None  # keeps highlight timer alive for cancellation
@@ -497,6 +511,8 @@ class MainWindow(QMainWindow):
             clear_db_action = QAction("Clear Database…", self)
             clear_db_action.triggered.connect(self._on_clear_db_clicked)
             file_menu.addAction(clear_db_action)
+            self._dev_tab = self._build_dev_tab()
+            self._tabs.addTab(self._dev_tab, "Dev")
         view_menu = menu_bar.addMenu("View")
         self._hide_matured_action = QAction("Hide matured investments", self)
         self._hide_matured_action.setCheckable(True)
@@ -998,20 +1014,143 @@ class MainWindow(QMainWindow):
     # ── Project ───────────────────────────────────────────────────────────────
 
     def _fetch_curve(self) -> None:
-        result = fetch_curves()
-        self._cdi_curve = result.curve
-        if result.source == "live":
-            if result.curve and result.curve.vertices:
-                self._curve_label.setText(f"Curve: live ({result.curve.anchor:%Y-%m-%d})")
-            else:
-                self._curve_label.setText("Curve: live (no data)")
-        elif result.source == "cached":
-            if result.curve and result.curve.vertices:
-                self._curve_label.setText(f"Curve: cached ({result.curve.anchor:%Y-%m-%d})")
-            else:
-                self._curve_label.setText("Curve: cached (no data)")
-        else:
+        self._fetch_result = fetch_curves()
+        self._cdi_curve = self._fetch_result.curve
+        self._pre_curve = self._fetch_result.pre
+        self._ipca_curve = self._fetch_result.ipca_real
+        self._curve_source = self._fetch_result.source
+        self._update_curve_label(self._curve_source, self._cdi_curve)
+        if hasattr(self, "_dev_cdi_label"):
+            self._refresh_dev_tab_curves()
+
+    def _update_curve_label(self, source: str, curve: Curve | None) -> None:
+        if curve and curve.vertices:
+            self._curve_label.setText(f"Curve: {source} ({curve.anchor:%Y-%m-%d})")
+        elif source == "unavailable":
             self._curve_label.setText("Curve: unavailable")
+        else:
+            self._curve_label.setText(f"Curve: {source} (no data)")
+
+    def _refresh_dev_tab_curves(self) -> None:
+        fetch_source = self._fetch_result.source if self._fetch_result else "unavailable"
+        fetch_time = self._fetch_result.source_time if self._fetch_result else None
+
+        def _summary(curve: Curve | None, source: str) -> str:
+            if not curve or not curve.vertices:
+                return f"source: {source}  ·  no data"
+            first = curve.vertices[0]
+            last = curve.vertices[-1]
+            line1 = (
+                f"source: {source}  ·  anchor: {curve.anchor:%Y-%m-%d}  ·  "
+                f"{len(curve.vertices)} vertices"
+            )
+            if fetch_time and source != "manual":
+                line1 += f"  ·  fetched {fetch_time:%H:%M:%S}"
+            line2 = (
+                f"first: {first.business_days}bd @ {first.rate:.4%}  ·  "
+                f"last: {last.business_days}bd @ {last.rate:.4%}"
+            )
+            return f"{line1}\n{line2}"
+
+        self._dev_cdi_label.setText(_summary(self._cdi_curve, self._curve_source))
+        self._dev_pre_label.setText(_summary(self._pre_curve, fetch_source))
+        self._dev_ipca_label.setText(_summary(self._ipca_curve, fetch_source))
+
+    def _build_dev_tab(self) -> QWidget:
+        tab = QWidget()
+        root = QVBoxLayout(tab)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(6)
+        root.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        bold = QFont()
+        bold.setBold(True)
+
+        def _title(text: str) -> QLabel:
+            lbl = QLabel(text)
+            lbl.setFont(bold)
+            return lbl
+
+        def _sep() -> QFrame:
+            f = QFrame()
+            f.setFrameShape(QFrame.Shape.HLine)
+            f.setFrameShadow(QFrame.Shadow.Sunken)
+            return f
+
+        # --- Curves ---
+        root.addWidget(_title("Active curves"))
+        root.addWidget(QLabel(f"Source URL: {CURVES_URL}"))
+        root.addSpacing(4)
+
+        for attr, label_text in (
+            ("_dev_cdi_label", "CDI (B3 DI1 futures):"),
+            ("_dev_pre_label", "PRE (ANBIMA ETTJ):"),
+            ("_dev_ipca_label", "IPCA real (ANBIMA ETTJ):"),
+        ):
+            root.addWidget(QLabel(label_text))
+            lbl = QLabel("  loading…")
+            root.addWidget(lbl)
+            setattr(self, attr, lbl)
+
+        root.addWidget(_sep())
+
+        # --- Seed ---
+        root.addWidget(_title("Seed status"))
+        if self._seed_loaded_count > 0:
+            seed_text = f"Loaded this session: yes ({self._seed_loaded_count} issuers)"
+        else:
+            seed_text = "Loaded this session: no"
+        root.addWidget(QLabel(seed_text))
+
+        root.addWidget(_sep())
+
+        # --- Admin tools ---
+        root.addWidget(_title("Admin tools"))
+        root.addWidget(QLabel("Data repo: https://github.com/razukadm/justfixed-data"))
+        root.addWidget(QLabel("Publish script: tools/publish_curves.py"))
+        root.addWidget(QLabel("Docs: docs/BUILD.md"))
+        root.addSpacing(4)
+
+        load_btn = QPushButton("Load curve from file…")
+        load_btn.clicked.connect(self._on_load_curve_from_file_clicked)
+        root.addWidget(load_btn)
+
+        root.addStretch()
+        return tab
+
+    def _on_load_curve_from_file_clicked(self) -> None:
+        dirs = QStandardPaths.standardLocations(
+            QStandardPaths.StandardLocation.DownloadLocation
+        )
+        path_str, _ = QFileDialog.getOpenFileName(
+            self, "Load curve from file",
+            dirs[0] if dirs else "",
+            "JSON files (*.json)",
+        )
+        if not path_str:
+            return
+        try:
+            data = json.loads(Path(path_str).read_text(encoding="utf-8"))
+            loaded_curve = parse_curve_payload(data)
+            if loaded_curve is None or not loaded_curve.vertices:
+                QMessageBox.warning(
+                    self, "Load curve",
+                    f"{Path(path_str).name}: no CDI curve data found in file.",
+                )
+                return
+        except Exception as exc:
+            QMessageBox.warning(
+                self, "Load curve",
+                f"Failed to parse {Path(path_str).name}:\n{exc}",
+            )
+            return
+
+        self._cdi_curve = loaded_curve
+        self._curve_source = "manual"
+        self._update_curve_label("manual", loaded_curve)
+        if hasattr(self, "_dev_cdi_label"):
+            self._refresh_dev_tab_curves()
+        self._on_project_clicked()
 
     def _on_project_clicked(self) -> None:
         self._set_busy(True)

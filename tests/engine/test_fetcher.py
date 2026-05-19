@@ -24,6 +24,30 @@ SAMPLE_PAYLOAD = {
     }
 }
 
+FULL_PAYLOAD = {
+    "as_of": "2026-05-15",
+    "schema_version": 1,
+    "cdi": {
+        "anchor": "2026-05-15",
+        "vertices": [
+            {"business_days": 126, "rate": 0.144},
+            {"business_days": 252, "rate": 0.143},
+        ],
+    },
+    "pre": {
+        "anchor": "2026-05-15",
+        "vertices": [
+            {"business_days": 252, "rate": 0.1394},
+        ],
+    },
+    "ipca_real": {
+        "anchor": "2026-05-15",
+        "vertices": [
+            {"business_days": 252, "rate": 0.0818},
+        ],
+    },
+}
+
 EMPTY_VERTICES_PAYLOAD = {
     "cdi": {
         "anchor": "2026-05-15",
@@ -114,6 +138,43 @@ class TestParsing:
         with patch("justfixed.engine.fetcher.urlopen", _mock_urlopen(no_anchor)):
             result = fetch_curves(cache_path=cache)
         assert result.curve is None
+
+
+# ── Multi-curve parsing (Phase 5a) ───────────────────────────────────────────
+
+class TestMultiCurveParsing:
+    def test_fetch_parses_pre_curve(self, tmp_path: Path) -> None:
+        cache = tmp_path / "curve_cache.json"
+        with patch("justfixed.engine.fetcher.urlopen", _mock_urlopen(FULL_PAYLOAD)):
+            result = fetch_curves(cache_path=cache)
+        assert result.pre is not None
+        assert len(result.pre.vertices) == 1
+
+    def test_fetch_parses_ipca_real_curve(self, tmp_path: Path) -> None:
+        cache = tmp_path / "curve_cache.json"
+        with patch("justfixed.engine.fetcher.urlopen", _mock_urlopen(FULL_PAYLOAD)):
+            result = fetch_curves(cache_path=cache)
+        assert result.ipca_real is not None
+        assert len(result.ipca_real.vertices) == 1
+
+    def test_fetch_handles_missing_pre_section(self, tmp_path: Path) -> None:
+        cache = tmp_path / "curve_cache.json"
+        with patch("justfixed.engine.fetcher.urlopen", _mock_urlopen(SAMPLE_PAYLOAD)):
+            result = fetch_curves(cache_path=cache)
+        assert result.pre is None
+
+    def test_fetch_records_source_time_on_live(self, tmp_path: Path) -> None:
+        cache = tmp_path / "curve_cache.json"
+        with patch("justfixed.engine.fetcher.urlopen", _mock_urlopen(FULL_PAYLOAD)):
+            result = fetch_curves(cache_path=cache)
+        assert result.source_time is not None
+
+    def test_fetch_source_time_none_when_unavailable(self, tmp_path: Path) -> None:
+        cache = tmp_path / "no_such_cache.json"
+        with patch("justfixed.engine.fetcher.urlopen", side_effect=URLError("offline")):
+            result = fetch_curves(cache_path=cache)
+        assert result.source == "unavailable"
+        assert result.source_time is None
 
 
 # ── fetch_seed_data ───────────────────────────────────────────────────────────

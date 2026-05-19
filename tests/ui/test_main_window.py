@@ -8,6 +8,7 @@ no QApplication or database setup is needed.
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from justfixed.domain.issuer import IssuerKind
 from justfixed.domain.money import Money
+from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fgc import ExposureStatus
 from justfixed.ui.main import ConglomerateEditDelegate, MainWindow, compute_totals
 
@@ -792,3 +794,108 @@ class TestFilterTotalsIntegration:
 
         assert self_mock._populate_row.call_count == 4
         self_mock._rows_label.setText.assert_called_with("Rows: 4")
+
+
+def _make_curve(anchor_str: str = "2026-05-15") -> Curve:
+    return Curve(
+        anchor=date.fromisoformat(anchor_str),
+        vertices=(CurveVertex(business_days=252, rate=Decimal("0.144")),),
+    )
+
+
+# ── _update_curve_label ───────────────────────────────────────────────────────
+
+class TestUpdateCurveLabel:
+    def _mock(self) -> MagicMock:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._curve_label = MagicMock()
+        return self_mock
+
+    def test_live_with_vertices_shows_anchor(self) -> None:
+        self_mock = self._mock()
+        MainWindow._update_curve_label(self_mock, "live", _make_curve())
+        self_mock._curve_label.setText.assert_called_once_with("Curve: live (2026-05-15)")
+
+    def test_unavailable_shows_unavailable(self) -> None:
+        self_mock = self._mock()
+        MainWindow._update_curve_label(self_mock, "unavailable", None)
+        self_mock._curve_label.setText.assert_called_once_with("Curve: unavailable")
+
+    def test_live_no_curve_shows_no_data(self) -> None:
+        self_mock = self._mock()
+        MainWindow._update_curve_label(self_mock, "live", None)
+        self_mock._curve_label.setText.assert_called_once_with("Curve: live (no data)")
+
+    def test_manual_with_curve_shows_manual(self) -> None:
+        self_mock = self._mock()
+        MainWindow._update_curve_label(self_mock, "manual", _make_curve())
+        self_mock._curve_label.setText.assert_called_once_with("Curve: manual (2026-05-15)")
+
+
+# ── _on_load_curve_from_file_clicked (B30) ────────────────────────────────────
+
+class TestLoadCurveFromFile:
+    _VALID_PAYLOAD = {
+        "cdi": {
+            "anchor": "2026-05-15",
+            "vertices": [{"business_days": 252, "rate": 0.144}],
+        }
+    }
+
+    def test_valid_json_updates_cdi_curve_and_reprojects(self, tmp_path) -> None:
+        json_file = tmp_path / "latest.json"
+        json_file.write_text(json.dumps(self._VALID_PAYLOAD), encoding="utf-8")
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._curve_source = "live"
+
+        with patch("justfixed.ui.main.QFileDialog.getOpenFileName",
+                   return_value=(str(json_file), "")), \
+             patch("justfixed.ui.main.QStandardPaths.standardLocations",
+                   return_value=[""]):
+            MainWindow._on_load_curve_from_file_clicked(self_mock)
+
+        assert self_mock._cdi_curve is not None
+        assert self_mock._curve_source == "manual"
+        self_mock._update_curve_label.assert_called_once()
+        self_mock._on_project_clicked.assert_called_once()
+
+    def test_cancel_is_no_op(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+
+        with patch("justfixed.ui.main.QFileDialog.getOpenFileName",
+                   return_value=("", "")), \
+             patch("justfixed.ui.main.QStandardPaths.standardLocations",
+                   return_value=[""]):
+            MainWindow._on_load_curve_from_file_clicked(self_mock)
+
+        self_mock._on_project_clicked.assert_not_called()
+
+    def test_invalid_json_shows_warning_no_reproject(self, tmp_path) -> None:
+        bad_file = tmp_path / "bad.json"
+        bad_file.write_text("not valid json {{ ", encoding="utf-8")
+        self_mock = MagicMock(spec=MainWindow)
+
+        with patch("justfixed.ui.main.QFileDialog.getOpenFileName",
+                   return_value=(str(bad_file), "")), \
+             patch("justfixed.ui.main.QStandardPaths.standardLocations",
+                   return_value=[""]), \
+             patch("justfixed.ui.main.QMessageBox.warning") as mock_warn:
+            MainWindow._on_load_curve_from_file_clicked(self_mock)
+
+        mock_warn.assert_called_once()
+        self_mock._on_project_clicked.assert_not_called()
+
+    def test_no_cdi_section_shows_warning_no_reproject(self, tmp_path) -> None:
+        json_file = tmp_path / "empty.json"
+        json_file.write_text(json.dumps({"as_of": "2026-05-15"}), encoding="utf-8")
+        self_mock = MagicMock(spec=MainWindow)
+
+        with patch("justfixed.ui.main.QFileDialog.getOpenFileName",
+                   return_value=(str(json_file), "")), \
+             patch("justfixed.ui.main.QStandardPaths.standardLocations",
+                   return_value=[""]), \
+             patch("justfixed.ui.main.QMessageBox.warning") as mock_warn:
+            MainWindow._on_load_curve_from_file_clicked(self_mock)
+
+        mock_warn.assert_called_once()
+        self_mock._on_project_clicked.assert_not_called()
