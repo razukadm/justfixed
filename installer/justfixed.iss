@@ -48,3 +48,6 @@ Source: "..\dist\JustFixed\*"; DestDir: "{app}"; Flags: ignoreversion recursesub
 Name: "{group}\JustFixed"; Filename: "{app}\JustFixed.exe"; Tasks: startmenuicon
 Name: "{group}\Uninstall JustFixed"; Filename: "{uninstallexe}"; Tasks: startmenuicon
 Name: "{userdesktop}\JustFixed"; Filename: "{app}\JustFixed.exe"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\JustFixed.exe"; Description: "Launch JustFixed"; Flags: nowait postinstall skipifsilent

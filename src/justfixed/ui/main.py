@@ -12,7 +12,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from PySide6.QtCore import QDate, QLocale, QStandardPaths, QStringListModel, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QFont
+from PySide6.QtGui import QAction, QColor, QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -385,6 +385,11 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("JustFixed")
+        if hasattr(sys, "_MEIPASS"):
+            _icon_path = Path(sys._MEIPASS) / "assets" / "icon.ico"
+        else:
+            _icon_path = Path(__file__).parent.parent.parent.parent / "assets" / "icon.ico"
+        self.setWindowIcon(QIcon(str(_icon_path)))
         self.setMinimumSize(1100, 600)
 
         try:

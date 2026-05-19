@@ -8,7 +8,7 @@ a = Analysis(
     ['src/justfixed/ui/main.py'],
     pathex=['src'],
     binaries=[],
-    datas=collect_data_files('bizdays', includes=['*.cal']),
+    datas=collect_data_files('bizdays', includes=['*.cal']) + [("assets/icon.ico", "assets")],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
