@@ -24,7 +24,7 @@ from justfixed.domain.money import Money
 from justfixed.domain.rates import Prefixed, PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA
 from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fgc import ExposureStatus
-from justfixed.ui.main import ConglomerateEditDelegate, MainWindow, compute_totals, _format_type, _format_rate
+from justfixed.ui.main import ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow, compute_totals, _format_type, _format_rate
 
 
 class TestProjectionCachePopulation:
@@ -1023,3 +1023,63 @@ class TestEmptyStateButtonWiring:
 
         self_mock._empty_add_btn.click()
         self_mock._on_add_investment_clicked.assert_called_once()
+
+
+class TestSelectionHandlers:
+    def test_on_selection_changed_empty_clears_and_hides_panel(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._table = MagicMock()
+        self_mock._detail_panel = MagicMock()
+        self_mock._table.selectedItems.return_value = []
+        MainWindow._on_selection_changed(self_mock)
+        self_mock._detail_panel.clear.assert_called_once()
+        self_mock._detail_panel.hide.assert_called_once()
+
+    def test_on_selection_changed_with_row_shows_investment(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._table = MagicMock()
+        self_mock._detail_panel = MagicMock()
+        inv = MagicMock()
+        item = MagicMock()
+        item.row.return_value = 0
+        self_mock._table.selectedItems.return_value = [item]
+        self_mock.visible_investments.return_value = [inv]
+        MainWindow._on_selection_changed(self_mock)
+        self_mock._detail_panel.show_investment.assert_called_once_with(inv)
+        self_mock._detail_panel.show.assert_called_once()
+
+    def test_on_panel_close_requested_clears_table_selection(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._table = MagicMock()
+        MainWindow._on_panel_close_requested(self_mock)
+        self_mock._table.clearSelection.assert_called_once()
+
+
+class TestRestoreSelection:
+    def test_none_selected_id_is_noop(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._table = MagicMock()
+        self_mock._detail_panel = MagicMock()
+        MainWindow._restore_selection(self_mock, None, [])
+        self_mock._table.selectRow.assert_not_called()
+        self_mock._detail_panel.clear.assert_not_called()
+
+    def test_matching_investment_calls_select_row(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._table = MagicMock()
+        self_mock._detail_panel = MagicMock()
+        inv = MagicMock()
+        inv.id = uuid.uuid4()
+        MainWindow._restore_selection(self_mock, inv.id, [inv])
+        self_mock._table.selectRow.assert_called_once_with(0)
+
+    def test_missing_investment_clears_panel(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._table = MagicMock()
+        self_mock._detail_panel = MagicMock()
+        inv = MagicMock()
+        inv.id = uuid.uuid4()
+        other_id = uuid.uuid4()
+        MainWindow._restore_selection(self_mock, other_id, [inv])
+        self_mock._detail_panel.clear.assert_called_once()
+        self_mock._detail_panel.hide.assert_called_once()

@@ -14,6 +14,7 @@ from pathlib import Path
 from PySide6.QtCore import QDate, QLocale, QStandardPaths, QStringListModel, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QFont, QIcon
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QComboBox,
     QCompleter,
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSplitter,
     QStackedWidget,
     QStatusBar,
     QStyledItemDelegate,
@@ -297,6 +299,52 @@ class _ProjectWorker(QThread):
             self.error.emit(str(exc))
 
 
+# ── Detail panel ──────────────────────────────────────────────────────────────
+
+class InvestmentDetailPanel(QWidget):
+    """Read-only detail panel shown alongside the investments table.
+
+    Visibility is controlled by MainWindow based on table selection:
+    show_investment() and clear() update contents only; MainWindow
+    calls show()/hide() based on whether a row is selected. Single
+    source of truth: the table's selection state.
+
+    The closed signal fires when the user clicks the close button.
+    MainWindow's handler clears the table selection, which drives
+    _on_selection_changed to call clear() and hide().
+    """
+
+    closed = Signal()
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        header = QHBoxLayout()
+        self._identity_label = QLabel("No investment selected.")
+        self._identity_label.setStyleSheet("font-weight: bold;")
+        self._close_btn = QPushButton("✕")
+        self._close_btn.setFixedSize(24, 24)
+        self._close_btn.clicked.connect(lambda: self.closed.emit())
+        header.addWidget(self._identity_label, stretch=1)
+        header.addWidget(self._close_btn)
+        layout.addLayout(header)
+
+        self._body_label = QLabel("No investment selected.")
+        self._body_label.setAlignment(Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self._body_label, stretch=1)
+
+    def show_investment(self, inv) -> None:
+        product_name = rules_for(inv.product).display_name
+        self._identity_label.setText(f"{inv.issuer.name} — {product_name}")
+
+    def clear(self) -> None:
+        self._identity_label.setText("No investment selected.")
+        self._body_label.setText("No investment selected.")
+
+
 # ── Delegate ──────────────────────────────────────────────────────────────────
 
 class ConglomerateEditDelegate(QStyledItemDelegate):
@@ -541,7 +589,9 @@ class MainWindow(QMainWindow):
         self._table = QTableWidget(0, _NCOLS)
         self._table.setHorizontalHeaderLabels(_HEADERS)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.itemSelectionChanged.connect(self._on_selection_changed)
         self._table.verticalHeader().setVisible(False)
         hdr = self._table.horizontalHeader()
         _Stretch = QHeaderView.ResizeMode.Stretch
@@ -557,7 +607,16 @@ class MainWindow(QMainWindow):
 
         self._stack.addWidget(self._table)                      # index 0 — has data
         self._stack.addWidget(self._build_empty_state_widget()) # index 1 — empty
-        root.addWidget(self._stack, stretch=1)
+
+        self._detail_panel = InvestmentDetailPanel()
+        self._detail_panel.hide()
+        self._detail_panel.closed.connect(self._on_panel_close_requested)
+
+        self._splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._splitter.addWidget(self._stack)
+        self._splitter.addWidget(self._detail_panel)
+        self._splitter.setSizes([700, 300])
+        root.addWidget(self._splitter, stretch=1)
 
         # Totals strip — principal, current, projected, row count
         totals_row = QHBoxLayout()
@@ -860,11 +919,12 @@ class MainWindow(QMainWindow):
 
     def refresh_table(self, highlight_issuer_id: uuid.UUID | None = None) -> None:
         """Reload all investments from DB and repopulate the table."""
+        _selected_id = self._capture_selected_id()
+
         self._investments = self._repo.list_all()
         self._populate_filter_dropdowns()
         visible = self.visible_investments()
         scroll_y = self._table.verticalScrollBar().value()
-        self._table.setRowCount(len(visible))
 
         projection_map: dict[uuid.UUID, ProjectionResult] = {}
         status_by_investment: dict[uuid.UUID, ExposureStatus] = {}
@@ -877,6 +937,8 @@ class MainWindow(QMainWindow):
                 for inv_exposure in c.investments
             }
 
+        self._table.blockSignals(True)
+        self._table.setRowCount(len(visible))
         for row, inv in enumerate(visible):
             proj = projection_map.get(inv.id)
             self._populate_row(
@@ -886,9 +948,12 @@ class MainWindow(QMainWindow):
                 fgc_status=status_by_investment.get(inv.id),
                 highlight=(inv.issuer.id == highlight_issuer_id),
             )
+        self._table.blockSignals(False)
+
         # setValue clamps to the scrollbar's valid range, so scroll_y past the
         # new content end (e.g. after Clear DB or Hide-matured toggle) is safe.
         self._table.verticalScrollBar().setValue(scroll_y)
+        self._restore_selection(_selected_id, visible)
         self._stack.setCurrentIndex(0 if self._investments else 1)
         self._update_button_states()
         self._update_totals()
@@ -1021,6 +1086,42 @@ class MainWindow(QMainWindow):
         self._export_btn.setEnabled(
             any(inv.maturity_date >= today for inv in self._investments)
         )
+
+    def _capture_selected_id(self) -> uuid.UUID | None:
+        items = self._table.selectedItems()
+        if not items:
+            return None
+        row = items[0].row()
+        visible = self.visible_investments()
+        return visible[row].id if row < len(visible) else None
+
+    def _restore_selection(self, selected_id: uuid.UUID | None, visible: list) -> None:
+        if selected_id is None:
+            return
+        for i, inv in enumerate(visible):
+            if inv.id == selected_id:
+                self._table.selectRow(i)
+                return
+        self._detail_panel.clear()
+        self._detail_panel.hide()
+
+    def _on_selection_changed(self) -> None:
+        items = self._table.selectedItems()
+        if not items:
+            self._detail_panel.clear()
+            self._detail_panel.hide()
+            return
+        row = items[0].row()
+        visible = self.visible_investments()
+        if row >= len(visible):
+            self._detail_panel.clear()
+            self._detail_panel.hide()
+            return
+        self._detail_panel.show_investment(visible[row])
+        self._detail_panel.show()
+
+    def _on_panel_close_requested(self) -> None:
+        self._table.clearSelection()
 
     def trigger_conglomerate_highlight(self, issuer_id: uuid.UUID) -> None:
         """Highlight all rows for issuer_id for 3 seconds, then snap back.
