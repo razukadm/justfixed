@@ -191,9 +191,9 @@ class Investment:
         return self.coupon_frequency == CouponFrequency.NONE
 
     @property
-    def is_fgc_covered(self) -> bool:
-        """True if this investment is covered by FGC."""
-        return rules_for(self.product).fgc_covered and self.issuer.is_fgc_covered
+    def is_deposit_guaranteed(self) -> bool:
+        """True if this investment is covered by a deposit-guarantee fund."""
+        return rules_for(self.product).fgc_covered and self.issuer.is_deposit_guaranteed
 
     # Identity-based equality (entity).
     def __eq__(self, other: object) -> bool:

@@ -595,11 +595,11 @@ class TestRealisticScenario:
         loaded_cdb = investment_repo.find_by_id(cdb.id)
         assert loaded_cdb is not None
         assert loaded_cdb.issuer.name == "Banco Inter"
-        assert loaded_cdb.is_fgc_covered is True
+        assert loaded_cdb.is_deposit_guaranteed is True
 
         loaded_tesouro = investment_repo.find_by_id(tesouro.id)
         assert loaded_tesouro is not None
-        assert loaded_tesouro.is_fgc_covered is False
+        assert loaded_tesouro.is_deposit_guaranteed is False
         assert isinstance(loaded_tesouro.rate, PostFixedIPCA)
 
         loaded_lcd = investment_repo.find_by_id(lcd.id)

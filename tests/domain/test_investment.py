@@ -370,11 +370,11 @@ class TestDerivedProperties:
         inv = make_cdb(coupons=CouponFrequency.MONTHLY)
         assert inv.is_bullet is False
 
-    def test_is_fgc_covered_for_cdb_at_commercial_bank(self) -> None:
+    def test_is_deposit_guaranteed_for_cdb_at_commercial_bank(self) -> None:
         inv = make_cdb()
-        assert inv.is_fgc_covered is True
+        assert inv.is_deposit_guaranteed is True
 
-    def test_is_fgc_covered_for_lcd_at_development_bank(self) -> None:
+    def test_is_deposit_guaranteed_for_lcd_at_development_bank(self) -> None:
         inv = Investment.create(
             product=ProductType.LCD,
             issuer=development_bank(),
@@ -383,7 +383,7 @@ class TestDerivedProperties:
             purchase_date=date(2024, 1, 15),
             maturity_date=date(2026, 1, 15),
         )
-        assert inv.is_fgc_covered is True
+        assert inv.is_deposit_guaranteed is True
 
     def test_is_not_fgc_covered_for_tesouro(self) -> None:
         inv = Investment.create(
@@ -394,7 +394,7 @@ class TestDerivedProperties:
             purchase_date=date(2024, 1, 15),
             maturity_date=date(2026, 1, 15),
         )
-        assert inv.is_fgc_covered is False
+        assert inv.is_deposit_guaranteed is False
 
 
 # ------------------------------------------------------------------

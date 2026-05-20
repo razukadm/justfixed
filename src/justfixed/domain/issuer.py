@@ -37,16 +37,54 @@ UNVERIFIED_CONGLOMERATE_PREFIX = "[unverified] "
 
 
 class IssuerKind(Enum):
-    """Categorization of issuers for FGC and product-eligibility logic."""
+    """Categorization of issuers by institution type.
 
-    COMMERCIAL_BANK = "commercial_bank"
-    DEVELOPMENT_BANK = "development_bank"
-    TREASURY = "treasury"
+    FGC-covered categories (R$250k per institution per CPF):
+      MULTIPLE_BANK                     → Bancos múltiplos
+      COMMERCIAL_BANK                   → Bancos comerciais
+      INVESTMENT_BANK                   → Bancos de investimento
+      DEVELOPMENT_BANK                  → Bancos de desenvolvimento
+      CAIXA_ECONOMICA                   → Caixa Econômica Federal
+      CREDIT_FINANCE_INVESTMENT_COMPANY → Sociedades de crédito, financiamento e investimento
+      REAL_ESTATE_CREDIT_COMPANY        → Sociedades de crédito imobiliário
+      MORTGAGE_COMPANY                  → Companhias hipotecárias
+      SAVINGS_LOAN_ASSOCIATION          → Associações de poupança e empréstimo
+
+    FGCoop-covered (separate fund, also R$250k per institution per CPF):
+      COOP                              → Cooperativas de crédito
+
+    Not covered by any deposit-guarantee fund:
+      TREASURY                          → Tesouro Nacional — sovereign credit only
+      OTHERS                            → Outside any of the above categories
+    """
+
+    MULTIPLE_BANK                     = "multiple_bank"
+    COMMERCIAL_BANK                   = "commercial_bank"
+    INVESTMENT_BANK                   = "investment_bank"
+    DEVELOPMENT_BANK                  = "development_bank"
+    CAIXA_ECONOMICA                   = "caixa_economica"
+    CREDIT_FINANCE_INVESTMENT_COMPANY = "credit_finance_investment_company"
+    REAL_ESTATE_CREDIT_COMPANY        = "real_estate_credit_company"
+    MORTGAGE_COMPANY                  = "mortgage_company"
+    SAVINGS_LOAN_ASSOCIATION          = "savings_loan_association"
+    COOP                              = "coop"
+    TREASURY                          = "treasury"
+    OTHERS                            = "others"
 
     @property
-    def is_fgc_covered(self) -> bool:
-        """Whether products from this issuer kind are FGC-covered."""
-        return self in {IssuerKind.COMMERCIAL_BANK, IssuerKind.DEVELOPMENT_BANK}
+    def is_deposit_guaranteed(self) -> bool:
+        """True for any kind covered by a deposit-guarantee fund.
+
+        FGC covers the nine bank/finance categories (R$250k per institution).
+        FGCoop covers COOP (also R$250k per institution). TREASURY is sovereign
+        credit with no fund. OTHERS is outside any fund.
+
+        The specific fund and its limits are not modelled yet — see the
+        GuaranteeFund milestone in ROADMAP.md. This bool is correct and
+        sufficient for per-institution R$250k checks, but cannot express
+        divergent limits or separate global-ceiling buckets (FGC vs FGCoop).
+        """
+        return self not in {IssuerKind.TREASURY, IssuerKind.OTHERS}
 
 
 def _normalize_cnpj(cnpj: str) -> str:
@@ -141,12 +179,12 @@ class Issuer:
         return re.sub(r"\s+", " ", name.strip()).upper()
     
     @property
-    def is_fgc_covered(self) -> bool:
-        """Whether products from this issuer are FGC-covered.
+    def is_deposit_guaranteed(self) -> bool:
+        """Whether this issuer's products are covered by a deposit-guarantee fund.
 
         Convenience accessor; the underlying logic lives on IssuerKind.
         """
-        return self.kind.is_fgc_covered
+        return self.kind.is_deposit_guaranteed
 
     @property
     def tax_id_display(self) -> str:

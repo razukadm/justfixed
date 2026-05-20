@@ -9,14 +9,62 @@ from justfixed.domain.issuer import Issuer, IssuerKind
 
 # ---------- IssuerKind ----------
 class TestIssuerKind:
-    def test_commercial_bank_is_fgc_covered(self) -> None:
-        assert IssuerKind.COMMERCIAL_BANK.is_fgc_covered is True
+    def test_all_twelve_members_exist(self) -> None:
+        expected = {
+            "MULTIPLE_BANK", "COMMERCIAL_BANK", "INVESTMENT_BANK",
+            "DEVELOPMENT_BANK", "CAIXA_ECONOMICA",
+            "CREDIT_FINANCE_INVESTMENT_COMPANY", "REAL_ESTATE_CREDIT_COMPANY",
+            "MORTGAGE_COMPANY", "SAVINGS_LOAN_ASSOCIATION",
+            "COOP", "TREASURY", "OTHERS",
+        }
+        assert {m.name for m in IssuerKind} == expected
 
-    def test_development_bank_is_fgc_covered(self) -> None:
-        assert IssuerKind.DEVELOPMENT_BANK.is_fgc_covered is True
+    def test_string_values_of_original_three_members_unchanged(self) -> None:
+        # DB rows stored before the expansion must still resolve.
+        assert IssuerKind.COMMERCIAL_BANK.value  == "commercial_bank"
+        assert IssuerKind.DEVELOPMENT_BANK.value == "development_bank"
+        assert IssuerKind.TREASURY.value         == "treasury"
 
-    def test_treasury_is_not_fgc_covered(self) -> None:
-        assert IssuerKind.TREASURY.is_fgc_covered is False
+    # FGC-covered kinds
+    def test_multiple_bank_is_deposit_guaranteed(self) -> None:
+        assert IssuerKind.MULTIPLE_BANK.is_deposit_guaranteed is True
+
+    def test_commercial_bank_is_deposit_guaranteed(self) -> None:
+        assert IssuerKind.COMMERCIAL_BANK.is_deposit_guaranteed is True
+
+    def test_investment_bank_is_deposit_guaranteed(self) -> None:
+        assert IssuerKind.INVESTMENT_BANK.is_deposit_guaranteed is True
+
+    def test_development_bank_is_deposit_guaranteed(self) -> None:
+        assert IssuerKind.DEVELOPMENT_BANK.is_deposit_guaranteed is True
+
+    def test_caixa_economica_is_deposit_guaranteed(self) -> None:
+        assert IssuerKind.CAIXA_ECONOMICA.is_deposit_guaranteed is True
+
+    def test_credit_finance_investment_company_is_deposit_guaranteed(self) -> None:
+        assert IssuerKind.CREDIT_FINANCE_INVESTMENT_COMPANY.is_deposit_guaranteed is True
+
+    def test_real_estate_credit_company_is_deposit_guaranteed(self) -> None:
+        assert IssuerKind.REAL_ESTATE_CREDIT_COMPANY.is_deposit_guaranteed is True
+
+    def test_mortgage_company_is_deposit_guaranteed(self) -> None:
+        assert IssuerKind.MORTGAGE_COMPANY.is_deposit_guaranteed is True
+
+    def test_savings_loan_association_is_deposit_guaranteed(self) -> None:
+        # POUPEX's category — explicitly exercised.
+        assert IssuerKind.SAVINGS_LOAN_ASSOCIATION.is_deposit_guaranteed is True
+
+    # FGCoop-covered kind
+    def test_coop_is_deposit_guaranteed(self) -> None:
+        # Covered by FGCoop (separate fund from FGC, also R$250k per institution).
+        assert IssuerKind.COOP.is_deposit_guaranteed is True
+
+    # Not covered
+    def test_treasury_is_not_deposit_guaranteed(self) -> None:
+        assert IssuerKind.TREASURY.is_deposit_guaranteed is False
+
+    def test_others_is_not_deposit_guaranteed(self) -> None:
+        assert IssuerKind.OTHERS.is_deposit_guaranteed is False
 
 
 # ---------- Construction ----------
@@ -158,19 +206,19 @@ class TestIdentity:
         assert a.id == original_id
 
 
-# ---------- FGC delegation ----------
-class TestFGC:
-    def test_commercial_bank_covered(self) -> None:
+# ---------- Deposit-guarantee delegation ----------
+class TestDepositGuarantee:
+    def test_commercial_bank_is_deposit_guaranteed(self) -> None:
         i = Issuer.create("Banco Inter", "Banco Inter S.A.", IssuerKind.COMMERCIAL_BANK)
-        assert i.is_fgc_covered is True
+        assert i.is_deposit_guaranteed is True
 
-    def test_development_bank_covered(self) -> None:
+    def test_development_bank_is_deposit_guaranteed(self) -> None:
         i = Issuer.create("BNDES", "BNDES", IssuerKind.DEVELOPMENT_BANK)
-        assert i.is_fgc_covered is True
+        assert i.is_deposit_guaranteed is True
 
-    def test_treasury_not_covered(self) -> None:
+    def test_treasury_is_not_deposit_guaranteed(self) -> None:
         i = Issuer.treasury()
-        assert i.is_fgc_covered is False
+        assert i.is_deposit_guaranteed is False
 
 
 # ---------- Treasury factory ----------
@@ -179,7 +227,7 @@ class TestTreasuryFactory:
         t = Issuer.treasury()
         assert t.name == "Tesouro Nacional"
         assert t.kind == IssuerKind.TREASURY
-        assert t.is_fgc_covered is False
+        assert t.is_deposit_guaranteed is False  # sovereign; no guarantee fund
 
     def test_treasury_has_canonical_cnpj(self) -> None:
         t = Issuer.treasury()

@@ -41,7 +41,41 @@ view is the natural home for per-investment metadata like payment frequency.
 **Status:** Shipped. Commits `3152f63`–`b2e1ed9` (May 2026). See
 `docs/BUILD.md` for build and packaging details.
 
-### 3. Phase 2 — post-MVP
+### 3. BTG importer (in progress)
+
+Layer 1 (parser) and layer 2 (mapper) shipped. Layer 3 (loader) pending.
+Follows the XP three-layer pattern: parser → mapper → loader.
+
+### 4. Model guarantee funds (FGC / FGCoop) as first-class entities
+
+**Scheduled after:** BTG importer completes.
+
+**Why:** Coverage amount, global ceiling, and per-conglomerate
+aggregation are properties of a *fund*, not of `IssuerKind`. FGC and
+FGCoop currently both cover R$250k per institution, but the amounts
+can diverge, and global limits (FGC's R$1M/4yr) must aggregate FGC
+and FGCoop exposure **separately** — an investor's FGC-institution
+total and cooperative total are independent ceiling computations.
+
+The current `is_deposit_guaranteed` bool is a deliberate interim: true
+and sufficient for the per-institution R$250k check, but it cannot
+express divergent limits or separate global-ceiling buckets.
+
+**Scope:**
+- A `GuaranteeFund` concept (FGC, FGCOOP) owning per-institution limit
+  and global ceiling.
+- An `IssuerKind → fund` mapping.
+- FGC-engine refactor: query the fund's per-institution limit instead
+  of the hardcoded R$250k.
+
+**Verification note:** The FGCoop global-ceiling rule could **not** be
+confirmed from a primary source — `fgcoop.coop.br/cobertura-ordinaria`
+is a JS-rendered app and secondary sources conflict on whether FGCoop
+has a R$1M global cap matching FGC's. Whoever builds this milestone
+must verify the FGCoop regulation directly before encoding a global
+ceiling value.
+
+### 5. Phase 2 — post-MVP
 
 After the MVP UI and installer ship, the broader Phase 2 work begins.
 See Part 2 (Backlog) for individual items. Phase 2 is not one feature;
