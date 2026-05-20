@@ -20,6 +20,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from justfixed.domain.issuer import IssuerKind
+from justfixed.importers.detection import Broker
 from justfixed.domain.money import Money
 from justfixed.domain.rates import Prefixed, PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA
 from justfixed.engine.curve import Curve, CurveVertex
@@ -50,9 +51,46 @@ class TestProjectionCacheInvalidation:
         fake_result.inserted = 3
         fake_result.skipped = 0
 
-        MainWindow._on_import_done(self_mock, fake_result)
+        with patch("justfixed.ui.main.QMessageBox.information"):
+            MainWindow._on_import_done(self_mock, (Broker.BTG, fake_result))
 
         assert self_mock.projection_cache is None
+
+    def test_import_done_shows_broker_in_information_dialog(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock.projection_cache = None
+        self_mock._status_label = MagicMock()
+        self_mock._ts_label = MagicMock()
+        self_mock._expanded_conglomerates = set()
+        self_mock._BROKER_DISPLAY = MainWindow._BROKER_DISPLAY
+        fake_result = MagicMock()
+        fake_result.inserted = 2
+        fake_result.skipped = 0
+
+        with patch("justfixed.ui.main.QMessageBox.information") as mock_info:
+            MainWindow._on_import_done(self_mock, (Broker.BTG, fake_result))
+
+        mock_info.assert_called_once()
+        _, title, body = mock_info.call_args.args
+        assert title == "Import complete"
+        assert "BTG Pactual" in body
+
+    def test_import_done_xp_shows_xp_in_dialog(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock.projection_cache = None
+        self_mock._status_label = MagicMock()
+        self_mock._ts_label = MagicMock()
+        self_mock._expanded_conglomerates = set()
+        self_mock._BROKER_DISPLAY = MainWindow._BROKER_DISPLAY
+        fake_result = MagicMock()
+        fake_result.inserted = 1
+        fake_result.skipped = 0
+
+        with patch("justfixed.ui.main.QMessageBox.information") as mock_info:
+            MainWindow._on_import_done(self_mock, (Broker.XP, fake_result))
+
+        _, _title, body = mock_info.call_args.args
+        assert "XP" in body
 
     def test_clear_db_clears_cache(self) -> None:
         self_mock = MagicMock(spec=MainWindow)

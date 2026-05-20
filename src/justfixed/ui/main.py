@@ -71,7 +71,8 @@ from justfixed.engine.conglomerate_report import (
 from justfixed.engine.fgc import ExposureStatus, fgc_concentration_report_from_projections
 from justfixed.engine.projection import ProjectionResult, project
 from justfixed.exports.calendar import export_maturity_calendar
-from justfixed.importers.xp_loader import LoadResult, load_xp_statement
+from justfixed.importers.detection import Broker, load_statement
+from justfixed.importers.xp_loader import LoadResult
 from justfixed.persistence.database import (
     Base,
     default_database_url,
@@ -258,7 +259,7 @@ def compute_totals(
 # ── Background workers ────────────────────────────────────────────────────────
 
 class _ImportWorker(QThread):
-    finished = Signal(object)  # LoadResult
+    finished = Signal(object)  # tuple[Broker, LoadResult]
     error    = Signal(str)
 
     def __init__(self, path: Path, session_factory) -> None:
@@ -268,7 +269,7 @@ class _ImportWorker(QThread):
 
     def run(self) -> None:
         try:
-            self.finished.emit(load_xp_statement(self._path, self._factory))
+            self.finished.emit(load_statement(self._path, self._factory))
         except Exception as exc:
             self.error.emit(str(exc))
 
@@ -627,7 +628,7 @@ class MainWindow(QMainWindow):
 
         # Toolbar — action buttons + status label
         toolbar = QHBoxLayout()
-        self._import_btn = QPushButton("Import XP statement…")
+        self._import_btn = QPushButton("Import Statement…")
         self._import_btn.clicked.connect(self._on_import_clicked)
         self._import_btn.setStyleSheet(TOOLBAR_BUTTON_STYLE)
         self._add_btn = QPushButton("Add investment…")
@@ -752,7 +753,7 @@ class MainWindow(QMainWindow):
         _ew_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _ew_layout.addWidget(_ew_label)
         _ew_layout.addSpacing(12)
-        self._empty_import_btn = QPushButton("Import XP statement…")
+        self._empty_import_btn = QPushButton("Import Statement…")
         self._empty_import_btn.clicked.connect(self._on_import_clicked)
         self._empty_add_btn = QPushButton("Add investment…")
         self._empty_add_btn.clicked.connect(self._on_add_investment_clicked)
@@ -1261,7 +1262,7 @@ class MainWindow(QMainWindow):
             QStandardPaths.StandardLocation.DownloadLocation
         )
         path_str, _ = QFileDialog.getOpenFileName(
-            self, "Import XP statement",
+            self, "Import Statement",
             dirs[0] if dirs else "",
             "Excel files (*.xlsx)",
         )
@@ -1276,11 +1277,24 @@ class MainWindow(QMainWindow):
         self._worker.error.connect(self._on_import_error)
         self._worker.start()
 
-    def _on_import_done(self, result: LoadResult) -> None:
+    _BROKER_DISPLAY = {
+        Broker.XP:  "XP",
+        Broker.BTG: "BTG Pactual",
+    }
+
+    def _on_import_done(self, payload) -> None:
+        broker, result = payload
         self._set_busy(False)
+        broker_display = self._BROKER_DISPLAY[broker]
         self._status_label.setText(
             f"Loaded {result.inserted + result.skipped} investments "
             f"({result.inserted} new, {result.skipped} unchanged)."
+        )
+        QMessageBox.information(
+            self,
+            "Import complete",
+            f"{broker_display} statement imported — "
+            f"{result.inserted} new, {result.skipped} unchanged.",
         )
         self.projection_cache = None
         self._expanded_conglomerates.clear()
