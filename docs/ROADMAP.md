@@ -41,10 +41,13 @@ view is the natural home for per-investment metadata like payment frequency.
 **Status:** Shipped. Commits `3152f63`–`b2e1ed9` (May 2026). See
 `docs/BUILD.md` for build and packaging details.
 
-### 3. BTG importer (in progress)
+### 3. BTG importer — SHIPPED
 
-Layer 1 (parser) and layer 2 (mapper) shipped. Layer 3 (loader) pending.
-Follows the XP three-layer pattern: parser → mapper → loader.
+All three layers shipped (2026-05-20). Commit range: btg.py (parser) through
+`282bd73` (UI rewire). Detection layer (`detection.py`) added alongside the
+loader: `Broker` enum, `detect_broker` (sheet-name fingerprints), `load_statement`
+dispatcher. UI rewired to a single broker-agnostic "Import Statement" button.
+See the session-status section below for full details.
 
 ### 4. Model guarantee funds (FGC / FGCoop) as first-class entities
 
@@ -833,3 +836,51 @@ This roadmap was compiled from:
 3. **Calendar export feature build** (this chat) — calendar export
    implementation. Source of the orphan event cleanup deferral
    (B1) and the v2 design sketch.
+
+---
+
+## Session status — 2026-05-20
+
+### BTG importer — SHIPPED
+
+Shipped end to end: a BTG statement imports from file picker through to
+investments in the table, broker auto-detected.
+
+Layers delivered:
+- `btg.py` (parser), `btg_mapper.py` (mapper), `btg_loader.py` (loader)
+- `detection.py`: `Broker` enum, `detect_broker` (sheet-name fingerprints),
+  `load_statement` dispatcher
+- UI rewire: single "Import Statement" button; `_on_import_done` unpacks a
+  `(Broker, LoadResult)` tuple and shows per-broker `QMessageBox.information`
+
+Final commit of the feature: `282bd73`. The feature spans from the BTG
+parser commit through `282bd73`.
+
+Verified against the real statement file and by manual UI click-test (BTG
+import, XP import, unrecognized-file error). Nothing pending on BTG itself.
+
+### C′ milestone — OPEN, resumes at commit 5b
+
+Investment detail-panel editing. Predates the BTG importer; was set aside
+to complete BTG. Commit 5a (detail panel, view mode) landed. Pending:
+commit 5b (the `_EditableField` widget — per-field editing, double-click to
+edit, per-field save via `dataclasses.replace`), and C′ commits 6–8.
+
+This is the largest genuinely-pending piece of work and is the natural
+thing to resume next.
+
+### Next broker importer — touchpoints
+
+When a third broker is added, the only touchpoints are:
+1. A `Broker` enum member in `detection.py`
+2. A fingerprint case in `detect_broker`
+3. A dispatch case in `load_statement`
+
+The UI does not change. A third importer is the stated trigger for cashing
+in B32 and B33.
+
+### Open items (pointers)
+
+B32 (shared Brazilian-number parsing), B33 (unified issuer-kind classifier),
+and the GuaranteeFund milestone (Part 1 §4, "Model guarantee funds
+(FGC / FGCoop) as first-class entities") remain open as previously recorded.
