@@ -84,11 +84,10 @@ PRODUCT_RULES: dict[ProductType, ProductRule] = {
     ),
     ProductType.LCI: ProductRule(
         allowed_issuer_kinds=frozenset({
-            # Regulation-confirmed — Banco Central authorizations corroborated
-            # from public sources (see commit message): COMMERCIAL_BANK,
-            # MULTIPLE_BANK, CAIXA_ECONOMICA, CREDIT_FINANCE_INVESTMENT_COMPANY,
-            # REAL_ESTATE_CREDIT_COMPANY, MORTGAGE_COMPANY,
-            # SAVINGS_LOAN_ASSOCIATION, COOP.
+            # Knowingly-possible LCI issuers (Banco Central authorizations,
+            # corroborated from public sources). DEVELOPMENT_BANK and
+            # INVESTMENT_BANK are excluded as unconfirmed — if a real LCI
+            # from either appears, the crash is the signal to verify and add it.
             IssuerKind.COMMERCIAL_BANK,
             IssuerKind.MULTIPLE_BANK,
             IssuerKind.CAIXA_ECONOMICA,
@@ -97,11 +96,6 @@ PRODUCT_RULES: dict[ProductType, ProductRule] = {
             IssuerKind.MORTGAGE_COMPANY,
             IssuerKind.SAVINGS_LOAN_ASSOCIATION,
             IssuerKind.COOP,
-            # Included without source confirmation — permitted by the
-            # deliberate permissive-importer decision, not verified against
-            # regulation: DEVELOPMENT_BANK, INVESTMENT_BANK.
-            IssuerKind.DEVELOPMENT_BANK,
-            IssuerKind.INVESTMENT_BANK,
         }),
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_EXEMPT,
@@ -112,24 +106,20 @@ PRODUCT_RULES: dict[ProductType, ProductRule] = {
     ),
     ProductType.LCA: ProductRule(
         allowed_issuer_kinds=frozenset({
-            # Regulation-confirmed — Banco Central authorizations corroborated
-            # from public sources (see commit message): COMMERCIAL_BANK,
-            # MULTIPLE_BANK, CAIXA_ECONOMICA, CREDIT_FINANCE_INVESTMENT_COMPANY,
-            # REAL_ESTATE_CREDIT_COMPANY, MORTGAGE_COMPANY,
-            # SAVINGS_LOAN_ASSOCIATION, COOP.
+            # Knowingly-possible LCA issuers (Banco Central authorizations,
+            # corroborated from public sources). DEVELOPMENT_BANK is a confirmed
+            # LCA issuer — development banks operate in agribusiness credit.
+            # INVESTMENT_BANK is excluded as unconfirmed — if a real LCA from one
+            # appears, the crash is the signal to verify and add it.
             IssuerKind.COMMERCIAL_BANK,
             IssuerKind.MULTIPLE_BANK,
+            IssuerKind.DEVELOPMENT_BANK,
             IssuerKind.CAIXA_ECONOMICA,
             IssuerKind.CREDIT_FINANCE_INVESTMENT_COMPANY,
             IssuerKind.REAL_ESTATE_CREDIT_COMPANY,
             IssuerKind.MORTGAGE_COMPANY,
             IssuerKind.SAVINGS_LOAN_ASSOCIATION,
             IssuerKind.COOP,
-            # Included without source confirmation — permitted by the
-            # deliberate permissive-importer decision, not verified against
-            # regulation: DEVELOPMENT_BANK, INVESTMENT_BANK.
-            IssuerKind.DEVELOPMENT_BANK,
-            IssuerKind.INVESTMENT_BANK,
         }),
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_EXEMPT,

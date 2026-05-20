@@ -54,11 +54,9 @@ class TestCouponFrequencyToDisplay:
 
 # ---------- LCI allowed issuer kinds ----------
 
-# Nine kinds newly permitted beyond the original COMMERCIAL_BANK.
+# Seven kinds newly permitted beyond the original COMMERCIAL_BANK.
 _LCI_NEW_KINDS = [
     IssuerKind.MULTIPLE_BANK,
-    IssuerKind.INVESTMENT_BANK,
-    IssuerKind.DEVELOPMENT_BANK,
     IssuerKind.CAIXA_ECONOMICA,
     IssuerKind.CREDIT_FINANCE_INVESTMENT_COMPANY,
     IssuerKind.REAL_ESTATE_CREDIT_COMPANY,
@@ -74,7 +72,12 @@ class TestLCIIssuerKinds:
         inv = _lci(kind)
         assert inv.product == ProductType.LCI
 
-    @pytest.mark.parametrize("kind", [IssuerKind.TREASURY, IssuerKind.OTHERS])
+    @pytest.mark.parametrize("kind", [
+        IssuerKind.TREASURY,
+        IssuerKind.OTHERS,
+        IssuerKind.DEVELOPMENT_BANK,
+        IssuerKind.INVESTMENT_BANK,
+    ])
     def test_lci_rejects_excluded_kind(self, kind: IssuerKind) -> None:
         with pytest.raises(ValueError, match="LCI requires issuer kind"):
             _lci(kind)
@@ -82,10 +85,9 @@ class TestLCIIssuerKinds:
 
 # ---------- LCA allowed issuer kinds ----------
 
-# Eight kinds newly permitted beyond the original COMMERCIAL_BANK / DEVELOPMENT_BANK.
+# Seven kinds newly permitted beyond the original COMMERCIAL_BANK + DEVELOPMENT_BANK baseline.
 _LCA_NEW_KINDS = [
     IssuerKind.MULTIPLE_BANK,
-    IssuerKind.INVESTMENT_BANK,
     IssuerKind.CAIXA_ECONOMICA,
     IssuerKind.CREDIT_FINANCE_INVESTMENT_COMPANY,
     IssuerKind.REAL_ESTATE_CREDIT_COMPANY,
@@ -101,7 +103,11 @@ class TestLCAIssuerKinds:
         inv = _lca(kind)
         assert inv.product == ProductType.LCA
 
-    @pytest.mark.parametrize("kind", [IssuerKind.TREASURY, IssuerKind.OTHERS])
+    @pytest.mark.parametrize("kind", [
+        IssuerKind.TREASURY,
+        IssuerKind.OTHERS,
+        IssuerKind.INVESTMENT_BANK,
+    ])
     def test_lca_rejects_excluded_kind(self, kind: IssuerKind) -> None:
         with pytest.raises(ValueError, match="LCA requires issuer kind"):
             _lca(kind)
