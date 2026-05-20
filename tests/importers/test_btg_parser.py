@@ -187,8 +187,8 @@ class TestEdgeCases:
         must yield nothing for that sub-section and not crash."""
         xlsx = tmp_path / "empty_subsection.xlsx"
         _build_test_xlsx(xlsx, [
-            ["Posições Detalhadas"],
-            ["Detalhamento > LCI | TEST BANK"],
+            [None, "Posições Detalhadas"],
+            [None, "Detalhamento > LCI | TEST BANK"],
             [None, "Ativo", "Emissão", "Vencimento"],  # column headers
             [None, "Total"],                             # immediate Total
         ])
@@ -199,16 +199,16 @@ class TestEdgeCases:
         not parsed, even if they look like Detalhamento data."""
         xlsx = tmp_path / "with_consolidada.xlsx"
         _build_test_xlsx(xlsx, [
-            ["Posições Detalhadas"],
-            ["Detalhamento > LCI | BANK A"],
+            [None, "Posições Detalhadas"],
+            [None, "Detalhamento > LCI | BANK A"],
             [None, "Ativo"],
             [None, "LCI-001", "2025-01-01", "2027-01-01", "2025-01-01",
              "Sim", "0", None, "90,00% do CDI", 10, 1000, 10000, 1050,
              10500, "-", "-", 10500],
             [None, "Total"],
-            ["Posição Consolidada Por Emissor"],
+            [None, "Posição Consolidada Por Emissor"],
             # These rows must be ignored:
-            ["Detalhamento > CDB | BANK B"],
+            [None, "Detalhamento > CDB | BANK B"],
             [None, "Ativo"],
             [None, "CDB-002", "2025-01-01", "2027-01-01", "2025-01-01",
              "Não", "0", None, "95,00% do CDI", 5, 1000, 5000, 1060,

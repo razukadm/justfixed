@@ -112,22 +112,26 @@ def read_renda_fixa_rows(path: Path) -> list[BTGRow]:
 def _iter_rows(worksheet) -> list[BTGRow]:
     """Walk the Renda Fixa worksheet and return one BTGRow per data row.
 
+    In BTG exports col A (index 0) is always empty; all row content begins
+    in col B (index 1). Anchors, section headers, "Total", "Ativo", and data
+    fields are all in col B onward.
+
     State machine:
         "before_detalhamento" — skip everything until DETALHAMENTO_ANCHOR
-            ("Posicoes Detalhadas"). This silently discards the Posicoes
-            summary table that appears earlier in the sheet.
+            ("Posicoes Detalhadas") in col B. This silently discards the
+            Posicoes summary table that appears earlier in the sheet.
         "looking_for_section" — inside the Detalhamento block, looking for
-            a sub-section header ("Detalhamento > <product> | <issuer>").
-            Blank and unknown rows are skipped. CONSOLIDADA_ANCHOR ends
-            parsing entirely.
+            a sub-section header ("Detalhamento > <product> | <issuer>")
+            in col B. Blank and unknown rows are skipped. CONSOLIDADA_ANCHOR
+            ends parsing entirely.
         "in_section" — consuming data rows for the current sub-section.
             "Total" in col B ends the sub-section (back to
             looking_for_section). The column-header row is detected by
             col B == "Ativo" — explicit and unambiguous, preferred over a
-            row-position offset. A blank row (both col A and col B empty)
-            ends the sub-section. Another sub-section header starts a new
-            one without requiring an intervening Total. CONSOLIDADA_ANCHOR
-            ends parsing.
+            row-position offset. A new sub-section header starts a new one
+            without requiring an intervening Total. CONSOLIDADA_ANCHOR ends
+            parsing. Blank rows are skipped — a sub-section ends only on
+            Total, a new header, or Consolidada, never on a blank row.
     """
     rows: list[BTGRow] = []
     state = "before_detalhamento"
@@ -138,20 +142,19 @@ def _iter_rows(worksheet) -> list[BTGRow]:
         if not raw_row:
             continue
 
-        col_a = _cell_str(raw_row[0])
         col_b = _cell_str(raw_row[1]) if len(raw_row) > 1 else ""
 
         if state == "before_detalhamento":
-            if col_a == DETALHAMENTO_ANCHOR:
+            if col_b == DETALHAMENTO_ANCHOR:
                 state = "looking_for_section"
             continue
 
         # CONSOLIDADA_ANCHOR terminates all Detalhamento processing.
-        if col_a == CONSOLIDADA_ANCHOR:
+        if col_b == CONSOLIDADA_ANCHOR:
             break
 
         if state == "looking_for_section":
-            m = _SECTION_RE.match(col_a)
+            m = _SECTION_RE.match(col_b)
             if m:
                 current_product = m.group("product").strip()
                 current_issuer = m.group("issuer").strip()
@@ -162,25 +165,22 @@ def _iter_rows(worksheet) -> list[BTGRow]:
         # state == "in_section"
 
         # A new sub-section header may appear without a preceding Total.
-        if col_a:
-            m = _SECTION_RE.match(col_a)
-            if m:
-                current_product = m.group("product").strip()
-                current_issuer = m.group("issuer").strip()
-                continue
+        m = _SECTION_RE.match(col_b)
+        if m:
+            current_product = m.group("product").strip()
+            current_issuer = m.group("issuer").strip()
+            continue
 
         if col_b == "Total":
             state = "looking_for_section"
             continue
 
-        # Column-header row — matched on col B == "Ativo" (explicit and
-        # unambiguous; the header is always the first row inside a sub-section).
+        # Column-header row — matched on col B == "Ativo".
         if col_b == "Ativo":
             continue
 
-        # Blank row — sub-section separator.
-        if not col_a and not col_b:
-            state = "looking_for_section"
+        # Blank row — carry no data; skip without terminating the sub-section.
+        if not col_b:
             continue
 
         # Data row.
@@ -194,7 +194,7 @@ def _build_row(raw_row: tuple, product: str, issuer: str) -> BTGRow:
     """Convert a raw openpyxl row tuple into a BTGRow.
 
     Column mapping (0-indexed from the row tuple):
-      0  = A  empty on data rows (section headers only)
+      0  = A  always empty in BTG exports
       1  = B  ativo
       2  = C  emissao
       3  = D  vencimento

@@ -72,15 +72,15 @@ def create_fixture() -> None:
         # Row 1 — blank
         [None],
         # Row 2 — sheet title (ignored)
-        ["Renda Fixa"],
+        [None, "Renda Fixa"],
         # Row 3 — blank
         [None],
         # Row 4 — Posicoes summary section header (ignored)
-        ["Posições"],
+        [None, "Posições"],
         # Row 5 — blank
         [None],
         # Row 6 — summary product header (ignored)
-        ["Posição > LCI"],
+        [None, "Posição > LCI"],
         # Row 7 — summary column headers (ignored; parser is before DETALHAMENTO_ANCHOR)
         [None, "Ativo", "Emissão", "Vencimento"],
         # Row 8 — summary data row for LCI POUPEX (ignored; same investment as
@@ -93,11 +93,11 @@ def create_fixture() -> None:
         # Row 11 — blank
         [None],
         # Row 12 — DETALHAMENTO_ANCHOR; parsing begins after this row
-        ["Posições Detalhadas"],
+        [None, "Posições Detalhadas"],
         # Row 13 — blank
         [None],
         # Row 14 — sub-section 1 header
-        ["Detalhamento > LCI | ASSOCIACAO DE POUPANCA E EMPRESTIMO POUPEX"],
+        [None, "Detalhamento > LCI | ASSOCIACAO DE POUPANCA E EMPRESTIMO POUPEX"],
         # Row 15 — column headers (skipped: col B == "Ativo")
         _detail_header_row(),
         # Row 16 — sub-section 1 data row
@@ -124,7 +124,7 @@ def create_fixture() -> None:
         # Row 18 — blank separator between sub-sections
         [None],
         # Row 19 — sub-section 2 header (invented: LCA from Banco do Brasil)
-        ["Detalhamento > LCA | BANCO DO BRASIL"],
+        [None, "Detalhamento > LCA | BANCO DO BRASIL"],
         # Row 20 — column headers
         _detail_header_row(),
         # Row 21 — sub-section 2 data row
@@ -151,7 +151,7 @@ def create_fixture() -> None:
         # Row 23 — blank
         [None],
         # Row 24 — CONSOLIDADA_ANCHOR (terminates parsing)
-        ["Posição Consolidada Por Emissor"],
+        [None, "Posição Consolidada Por Emissor"],
     ]
 
     for row in sheet_rows:
