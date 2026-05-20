@@ -83,21 +83,57 @@ PRODUCT_RULES: dict[ProductType, ProductRule] = {
         display_name="CDB",
     ),
     ProductType.LCI: ProductRule(
-        allowed_issuer_kinds=frozenset({IssuerKind.COMMERCIAL_BANK}),
+        allowed_issuer_kinds=frozenset({
+            # Regulation-confirmed — Banco Central authorizations corroborated
+            # from public sources (see commit message): COMMERCIAL_BANK,
+            # MULTIPLE_BANK, CAIXA_ECONOMICA, CREDIT_FINANCE_INVESTMENT_COMPANY,
+            # REAL_ESTATE_CREDIT_COMPANY, MORTGAGE_COMPANY,
+            # SAVINGS_LOAN_ASSOCIATION, COOP.
+            IssuerKind.COMMERCIAL_BANK,
+            IssuerKind.MULTIPLE_BANK,
+            IssuerKind.CAIXA_ECONOMICA,
+            IssuerKind.CREDIT_FINANCE_INVESTMENT_COMPANY,
+            IssuerKind.REAL_ESTATE_CREDIT_COMPANY,
+            IssuerKind.MORTGAGE_COMPANY,
+            IssuerKind.SAVINGS_LOAN_ASSOCIATION,
+            IssuerKind.COOP,
+            # Included without source confirmation — permitted by the
+            # deliberate permissive-importer decision, not verified against
+            # regulation: DEVELOPMENT_BANK, INVESTMENT_BANK.
+            IssuerKind.DEVELOPMENT_BANK,
+            IssuerKind.INVESTMENT_BANK,
+        }),
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_EXEMPT,
         allowed_coupons=frozenset({CouponFrequency.NONE}),
         display_name="LCI",
     ),
     ProductType.LCA: ProductRule(
-        allowed_issuer_kinds=frozenset({IssuerKind.COMMERCIAL_BANK, IssuerKind.DEVELOPMENT_BANK}),
+        allowed_issuer_kinds=frozenset({
+            # Regulation-confirmed — Banco Central authorizations corroborated
+            # from public sources (see commit message): COMMERCIAL_BANK,
+            # MULTIPLE_BANK, CAIXA_ECONOMICA, CREDIT_FINANCE_INVESTMENT_COMPANY,
+            # REAL_ESTATE_CREDIT_COMPANY, MORTGAGE_COMPANY,
+            # SAVINGS_LOAN_ASSOCIATION, COOP.
+            IssuerKind.COMMERCIAL_BANK,
+            IssuerKind.MULTIPLE_BANK,
+            IssuerKind.CAIXA_ECONOMICA,
+            IssuerKind.CREDIT_FINANCE_INVESTMENT_COMPANY,
+            IssuerKind.REAL_ESTATE_CREDIT_COMPANY,
+            IssuerKind.MORTGAGE_COMPANY,
+            IssuerKind.SAVINGS_LOAN_ASSOCIATION,
+            IssuerKind.COOP,
+            # Included without source confirmation — permitted by the
+            # deliberate permissive-importer decision, not verified against
+            # regulation: DEVELOPMENT_BANK, INVESTMENT_BANK.
+            IssuerKind.DEVELOPMENT_BANK,
+            IssuerKind.INVESTMENT_BANK,
+        }),
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_EXEMPT,
         # LCAs are commonly issued with monthly coupons in the Brazilian
         # market (juros mensais), and semi-annual variants exist too.
         # Allow any frequency; we trust the broker's reported value.
-        # Note: LCI is more conservative (NONE only) until real-world
-        # data shows otherwise — same audit-when-it-crashes discipline.
         allowed_coupons=frozenset(CouponFrequency),
         display_name="LCA",
     ),
