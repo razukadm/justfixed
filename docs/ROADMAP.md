@@ -711,6 +711,31 @@ breaking problem.
 **Trigger to revisit:** When a third broker importer is added, or
 sooner if `xp_mapper` internals change and the import breaks.
 
+### B33. Unified issuer-kind classifier across broker importers
+
+**Source:** btg_loader.py layer-3 review, 2026-05-20.
+
+**Why deferred:** Issuer-kind classification is duplicated across
+importers: `xp_loader._DEVELOPMENT_BANK_NAMES` (frozenset of
+development-bank exceptions, defaulting to COMMERCIAL_BANK) and
+`btg_loader._ISSUER_KIND_CATALOG` (dict mapping normalized names to
+IssuerKind, also defaulting to COMMERCIAL_BANK). The two structures
+differ in shape because they grew independently — XP only needed a
+development-bank exception list; BTG needed a broader kind map from the
+start. A shared `importers/_kind_catalog.py` (or equivalent) would give
+all loaders a single name→IssuerKind lookup with one source of truth.
+
+**Trigger to revisit:** When a third broker importer is added, or sooner
+if the catalogs drift (e.g. a BTG development bank surfaces that is not
+in XP's set). See B32 as a sibling importer-coupling item.
+
+**Broader scope note:** The same coupling smell applies to `LoadResult`:
+it is defined in `xp_loader.py` and imported by `btg_loader.py` — a
+shared loader type living in one importer's module. When the classifier
+work happens, `LoadResult` (and any other cross-importer types) should
+move to a common module (e.g. `importers/loader_types.py`) so no loader
+depends on a sibling loader's internals.
+
 ---
 
 ## Part 3 — Open questions

@@ -119,7 +119,7 @@ class TestRowContents:
         assert r.product == "LCA"
         assert r.issuer_name == "BANCO DO BRASIL"
         assert r.ativo == "LCA-24A01234567"
-        assert r.emissao_date_text == "2024-03-15 00:00:00"
+        assert r.emissao_date_text == "2024-01-10 00:00:00"
         assert r.vencimento_date_text == "2026-03-15 00:00:00"
         assert r.aquisicao_date_text == "2024-03-15 00:00:00"
         assert r.liquidez == "Não"   # Não

@@ -14,6 +14,15 @@ The fixture exercises:
   - Blank row between sub-sections (row 18).
   - Posicao Consolidada Por Emissor trailer on row 24 (terminator).
 
+Sub-section 1 (LCI POUPEX): emissao == aquisicao, matching the real
+000739520.xlsx file.
+Sub-section 2 (LCA Banco do Brasil): emissao (2024-01-10) intentionally
+DIFFERS from aquisicao (2024-03-15) — this is a secondary-market purchase,
+where the security was issued before it was acquired. The gap lets
+test_issue_date_on_loaded_investment prove that btg_loader passes
+issue_date from emissao_date_text rather than defaulting it to
+purchase_date (which is sourced from aquisicao).
+
 Values use integers for all numeric fields to avoid float round-trip
 ambiguity through Excel. The layer-1 parser captures them via str() — the
 mapper tests exercise actual numeric parsing against its own inputs.
@@ -128,9 +137,12 @@ def create_fixture() -> None:
         # Row 20 — column headers
         _detail_header_row(),
         # Row 21 — sub-section 2 data row
+        # emissao (2024-01-10) deliberately differs from aquisicao (2024-03-15):
+        # secondary-market purchase. This lets the loader test prove issue_date
+        # is read from emissao, not defaulted from purchase_date (aquisicao).
         _data_row(
             ativo="LCA-24A01234567",
-            emissao=datetime(2024, 3, 15),
+            emissao=datetime(2024, 1, 10),
             vencimento=datetime(2026, 3, 15),
             aquisicao=datetime(2024, 3, 15),
             liquidez="Não",
