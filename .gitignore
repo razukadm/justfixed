@@ -31,8 +31,9 @@ Thumbs.db
 data/
 /exports/
 
-# Allow only the synthetic test fixture (no real broker data)
+# Allow only the synthetic test fixtures (no real broker data)
 !tests/importers/fixtures/synthetic_xp_statement.xlsx
+!tests/importers/fixtures/synthetic_btg_statement.xlsx
 
 # Build outputs
 build/
