@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
 
 from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
+from justfixed.domain.investment import InvestmentSource
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
 from justfixed.domain.rates import (
@@ -302,7 +303,7 @@ class _ProjectWorker(QThread):
 # ── Detail panel ──────────────────────────────────────────────────────────────
 
 class InvestmentDetailPanel(QWidget):
-    """Read-only detail panel shown alongside the investments table.
+    """Field-by-field detail panel shown alongside the investments table.
 
     Visibility is controlled by MainWindow based on table selection:
     show_investment() and clear() update contents only; MainWindow
@@ -312,12 +313,33 @@ class InvestmentDetailPanel(QWidget):
     The closed signal fires when the user clicks the close button.
     MainWindow's handler clears the table selection, which drives
     _on_selection_changed to call clear() and hide().
+
+    session_factory and main_window are stored for per-field editing
+    (commit 5b). Injected here so the constructor signature is stable
+    across both commits.
     """
 
     closed = Signal()
 
-    def __init__(self, parent=None) -> None:
+    _FIELD_KEYS = [
+        ("Issuer",        "issuer"),
+        ("Conglomerate",  "conglomerate"),
+        ("Product",       "product"),
+        ("Principal",     "principal"),
+        ("Rate",          "rate"),
+        ("Purchase date", "purchase_date"),
+        ("Issue date",    "issue_date"),
+        ("Maturity date", "maturity_date"),
+        ("Coupon",        "coupon_frequency"),
+        ("Description",   "description"),
+    ]
+
+    def __init__(self, session_factory, main_window, parent=None) -> None:
         super().__init__(parent)
+        self._session_factory = session_factory
+        self._main_window = main_window
+        self._current_inv = None
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
@@ -332,17 +354,76 @@ class InvestmentDetailPanel(QWidget):
         header.addWidget(self._close_btn)
         layout.addLayout(header)
 
-        self._body_label = QLabel("No investment selected.")
-        self._body_label.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(self._body_label, stretch=1)
+        self._source_banner = QLabel()
+        self._source_banner.setStyleSheet(
+            "background: #fff3e0; color: #e65100;"
+            " padding: 4px 8px; border-radius: 4px;"
+        )
+        self._source_banner.hide()
+        layout.addWidget(self._source_banner)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(2)
+
+        self._field_values: dict[str, QLabel] = {}
+        for label_text, key in self._FIELD_KEYS:
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 2, 0, 2)
+            lbl = QLabel(label_text + ":")
+            lbl.setStyleSheet("color: #666666;")
+            lbl.setFixedWidth(100)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignTop)
+            val = QLabel()
+            val.setWordWrap(True)
+            self._field_values[key] = val
+            row.addWidget(lbl)
+            row.addWidget(val, stretch=1)
+            body_layout.addLayout(row)
+
+        body_layout.addStretch()
+        scroll.setWidget(body)
+        layout.addWidget(scroll, stretch=1)
 
     def show_investment(self, inv) -> None:
+        self._current_inv = inv
         product_name = rules_for(inv.product).display_name
         self._identity_label.setText(f"{inv.issuer.name} — {product_name}")
 
+        if inv.source == InvestmentSource.XP_IMPORT:
+            self._source_banner.setText(
+                "Imported from XP — only description is editable."
+            )
+            self._source_banner.show()
+        else:
+            self._source_banner.hide()
+
+        def _fmt_date(d: date) -> str:
+            return _PT_BR.toString(
+                QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat
+            )
+
+        self._field_values["issuer"].setText(inv.issuer.name)
+        self._field_values["conglomerate"].setText(inv.issuer.conglomerate)
+        self._field_values["product"].setText(product_name)
+        self._field_values["principal"].setText(inv.principal.to_display())
+        self._field_values["rate"].setText(inv.rate.to_display())
+        self._field_values["purchase_date"].setText(_fmt_date(inv.purchase_date))
+        self._field_values["issue_date"].setText(_fmt_date(inv.issue_date))
+        self._field_values["maturity_date"].setText(_fmt_date(inv.maturity_date))
+        self._field_values["coupon_frequency"].setText(inv.coupon_frequency.to_display())
+        self._field_values["description"].setText(inv.description or "—")
+
     def clear(self) -> None:
+        self._current_inv = None
         self._identity_label.setText("No investment selected.")
-        self._body_label.setText("No investment selected.")
+        self._source_banner.hide()
+        for val in self._field_values.values():
+            val.setText("")
 
 
 # ── Delegate ──────────────────────────────────────────────────────────────────
@@ -608,7 +689,7 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._table)                      # index 0 — has data
         self._stack.addWidget(self._build_empty_state_widget()) # index 1 — empty
 
-        self._detail_panel = InvestmentDetailPanel()
+        self._detail_panel = InvestmentDetailPanel(self._session_factory, self)
         self._detail_panel.hide()
         self._detail_panel.closed.connect(self._on_panel_close_requested)
 

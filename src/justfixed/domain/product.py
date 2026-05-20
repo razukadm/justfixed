@@ -40,6 +40,13 @@ class CouponFrequency(Enum):
     MONTHLY = "monthly"     # interest paid every month
     SEMI_ANNUAL = "semi_annual"  # interest paid every 6 months
 
+    def to_display(self) -> str:
+        return {
+            CouponFrequency.NONE:        "Nenhum",
+            CouponFrequency.MONTHLY:     "Mensal",
+            CouponFrequency.SEMI_ANNUAL: "Semestral",
+        }[self]
+
 
 class TaxTreatment(Enum):
     """How interest income is taxed for individuals (PF)."""
