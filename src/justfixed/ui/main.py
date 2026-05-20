@@ -111,7 +111,7 @@ _NCOLS            = 10
 
 _HEADERS = [
     "Issuer", "Conglomerate", "Product", "Type", "Rate",
-    "Principal", "Maturity", "Current value", "Projected value", "FGC",
+    "Principal", "Maturity", "Current", "Projected", "FGC",
 ]
 
 _PT_BR = QLocale(QLocale.Language.Portuguese, QLocale.Country.Brazil)
@@ -863,8 +863,8 @@ class MainWindow(QMainWindow):
             ("Issuer",                0, 1),
             ("Product",             100, 0),
             ("Principal",           110, 0),
-            ("Current value",       110, 0),
-            ("Projected value",     110, 0),
+            ("Current",             110, 0),
+            ("Projected",           110, 0),
             ("Projected Balance",   120, 0),
             ("FGC",                 110, 0),
         ]:
@@ -938,8 +938,8 @@ class MainWindow(QMainWindow):
         for text, width in [
             ("Next maturity",   120),
             ("Principal",       120),
-            ("Current value",   120),
-            ("Projected value", 120),
+            ("Current",   120),
+            ("Projected", 120),
             ("FGC",             130),
         ]:
             lbl = QLabel(text)
