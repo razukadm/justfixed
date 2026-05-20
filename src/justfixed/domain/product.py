@@ -105,6 +105,8 @@ PRODUCT_RULES: dict[ProductType, ProductRule] = {
         }),
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_EXEMPT,
+        # LCI is NONE-only until a real coupon-paying LCI appears in broker
+        # data and crashes the loader — same audit-when-it-crashes discipline.
         allowed_coupons=frozenset({CouponFrequency.NONE}),
         display_name="LCI",
     ),
