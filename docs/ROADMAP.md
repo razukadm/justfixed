@@ -659,6 +659,24 @@ scaffolding.
 
 **Trigger to revisit:** Any time. Independent of other roadmap items.
 
+### B32. Extract shared Brazilian-number parsing into a common importer utility
+
+**Source:** btg_mapper.py layer-2 review, 2026-05-20.
+
+**Why deferred:** `btg_mapper.py` currently imports
+`_parse_brazilian_percent_to_fraction` from `xp_mapper` — a
+private (underscore-prefixed) symbol — creating a cross-module
+coupling on another module's internals. The percent format is identical
+between XP and BTG (comma-decimal, e.g. "89,00%"), so sharing is
+correct; only the coupling point is wrong. Extracting to a shared
+module (e.g. `importers/_parsing_utils.py`) would let both mappers
+draw from a clean internal API. Deferred because two importers don't
+yet justify the extraction; the private import is a known smell, not a
+breaking problem.
+
+**Trigger to revisit:** When a third broker importer is added, or
+sooner if `xp_mapper` internals change and the import breaks.
+
 ---
 
 ## Part 3 — Open questions
