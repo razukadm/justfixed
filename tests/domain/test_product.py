@@ -38,6 +38,16 @@ def _lca(kind: IssuerKind) -> Investment:
         maturity_date=date(2026, 1, 15),
     )
 
+def _cdb(kind: IssuerKind) -> Investment:
+    return Investment.create(
+        product=ProductType.CDB,
+        issuer=_issuer(kind),
+        principal=Money.from_reais("10000"),
+        rate=PostFixedCDI.from_percent("90"),
+        purchase_date=date(2024, 1, 15),
+        maturity_date=date(2026, 1, 15),
+    )
+
 
 # ---------- CouponFrequency display ----------
 
@@ -111,3 +121,34 @@ class TestLCAIssuerKinds:
     def test_lca_rejects_excluded_kind(self, kind: IssuerKind) -> None:
         with pytest.raises(ValueError, match="LCA requires issuer kind"):
             _lca(kind)
+
+
+# ---------- CDB allowed issuer kinds ----------
+
+# Five kinds newly permitted beyond the original COMMERCIAL_BANK baseline.
+_CDB_NEW_KINDS = [
+    IssuerKind.MULTIPLE_BANK,
+    IssuerKind.INVESTMENT_BANK,
+    IssuerKind.DEVELOPMENT_BANK,
+    IssuerKind.CAIXA_ECONOMICA,
+    IssuerKind.COOP,
+]
+
+
+class TestCDBIssuerKinds:
+    @pytest.mark.parametrize("kind", _CDB_NEW_KINDS)
+    def test_cdb_accepts_newly_permitted_kind(self, kind: IssuerKind) -> None:
+        inv = _cdb(kind)
+        assert inv.product == ProductType.CDB
+
+    @pytest.mark.parametrize("kind", [
+        IssuerKind.TREASURY,
+        IssuerKind.OTHERS,
+        IssuerKind.CREDIT_FINANCE_INVESTMENT_COMPANY,
+        IssuerKind.REAL_ESTATE_CREDIT_COMPANY,
+        IssuerKind.MORTGAGE_COMPANY,
+        IssuerKind.SAVINGS_LOAN_ASSOCIATION,
+    ])
+    def test_cdb_rejects_excluded_kind(self, kind: IssuerKind) -> None:
+        with pytest.raises(ValueError, match="CDB requires issuer kind"):
+            _cdb(kind)

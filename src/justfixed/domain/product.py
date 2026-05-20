@@ -76,7 +76,23 @@ class ProductRule:
 # at the domain level; it is not a market-typical-term.
 PRODUCT_RULES: dict[ProductType, ProductRule] = {
     ProductType.CDB: ProductRule(
-        allowed_issuer_kinds=frozenset({IssuerKind.COMMERCIAL_BANK}),
+        allowed_issuer_kinds=frozenset({
+            # Knowingly-possible CDB issuers: deposit-taking institutions that
+            # issue CDBs. Commercial, multiple, investment, and development banks
+            # all take deposits and issue CDBs; Caixa Econômica issues CDBs;
+            # credit cooperatives issue CDBs (confirmed — CDB is among the
+            # cooperative deposit products covered by FGCoop).
+            # CREDIT_FINANCE_INVESTMENT_COMPANY, REAL_ESTATE_CREDIT_COMPANY,
+            # MORTGAGE_COMPANY, and SAVINGS_LOAN_ASSOCIATION are excluded as
+            # unconfirmed — if a real CDB from one appears and crashes the
+            # loader, that crash is the signal to verify and add it.
+            IssuerKind.COMMERCIAL_BANK,
+            IssuerKind.MULTIPLE_BANK,
+            IssuerKind.INVESTMENT_BANK,
+            IssuerKind.DEVELOPMENT_BANK,
+            IssuerKind.CAIXA_ECONOMICA,
+            IssuerKind.COOP,
+        }),
         fgc_covered=True,
         tax_treatment=TaxTreatment.IR_REGRESSIVE,
         allowed_coupons=frozenset(CouponFrequency),  # any
