@@ -179,36 +179,83 @@ DI1F26 BRBMEFD1I000 FINANCIAL - - - - - - 99.000,0000 14,0000 99.000,0000 - 0,00
             _di1_vertices_from_text(_BDI_BAD_RATE_TEXT, _AS_OF)
 
 
-# ── parse_b3 via mocked pdfplumber ───────────────────────────────────────────
+# ── parse_b3 via mocked fitz ──────────────────────────────────────────────────
 
-def _make_mock_pdf(page_texts: list[str]) -> MagicMock:
-    """Build a MagicMock that mimics pdfplumber's context-manager API."""
+def _row_to_words(tokens: list[str], y1: float) -> list[tuple]:
+    """Build fitz word tuples for a list of tokens placed on a single visual row at y1.
+
+    Each tuple is (x0, y0, x1, y1, word, block_no, line_no, word_no).
+    """
+    result = []
+    x = 0.0
+    for i, tok in enumerate(tokens):
+        w = float(len(tok)) * 8.0
+        result.append((x, y1 - 12.0, x + w, y1, tok, 0, 0, i))
+        x += w + 4.0
+    return result
+
+
+# Word-tuple equivalent of the three DI1 rows from _BDI_PAGE_TEXT, each on its
+# own y-row so the grouping logic reassembles them into the same single-line format
+# that _DI1_ROW_RE expects.
+_BDI_PAGE_WORDS: list[tuple] = (
+    _row_to_words(
+        ["DI1N26", "BRBMEFD1I611", "FINANCIAL", "14,3670", "14,3620", "14,3740",
+         "14,3680", "14,3740", "0,09", "98.309,2400", "14,3720", "98.310,4500",
+         "-", "-1,2100", "-1,2100", "14,3710", "14,3730", "2.946", "403.386",
+         "39.656.723.277"],
+        y1=100.0,
+    )
+    + _row_to_words(
+        ["DI1J27", "BRBMEFD1I7C2", "FINANCIAL", "14,1850", "14,1650", "14,2250",
+         "14,2020", "14,2200", "0,58", "89.093,4500", "14,2120", "89.144,4500",
+         "-", "-51,0000", "-51,0000", "14,2200", "14,2250", "5.354", "122.899",
+         "10.950.248.325"],
+        y1=200.0,
+    )
+    + _row_to_words(
+        ["DI1F40", "BRBMEFD1I8E6", "FINANCIAL", "-", "-", "-", "-", "-", "-",
+         "16.496,7800", "14,2220", "16.811,3400", "-", "-314,5600", "-314,5600",
+         "-", "-", "-", "-", "-"],
+        y1=300.0,
+    )
+)
+
+# A page with no DI1[A-Z]\d{2} tokens — parse_b3 should skip it entirely.
+_NO_DI1_WORDS: list[tuple] = _row_to_words(["no", "futures", "here"], y1=50.0)
+
+
+def _make_mock_pdf(page_word_lists: list[list[tuple]]) -> MagicMock:
+    """Build a MagicMock that mimics fitz's doc API with word-level extraction.
+
+    Each entry in page_word_lists is the list of word tuples returned by
+    page.get_text("words") for that page.
+    """
     pages = []
-    for text in page_texts:
+    for word_tuples in page_word_lists:
         page = MagicMock()
-        page.extract_text.return_value = text
+        page.get_text.return_value = word_tuples
         pages.append(page)
-    pdf = MagicMock()
-    pdf.pages = pages
-    pdf.__enter__ = lambda s: s
-    pdf.__exit__ = MagicMock(return_value=False)
-    return MagicMock(return_value=pdf)
+    doc = MagicMock()
+    doc.page_count = len(pages)
+    doc.__getitem__ = lambda s, i: pages[i]
+    return MagicMock(return_value=doc)
 
 
 class TestParseB3:
     def test_returns_vertices_from_di1_page(self, tmp_path: Path) -> None:
         fake_pdf = tmp_path / "BDI_00.pdf"
-        fake_pdf.write_bytes(b"%PDF-1.4")  # not a real PDF; pdfplumber is mocked
-        mock_open = _make_mock_pdf(["no futures here", _BDI_PAGE_TEXT])
-        with patch("publish_curves.pdfplumber.open", mock_open):
+        fake_pdf.write_bytes(b"%PDF-1.4")  # not a real PDF; fitz is mocked
+        mock_open = _make_mock_pdf([_NO_DI1_WORDS, _BDI_PAGE_WORDS])
+        with patch("publish_curves.fitz.open", mock_open):
             verts = parse_b3(fake_pdf, _AS_OF)
         assert len(verts) == 3
 
     def test_vertices_sorted_ascending(self, tmp_path: Path) -> None:
         fake_pdf = tmp_path / "BDI_00.pdf"
         fake_pdf.write_bytes(b"%PDF-1.4")
-        mock_open = _make_mock_pdf([_BDI_PAGE_TEXT])
-        with patch("publish_curves.pdfplumber.open", mock_open):
+        mock_open = _make_mock_pdf([_BDI_PAGE_WORDS])
+        with patch("publish_curves.fitz.open", mock_open):
             verts = parse_b3(fake_pdf, _AS_OF)
         bdays = [v.business_days for v in verts]
         assert bdays == sorted(bdays)
@@ -216,8 +263,8 @@ class TestParseB3:
     def test_aborts_on_no_di1_rows(self, tmp_path: Path) -> None:
         fake_pdf = tmp_path / "BDI_00.pdf"
         fake_pdf.write_bytes(b"%PDF-1.4")
-        mock_open = _make_mock_pdf(["page with no futures data"])
-        with patch("publish_curves.pdfplumber.open", mock_open):
+        mock_open = _make_mock_pdf([_NO_DI1_WORDS])
+        with patch("publish_curves.fitz.open", mock_open):
             with pytest.raises(SystemExit):
                 parse_b3(fake_pdf, _AS_OF)
 

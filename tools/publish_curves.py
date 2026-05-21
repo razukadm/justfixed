@@ -22,7 +22,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-import pdfplumber
+import fitz
 
 from justfixed.engine.calendar import business_days_between, next_business_day
 from justfixed.engine.curve import CurveVertex
@@ -44,6 +44,11 @@ _DI1_ROW_RE = re.compile(
     r"^(DI1[A-Z]\d{2})\s+\S+\s+FINANCIAL\s+(.+)$",
     re.MULTILINE,
 )
+
+# Groups words from page.get_text("words") into visual table rows by y-coordinate proximity
+_ROW_Y_TOLERANCE = 3.0
+# Page-skip guard: matches an exact DI1 contract token; avoids noise like NCDI11
+_DI1_CONTRACT_RE = re.compile(r"^DI1[A-Z]\d{2}$")
 
 
 def contract_to_maturity(code: str) -> date:
@@ -187,13 +192,23 @@ def parse_b3(pdf_path: Path, as_of: date) -> list[Vertex]:
     all_vertices: list[Vertex] = []
 
     print(f"Opening {pdf_path} ...", flush=True)
-    with pdfplumber.open(str(pdf_path)) as pdf:
-        print(f"  {len(pdf.pages)} pages — scanning for DI1 rows ...", flush=True)
-        for page in pdf.pages:
-            text = page.extract_text() or ""
-            if "DI1" not in text:
-                continue
-            all_vertices.extend(_di1_vertices_from_text(text, as_of))
+    doc = fitz.open(str(pdf_path))
+    print(f"  {doc.page_count} pages — scanning for DI1 rows ...", flush=True)
+    for i in range(doc.page_count):
+        words = doc[i].get_text("words")
+        if not any(_DI1_CONTRACT_RE.match(wt[4]) for wt in words):
+            continue
+        rows: dict[float, list] = {}
+        for wt in words:
+            y1 = wt[3]
+            key = next((k for k in rows if abs(k - y1) <= _ROW_Y_TOLERANCE), y1)
+            rows.setdefault(key, []).append(wt)
+        lines = []
+        for key in sorted(rows):
+            sorted_row = sorted(rows[key], key=lambda t: t[0])
+            lines.append(" ".join(t[4] for t in sorted_row))
+        text = "\n".join(lines)
+        all_vertices.extend(_di1_vertices_from_text(text, as_of))
 
     if not all_vertices:
         sys.exit("B3 PDF: no DI1 settlement rows found. Check PDF file and --as-of date.")
