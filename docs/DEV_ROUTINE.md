@@ -125,9 +125,7 @@ $env:JUSTFIXED_DEV = "1"
 The `$env:JUSTFIXED_DEV` setting applies only to the current PowerShell
 window. Open a new window, or close this one, to launch normally again.
 
-<!-- FILL IN: one line on what dev mode actually changes (e.g. uses the dev
-database instead of the user's real data / enables verbose logging / bypasses
-the expiry check) and how to confirm it is active. -->
+> **Note.** It runs in Developer mode so that the database can be cleared.
 
 ---
 
