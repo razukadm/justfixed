@@ -9,7 +9,7 @@ import os
 import sys
 import uuid
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from PySide6.QtCore import QDate, QEvent, QLocale, QStandardPaths, QStringListModel, Qt, QThread, QTimer, Signal
@@ -318,6 +318,7 @@ class _EditableField(QWidget):
 
     _DATE_KEYS = frozenset({"purchase_date", "issue_date", "maturity_date"})
     _COMBO_KEYS = frozenset({"coupon_frequency"})
+    _RATE_KEYS = frozenset({"rate"})
 
     def __init__(self, key: str, save_fn, error_fn, parent=None) -> None:
         super().__init__(parent)
@@ -393,6 +394,10 @@ class _EditableField(QWidget):
                 editor.addItem(cf.to_display(), cf)
             editor.activated.connect(lambda _idx: self._commit())
             return editor
+        if self._key in self._RATE_KEYS:
+            editor = _RateEditor()
+            editor.commit_requested.connect(self._commit)
+            return editor
         editor = QLineEdit()
         editor.editingFinished.connect(self._commit)
         return editor
@@ -405,6 +410,8 @@ class _EditableField(QWidget):
             idx = self._editor.findData(self._raw_value)
             if idx >= 0:
                 self._editor.setCurrentIndex(idx)
+        elif self._key in self._RATE_KEYS:
+            self._editor.set_rate(self._raw_value)
         elif self._key == "principal":
             self._editor.setText(
                 self._raw_value.to_display() if self._raw_value is not None else ""
@@ -447,9 +454,124 @@ class _EditableField(QWidget):
             return date(qd.year(), qd.month(), qd.day())
         if self._key in self._COMBO_KEYS:
             return self._editor.currentData()
+        if self._key in self._RATE_KEYS:
+            return self._editor.get_rate()
         if self._key == "principal":
             return parse_brazilian_money(self._editor.text().strip())
         return self._editor.text()
+
+
+# ── Rate editor helpers ───────────────────────────────────────────────────────
+
+def _pct_to_display(value: Decimal) -> str:
+    """Format a Decimal percentage for the rate editor line edit (no % suffix)."""
+    return _format_brazilian_percent(value).rstrip("%")
+
+
+def _parse_rate_percent(text: str) -> Decimal:
+    """Parse a rate percentage from user input. Strict Brazilian format: comma
+    as decimal separator, no period allowed (percentages carry no thousands
+    separator in this UI). Strips trailing '%'. Raises ValueError on any
+    period or unparseable input.
+    """
+    s = text.strip().rstrip("%").strip()
+    if "." in s:
+        raise ValueError(
+            f"Use vírgula como separador decimal (ex: 112,50), não ponto: {text!r}"
+        )
+    s = s.replace(",", ".")
+    try:
+        return Decimal(s)
+    except InvalidOperation:
+        raise ValueError(f"Valor inválido: {text!r}")
+
+
+_RATE_TYPE_ENTRIES = [
+    # (combo label, data key, suffix label)
+    ("% do CDI",  "cdi_pct",   "% do CDI"),
+    ("CDI +",     "cdi_plus",  "% a.a."),
+    ("IPCA +",    "ipca_plus", "% a.a."),
+    ("Prefixado", "prefixed",  "% a.a."),
+]
+
+
+class _RateEditor(QWidget):
+    """Composite editor for a Rate: type combo + numeric line edit + suffix label.
+
+    Public API:
+      set_rate(rate)  — seed from an existing Rate object
+      get_rate()      — parse and return a Rate; raises ValueError on bad input
+      commit_requested — Signal fired when Enter is pressed in the line edit
+    """
+
+    commit_requested = Signal()
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+
+        self._combo = QComboBox()
+        for label, key, _suffix in _RATE_TYPE_ENTRIES:
+            self._combo.addItem(label, key)
+        self._combo.currentIndexChanged.connect(self._on_type_changed)
+
+        self._line = QLineEdit()
+        self._line.setFixedWidth(80)
+        self._line.editingFinished.connect(self.commit_requested)
+
+        self._suffix_lbl = QLabel()
+
+        row.addWidget(self._combo)
+        row.addWidget(self._line)
+        row.addWidget(self._suffix_lbl)
+        row.addStretch()
+
+        self._update_suffix()
+
+    # ── Public ────────────────────────────────────────────────────────────────
+
+    def set_rate(self, rate: Rate) -> None:
+        """Seed the editor from an existing Rate object."""
+        if isinstance(rate, PostFixedCDI):
+            self._combo.setCurrentIndex(0)
+            self._line.setText(_pct_to_display(rate.cdi_percent_value))
+        elif isinstance(rate, PostFixedCDIPlusSpread):
+            self._combo.setCurrentIndex(1)
+            self._line.setText(_pct_to_display(rate.spread_percent))
+        elif isinstance(rate, PostFixedIPCA):
+            self._combo.setCurrentIndex(2)
+            self._line.setText(_pct_to_display(rate.spread_percent))
+        elif isinstance(rate, Prefixed):
+            self._combo.setCurrentIndex(3)
+            self._line.setText(_pct_to_display(rate.annual_percent))
+        self._update_suffix()
+
+    def get_rate(self) -> Rate:
+        """Parse the editor state and return a Rate. Raises ValueError on bad input."""
+        pct = _parse_rate_percent(self._line.text())
+        key = self._combo.currentData()
+        if key == "cdi_pct":
+            return PostFixedCDI.from_percent(pct)
+        if key == "cdi_plus":
+            return PostFixedCDIPlusSpread.from_percent(pct)
+        if key == "ipca_plus":
+            return PostFixedIPCA.from_percent(pct)
+        return Prefixed.from_percent(pct)
+
+    def setFocus(self) -> None:  # type: ignore[override]
+        self._line.setFocus()
+
+    # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _on_type_changed(self) -> None:
+        self._update_suffix()
+
+    def _update_suffix(self) -> None:
+        idx = self._combo.currentIndex()
+        if 0 <= idx < len(_RATE_TYPE_ENTRIES):
+            self._suffix_lbl.setText(_RATE_TYPE_ENTRIES[idx][2])
 
 
 # ── Detail panel ──────────────────────────────────────────────────────────────
@@ -486,9 +608,8 @@ class InvestmentDetailPanel(QWidget):
         ("Description",   "description"),
     ]
 
-    # Fields editable by source. Rate deferred to a later sub-commit.
     _EDITABLE_FOR_MANUAL = frozenset({
-        "principal", "purchase_date", "issue_date",
+        "principal", "rate", "purchase_date", "issue_date",
         "maturity_date", "coupon_frequency", "description",
     })
     _EDITABLE_FOR_IMPORT = frozenset({"description"})
@@ -600,7 +721,7 @@ class InvestmentDetailPanel(QWidget):
         f["conglomerate"].set_value(inv.issuer.conglomerate, inv.issuer.conglomerate, editable=False)
         f["product"].set_value(product_name, product_name, editable=False)
         f["principal"].set_value(inv.principal, inv.principal.to_display(), editable="principal" in editable_keys)
-        f["rate"].set_value(inv.rate, inv.rate.to_display(), editable=False)
+        f["rate"].set_value(inv.rate, inv.rate.to_display(), editable="rate" in editable_keys)
         f["purchase_date"].set_value(inv.purchase_date, _fmt_date(inv.purchase_date), editable="purchase_date" in editable_keys)
         f["issue_date"].set_value(inv.issue_date, _fmt_date(inv.issue_date), editable="issue_date" in editable_keys)
         f["maturity_date"].set_value(inv.maturity_date, _fmt_date(inv.maturity_date), editable="maturity_date" in editable_keys)
@@ -631,6 +752,8 @@ class InvestmentDetailPanel(QWidget):
         return self._format_field(key, new_inv)
 
     def _format_field(self, key: str, inv) -> str:
+        if key == "rate":
+            return inv.rate.to_display()
         if key == "principal":
             return inv.principal.to_display()
         if key in ("purchase_date", "issue_date", "maturity_date"):

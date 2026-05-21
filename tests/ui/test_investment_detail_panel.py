@@ -21,8 +21,8 @@ from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.issuer import Issuer, IssuerKind
 from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType
-from justfixed.domain.rates import PostFixedCDI
-from justfixed.ui.main import InvestmentDetailPanel, _EditableField
+from justfixed.domain.rates import PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA, Prefixed
+from justfixed.ui.main import InvestmentDetailPanel, _EditableField, _RateEditor
 
 
 @pytest.fixture(scope="session")
@@ -322,13 +322,13 @@ class TestInvestmentDetailPanelSave:
         panel.clear()
         assert panel._error_label.isHidden()
 
-    def test_manual_investment_has_six_editable_fields(self, qapp) -> None:
+    def test_manual_investment_has_seven_editable_fields(self, qapp) -> None:
         panel = InvestmentDetailPanel(MagicMock(), MagicMock())
         inv = _make_real_inv(source=InvestmentSource.MANUAL)
         panel.show_investment(inv)
 
         expected_editable = {
-            "principal", "purchase_date", "issue_date",
+            "principal", "rate", "purchase_date", "issue_date",
             "maturity_date", "coupon_frequency", "description",
         }
         for key, field in panel._field_values.items():
@@ -463,3 +463,114 @@ class TestInvestmentDetailPanelSave:
         # intermediate object _save_field set — confirms same-id-distinct-object
         # adoption, not a trivial is-identity pass.
         assert panel._current_inv is distinct_inv_holder[0]
+
+
+# ── _RateEditor tests ─────────────────────────────────────────────────────────
+
+class TestRateEditor:
+    def test_set_rate_cdi_percent_round_trip(self, qapp) -> None:
+        editor = _RateEditor()
+        rate = PostFixedCDI.from_percent("112")
+        editor.set_rate(rate)
+        result = editor.get_rate()
+        assert isinstance(result, PostFixedCDI)
+        assert result == PostFixedCDI.from_percent("112")
+
+    def test_set_rate_cdi_plus_spread_round_trip(self, qapp) -> None:
+        editor = _RateEditor()
+        rate = PostFixedCDIPlusSpread.from_percent("2.05")
+        editor.set_rate(rate)
+        result = editor.get_rate()
+        assert isinstance(result, PostFixedCDIPlusSpread)
+        assert result == PostFixedCDIPlusSpread.from_percent("2.05")
+
+    def test_set_rate_ipca_plus_round_trip(self, qapp) -> None:
+        editor = _RateEditor()
+        rate = PostFixedIPCA.from_percent("5.5")
+        editor.set_rate(rate)
+        result = editor.get_rate()
+        assert isinstance(result, PostFixedIPCA)
+        assert result == PostFixedIPCA.from_percent("5.5")
+
+    def test_set_rate_prefixed_round_trip(self, qapp) -> None:
+        editor = _RateEditor()
+        rate = Prefixed.from_percent("12")
+        editor.set_rate(rate)
+        result = editor.get_rate()
+        assert isinstance(result, Prefixed)
+        assert result == Prefixed.from_percent("12")
+
+    def test_type_change_cdi_to_prefixed(self, qapp) -> None:
+        editor = _RateEditor()
+        editor.set_rate(PostFixedCDI.from_percent("112"))
+        # Switch combo to Prefixed (index 3)
+        idx = editor._combo.findData("prefixed")
+        editor._combo.setCurrentIndex(idx)
+        result = editor.get_rate()
+        assert isinstance(result, Prefixed)
+        assert result == Prefixed.from_percent("112")
+
+    def test_comma_decimal_parsed(self, qapp) -> None:
+        editor = _RateEditor()
+        editor.set_rate(PostFixedCDI.from_percent("112"))
+        editor._line.setText("112,50")
+        result = editor.get_rate()
+        assert isinstance(result, PostFixedCDI)
+        assert result == PostFixedCDI.from_percent("112.50")
+
+    def test_dot_decimal_rejected(self, qapp) -> None:
+        editor = _RateEditor()
+        editor.set_rate(PostFixedCDI.from_percent("112"))
+        editor._line.setText("112.50")
+        with pytest.raises(ValueError):
+            editor.get_rate()
+
+    def test_garbage_raises_value_error(self, qapp) -> None:
+        editor = _RateEditor()
+        editor.set_rate(PostFixedCDI.from_percent("112"))
+        editor._line.setText("abc")
+        with pytest.raises(ValueError):
+            editor.get_rate()
+
+
+# ── Panel rate integration tests ──────────────────────────────────────────────
+
+class TestInvestmentDetailPanelRate:
+    def test_manual_exposes_rate_as_editable(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        inv = _make_real_inv(source=InvestmentSource.MANUAL)
+        panel.show_investment(inv)
+        assert panel._field_values["rate"]._editable
+
+    def test_import_does_not_expose_rate(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        inv = _make_real_inv(source=InvestmentSource.XP_IMPORT)
+        panel.show_investment(inv)
+        assert not panel._field_values["rate"]._editable
+
+    def test_rate_save_updates_panel_label(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        inv = _make_real_inv(source=InvestmentSource.MANUAL)
+        panel.show_investment(inv)
+
+        new_rate = PostFixedCDI.from_percent("100")
+        with patch("justfixed.ui.main.InvestmentRepository"):
+            result = panel._save_field("rate", new_rate)
+
+        assert result == new_rate.to_display()
+        assert panel._current_inv.rate == new_rate
+
+    def test_rate_invalid_shows_error(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        inv = _make_real_inv(source=InvestmentSource.MANUAL)
+        panel.show_investment(inv)
+
+        rate_field = panel._field_values["rate"]
+        rate_field._show_editor()
+        rate_field._editor._line.setText("abc")
+
+        with patch("justfixed.ui.main.InvestmentRepository") as MockRepo:
+            rate_field._commit()
+
+        MockRepo.return_value.save.assert_not_called()
+        assert not panel._error_label.isHidden()
