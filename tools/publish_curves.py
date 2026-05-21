@@ -6,7 +6,10 @@ Usage:
         --b3 /path/to/BDI_00_20260515.pdf \\
         --data-repo /path/to/justfixed-data \\
         [--as-of 2026-05-15] \\
-        [--push]
+        [--commit] \\
+        [--push]    # implies --commit
+
+Without --commit the script writes curves/latest.json but does not touch git.
 
 Requires the [tools] extra:
     pip install -e ".[tools]"
@@ -260,8 +263,11 @@ def _parse_args() -> argparse.Namespace:
                         help="Path to local clone of justfixed-data repo")
     parser.add_argument("--as-of", metavar="YYYY-MM-DD",
                         help="Anchor date (default: today)")
+    parser.add_argument("--commit", action="store_true",
+                        help="git commit curves/latest.json after writing "
+                             "(default: write only, no commit)")
     parser.add_argument("--push", action="store_true",
-                        help="git push after committing")
+                        help="git push after committing (implies --commit)")
     return parser.parse_args()
 
 
@@ -299,17 +305,23 @@ def main() -> None:
     out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(f"\nWrote {out_path}")
 
-    subprocess.run(["git", "add", "curves/latest.json"], cwd=data_repo_path, check=True)
+    # --push implies --commit; pushing without a prior local commit is meaningless
+    do_commit = args.commit or args.push
 
-    try:
-        subprocess.run(
-            ["git", "commit", "-m", f"Curves for {as_of.isoformat()}"],
-            cwd=data_repo_path,
-            check=True,
-        )
-        print("Committed.")
-    except subprocess.CalledProcessError:
-        print("Warning: git commit failed (nothing to commit?)", file=sys.stderr)
+    if do_commit:
+        subprocess.run(["git", "add", "curves/latest.json"], cwd=data_repo_path, check=True)
+
+        try:
+            subprocess.run(
+                ["git", "commit", "-m", f"Curves for {as_of.isoformat()}"],
+                cwd=data_repo_path,
+                check=True,
+            )
+            print("Committed.")
+        except subprocess.CalledProcessError:
+            print("Warning: git commit failed (nothing to commit?)", file=sys.stderr)
+    else:
+        print("Wrote file only (no commit). Re-run with --commit to commit, or commit manually.")
 
     if args.push:
         subprocess.run(["git", "push"], cwd=data_repo_path, check=True)

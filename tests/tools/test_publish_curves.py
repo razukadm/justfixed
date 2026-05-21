@@ -269,6 +269,111 @@ class TestParseB3:
                 parse_b3(fake_pdf, _AS_OF)
 
 
+# ── parse_b3 realistic-shape regression ──────────────────────────────────────
+
+def _real_row(
+    tokens: list[str],
+    x0s: list[float],
+    y1: float,
+    line_no: int = 0,
+) -> list[tuple]:
+    """Build word tuples with explicitly supplied x0 positions (non-uniform gaps).
+
+    Simulates real pymupdf output where right-aligned numeric columns produce
+    varying x0 positions across rows depending on token width.
+    """
+    return [
+        (x0, y1 - 10.2, x0 + 5.4 * len(tok), y1, tok, 0, line_no, word_no)
+        for word_no, (tok, x0) in enumerate(zip(tokens, x0s))
+    ]
+
+
+# Three DI1 settlement rows with realistic, non-uniform column x-positions.
+# These values reflect actual BDI table layout: right-aligned numerics shift
+# x0 per row; the var% column (col 8) shifts col 9 (prev PU) when negative.
+#
+# Settlement rates at token index 7 after FINANCIAL:
+#   DI1F27 → 14,0590 → Decimal("0.140590")   ← regression guard assertion
+#   DI1F35 → 14,1700 → Decimal("0.141700")
+#   DI1J28 → 13,9950 → Decimal("0.139950")
+_REAL_DI1_PAGE_WORDS: list[tuple] = (
+    _real_row(
+        ["DI1F27", "BRBMEFD1I4Z0", "FINANCIAL",
+         "14,1300", "14,0300", "14,1600", "14,0900", "14,0750",
+         "-0,51", "92.179,4400", "14,0590", "92.134,7300",
+         "-", "44,7100", "44,7100", "14,0700", "14,0800", "28.694", "850.519"],
+        [28.1, 74.3, 162.8,
+         230.5, 270.8, 311.2, 351.5, 391.9,
+         441.3, 463.5, 533.8, 572.5,
+         631.3, 643.8, 685.2, 726.4, 769.1, 809.8, 843.7],
+        y1=720.5, line_no=0,
+    )
+    + _real_row(
+        ["DI1F35", "BRBMEFD1I6J9", "FINANCIAL",
+         "14,3050", "14,1600", "14,3550", "14,2370", "14,2050",
+         "-1,05", "32.131,0900", "14,1700", "31.686,1400",
+         "-", "444,9500", "14,2050", "14,2150", "12.564", "44.731",
+         "1.429.977.212"],
+        [28.1, 74.3, 162.8,
+         230.5, 270.8, 311.2, 351.5, 391.9,
+         440.4, 471.2, 533.8, 572.5,      # col 9 shifted right: "-1,05" is wider
+         631.3, 643.8, 691.3, 729.8, 769.1, 810.3, 840.1],
+        y1=732.8, line_no=1,
+    )
+    + _real_row(
+        ["DI1J28", "BRBMEFD1I5K1", "FINANCIAL",
+         "14,0500", "13,9800", "14,0700", "14,0100", "14,0200",
+         "0,12", "78.234,5600", "13,9950", "78.189,2300",
+         "-", "45,3300", "45,3300", "13,9900", "14,0100", "15.432", "234.567",
+         "3.456.789.012"],
+        [28.1, 74.3, 162.8,
+         230.5, 270.8, 311.2, 351.5, 391.9,
+         442.6, 463.5, 533.8, 572.5,
+         631.3, 643.8, 685.2, 726.4, 769.1, 809.8, 843.7, 890.5],
+        y1=745.1, line_no=2,
+    )
+)
+
+
+class TestParseB3RealShape:
+    """Regression guard: parse_b3 extracts correct vertices from realistic word-layout data.
+
+    Catches column-drift bugs where non-uniform x-spacing causes row reconstruction
+    to assemble tokens in the wrong order, placing the wrong value at index 7.
+    """
+
+    def test_correct_vertex_count(self, tmp_path: Path) -> None:
+        fake_pdf = tmp_path / "BDI_00.pdf"
+        fake_pdf.write_bytes(b"%PDF-1.4")
+        mock_open = _make_mock_pdf([_REAL_DI1_PAGE_WORDS])
+        with patch("publish_curves.fitz.open", mock_open):
+            verts = parse_b3(fake_pdf, _AS_OF)
+        assert len(verts) == 3
+
+    def test_vertices_sorted_ascending(self, tmp_path: Path) -> None:
+        fake_pdf = tmp_path / "BDI_00.pdf"
+        fake_pdf.write_bytes(b"%PDF-1.4")
+        mock_open = _make_mock_pdf([_REAL_DI1_PAGE_WORDS])
+        with patch("publish_curves.fitz.open", mock_open):
+            verts = parse_b3(fake_pdf, _AS_OF)
+        bdays = [v.business_days for v in verts]
+        assert bdays == sorted(bdays)
+
+    def test_di1f27_settlement_rate(self, tmp_path: Path) -> None:
+        """Token index 7 after FINANCIAL must survive non-uniform column spacing.
+
+        DI1F27 (Jan 2027) is the nearest maturity; its settlement rate 14,0590
+        must appear as Decimal("0.140590"), not a neighbour column's value.
+        """
+        fake_pdf = tmp_path / "BDI_00.pdf"
+        fake_pdf.write_bytes(b"%PDF-1.4")
+        mock_open = _make_mock_pdf([_REAL_DI1_PAGE_WORDS])
+        with patch("publish_curves.fitz.open", mock_open):
+            verts = parse_b3(fake_pdf, _AS_OF)
+        nearest = min(verts, key=lambda v: v.business_days)
+        assert nearest.rate == Decimal("0.140590")
+
+
 # ── build_unified_json ────────────────────────────────────────────────────────
 
 class TestBuildUnifiedJson:
