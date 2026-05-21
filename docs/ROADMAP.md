@@ -266,30 +266,31 @@ At that point Q3 gets answered in context, and B9b can be designed as
 **Architectural note:** Engine support is already complete (B9a). B9b
 is UI work only.
 
-### B10. Real index data fetching (B3 for CDI history, IBGE for IPCA)
+### B10. Multi-source current value (broker / user-edited / computed)
 
-**Source:** Phase 2 list in `ARCHITECTURE.md`.
+**Source:** Phase 2 list in `ARCHITECTURE.md`; reframed 2026-05-21 after two scoping investigations.
 
-**Why deferred:** PostFixedCDI and PostFixedIPCA accrual currently
-takes assumed annualized rates as parameters. The math is correct;
-the input is a user-supplied assumption. Real history would replace
-the assumption with computed values.
+**What it is:** Give each investment a current value drawn from up to three sources, showing the freshest available one with a visible provenance indicator (colour or symbol marking which source the displayed value came from). The three sources:
 
-**Trigger to revisit:** When the user wants to see "what this
-investment is *actually* worth right now" rather than "what it would
-be worth if CDI averaged X%."
+- **User-edited** — a current value the user types in manually.
+- **Broker-reported** — the broker's own present value from an imported statement (XP "Posição a mercado" / BTG "saldo bruto").
+- **Historical-computed** — a value computed by the engine from real historical CDI/IPCA data. This is the original B10 scope: fetch historical CDI (Banco Central) and IPCA (IBGE) series and use them instead of the hardcoded `_ASSUMED_CDI` / `_ASSUMED_IPCA` constants in `ui/main.py`.
 
-**Architectural note:** The accrual formulas don't change when real
-data arrives — the engine already does the math correctly. What
-changes is *where the rate input comes from*. The seam already exists.
+**Selection rule:** Show the freshest available source. When not all three exist, choose among those present. Priority order — user → broker → historical — is the primary tie-break and overrides naive recency: the historical-computed value recalculates on every projection, so by raw timestamp it would always appear "newest"; the priority order prevents a computed estimate from silently overriding a user edit or a recent broker statement. Recency is a secondary signal within that ordering. The exact freshness-comparison rule across source types is an open detail to pin at implementation.
 
-**Until B10 lands:** both `_ASSUMED_CDI` and `_ASSUMED_IPCA` in
-`src/justfixed/ui/main.py` are hardcoded module-level constants.
-They drift between Copom decisions (CDI; ~45-day cycle) and IBGE
-releases (IPCA; monthly). Verify both at any rebuild and update if
-material. Comment headers in `ui/main.py` carry source attribution
-(Banco Central for Selic→CDI, IBGE for IPCA acumulado 12 meses)
-to guide the verification.
+**Why this reframing:** The original B10 ("fetch real index data") is now only one of the three sources, not the whole feature. The accrual math does not change — the engine already computes correctly; what changes is where the rate input comes from, and now also that two non-computed sources can supersede it.
+
+**Investigation findings (2026-05-21):**
+
+- The broker's present value is already parsed at importer layer 1 (`XPRow.market_value`, `BTGRow.saldo_bruto_text`) but is dropped at layer 2 — the mappers deliberately keep `principal` as acquisition cost and discard current-value fields. It never reaches the domain model or database.
+- The `Investment` domain model has no field for a broker-reported or user-edited current value; the engine computes current/projected values independently at projection time.
+- Touch points to carry a non-computed current value through: a new field in `ParsedXPRow` / `ParsedBTGRow` (layer 2), a field in `Investment` (domain), a persistence-schema migration, and UI display logic. Layer-1 structs already hold the data.
+
+**Dependencies / sequencing:** Overlaps B9b (mark-to-market display), which the roadmap defers until C′ (per-investment detail view) ships — the detail view is the natural home for a multi-source value display with provenance. B10 should be staged after C′. The historical-computed source (a Banco Central / IBGE fetcher with disk cache) should mirror the existing curve fetcher from B9a.
+
+**Until B10 lands:** `_ASSUMED_CDI` and `_ASSUMED_IPCA` in `src/justfixed/ui/main.py` remain hardcoded module-level constants. They drift between Copom decisions (CDI; ~45-day cycle) and IBGE releases (IPCA; monthly). Verify both at any rebuild and update if material. Comment headers in `ui/main.py` carry source attribution (Banco Central for Selic→CDI, IBGE for IPCA acumulado 12 meses).
+
+**Trigger to revisit:** After C′ ships. At that point the detail view exists, B9b can be designed in context, and B10's multi-source display has a home.
 
 ### B11. Database backup/restore
 
