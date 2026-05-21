@@ -168,3 +168,42 @@ docs, not on memory of what shipped. This is what protects against the
 - Test fixtures: `tests/importers/fixtures/synthetic_xp_statement.xlsx`
 - Real broker data (your machine only, not tracked):
   `C:\Users\carlo\Documents\JustFixed\PosicaoDetalhada.xlsx`
+
+## Team & working agreement
+
+Four participants work on this project:
+- **claude.ai** — project manager: design discussion, task decomposition,
+  drafting Claude Code prompts, reviewing returned work, authorizing commits.
+- **Claude Design** — visual work: mockups, prototypes, UI flows. Hands
+  designs to Claude Code for implementation or back to claude.ai for discussion.
+- **Claude Code** — implementation in this repository.
+- **The user** — decisions, authorization, and routine local checks.
+
+**Turn structure.** When a claude.ai turn produces work for others, it is
+written project-manager style: discrete, labelled blocks, one owner per
+block — never merged into a single block. Standard block labels:
+- `Claude Code — task`: the verbatim prompt to paste into Claude Code.
+- `Claude Design — task`: when visual/design work is needed.
+- `Your turn — PowerShell`: commands for the user to run in their own
+  terminal, given in PowerShell syntax.
+- `Back to claude.ai — review`: what the user pastes back into claude.ai
+  for evaluation, fixing, and authorization.
+
+The seam between "Claude Code's job is done" and "returned to claude.ai
+for review" must be unmistakable.
+
+**Prefer PowerShell for cheap checks.** Routine inspection — git status,
+git log, git show --stat, file listings, reading a short file — the user
+runs directly in PowerShell rather than spending a Claude Code turn on it.
+claude.ai states explicitly which steps are the user's PowerShell turn and
+which need Claude Code. Claude Code is reserved for actual code changes and
+substantive work. Note: "PowerShell" refers to the user's local terminal;
+Claude Code uses its own tool environment for its own tasks.
+
+**Review gate.** Claude Code stops before committing. Diffs are read before
+approval. Importer and real-data work is gated on smoke tests against real
+files, not only synthetic fixtures. The block structure makes this gate
+clearer — it does not replace it.
+
+The JustFixed project's claude.ai instructions mirror this section; if the
+working agreement changes, revise both together.
