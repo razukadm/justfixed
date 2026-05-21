@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import os
@@ -11,13 +12,14 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QLocale, QStandardPaths, QStringListModel, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QDate, QEvent, QLocale, QStandardPaths, QStringListModel, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QFont, QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QComboBox,
     QCompleter,
+    QDateEdit,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -29,6 +31,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSplitter,
+    QStackedLayout,
     QStackedWidget,
     QStatusBar,
     QStyledItemDelegate,
@@ -43,7 +46,7 @@ from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.investment import InvestmentSource
 from justfixed.domain.money import Money
-from justfixed.domain.product import rules_for
+from justfixed.domain.product import CouponFrequency, rules_for
 from justfixed.domain.rates import (
     Prefixed,
     PostFixedCDI,
@@ -72,6 +75,7 @@ from justfixed.engine.fgc import ExposureStatus, fgc_concentration_report_from_p
 from justfixed.engine.projection import ProjectionResult, project
 from justfixed.exports.calendar import export_maturity_calendar
 from justfixed.importers.detection import Broker, load_statement
+from justfixed.importers.xp_mapper import parse_brazilian_money
 from justfixed.importers.xp_loader import LoadResult
 from justfixed.persistence.database import (
     Base,
@@ -301,6 +305,153 @@ class _ProjectWorker(QThread):
             self.error.emit(str(exc))
 
 
+# ── Editable field widget ─────────────────────────────────────────────────────
+
+class _EditableField(QWidget):
+    """A field showing a QLabel in view mode, swapping to an editor on double-click.
+
+    Editability is controlled per-investment via set_value(editable=...).
+    On commit (Enter or focus-loss from the editor), calls save_fn(key, typed_value).
+    save_fn returns the new formatted string on success, raises on failure.
+    error_fn(message) is called with a string on failure or None to clear the error.
+    """
+
+    _DATE_KEYS = frozenset({"purchase_date", "issue_date", "maturity_date"})
+    _COMBO_KEYS = frozenset({"coupon_frequency"})
+
+    def __init__(self, key: str, save_fn, error_fn, parent=None) -> None:
+        super().__init__(parent)
+        self._key = key
+        self._save_fn = save_fn
+        self._error_fn = error_fn
+        self._editable = False
+        self._raw_value = None
+        self._committing = False
+
+        self._stack = QStackedLayout(self)
+
+        self._label = QLabel()
+        self._label.setWordWrap(True)
+        self._label.installEventFilter(self)
+        self._stack.addWidget(self._label)   # index 0: view mode
+
+        self._editor: QWidget | None = None  # added at index 1 on first use
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def text(self) -> str:
+        """Return the label text (compatible with QLabel.text() call sites)."""
+        return self._label.text()
+
+    def set_value(self, raw_value, formatted: str, *, editable: bool) -> None:
+        """Set displayed value and editability. Always reverts to view mode."""
+        self._raw_value = raw_value
+        self._editable = editable
+        self._label.setText(formatted)
+        self._show_label()
+
+    def revert_to_view(self) -> None:
+        """Discard any in-progress edit silently and return to label mode."""
+        self._show_label()
+
+    # ── Event filter ──────────────────────────────────────────────────────────
+
+    def eventFilter(self, obj, event) -> bool:
+        if (
+            obj is self._label
+            and self._editable
+            and event.type() == QEvent.Type.MouseButtonDblClick
+        ):
+            self._show_editor()
+            return True
+        return False
+
+    # ── Mode switching ────────────────────────────────────────────────────────
+
+    def _show_label(self) -> None:
+        self._stack.setCurrentIndex(0)
+
+    def _show_editor(self) -> None:
+        if self._editor is None:
+            self._editor = self._build_editor()
+            self._stack.addWidget(self._editor)  # index 1
+        self._seed_editor()
+        self._stack.setCurrentIndex(1)
+        self._editor.setFocus()
+
+    # ── Editor construction ───────────────────────────────────────────────────
+
+    def _build_editor(self) -> QWidget:
+        if self._key in self._DATE_KEYS:
+            editor = QDateEdit()
+            editor.setDisplayFormat("dd/MM/yyyy")
+            editor.editingFinished.connect(self._commit)
+            return editor
+        if self._key in self._COMBO_KEYS:
+            editor = QComboBox()
+            for cf in CouponFrequency:
+                editor.addItem(cf.to_display(), cf)
+            editor.activated.connect(lambda _idx: self._commit())
+            return editor
+        editor = QLineEdit()
+        editor.editingFinished.connect(self._commit)
+        return editor
+
+    def _seed_editor(self) -> None:
+        if self._key in self._DATE_KEYS:
+            d = self._raw_value
+            self._editor.setDate(QDate(d.year, d.month, d.day))
+        elif self._key in self._COMBO_KEYS:
+            idx = self._editor.findData(self._raw_value)
+            if idx >= 0:
+                self._editor.setCurrentIndex(idx)
+        elif self._key == "principal":
+            self._editor.setText(
+                self._raw_value.to_display() if self._raw_value is not None else ""
+            )
+        else:
+            self._editor.setText(self._raw_value or "")
+
+    # ── Commit ────────────────────────────────────────────────────────────────
+
+    def _commit(self) -> None:
+        if self._committing:
+            return
+        self._committing = True
+        try:
+            self._do_commit()
+        finally:
+            self._committing = False
+
+    def _do_commit(self) -> None:
+        try:
+            typed = self._extract_value()
+        except ValueError as exc:
+            self._error_fn(str(exc))
+            return
+
+        try:
+            formatted = self._save_fn(self._key, typed)
+        except Exception as exc:
+            self._error_fn(str(exc))
+            return
+
+        self._raw_value = typed
+        self._label.setText(formatted)
+        self._error_fn(None)
+        self._show_label()
+
+    def _extract_value(self):
+        if self._key in self._DATE_KEYS:
+            qd = self._editor.date()
+            return date(qd.year(), qd.month(), qd.day())
+        if self._key in self._COMBO_KEYS:
+            return self._editor.currentData()
+        if self._key == "principal":
+            return parse_brazilian_money(self._editor.text().strip())
+        return self._editor.text()
+
+
 # ── Detail panel ──────────────────────────────────────────────────────────────
 
 class InvestmentDetailPanel(QWidget):
@@ -335,6 +486,13 @@ class InvestmentDetailPanel(QWidget):
         ("Description",   "description"),
     ]
 
+    # Fields editable by source. Rate deferred to a later sub-commit.
+    _EDITABLE_FOR_MANUAL = frozenset({
+        "principal", "purchase_date", "issue_date",
+        "maturity_date", "coupon_frequency", "description",
+    })
+    _EDITABLE_FOR_IMPORT = frozenset({"description"})
+
     def __init__(self, session_factory, main_window, parent=None) -> None:
         super().__init__(parent)
         self._session_factory = session_factory
@@ -363,6 +521,15 @@ class InvestmentDetailPanel(QWidget):
         self._source_banner.hide()
         layout.addWidget(self._source_banner)
 
+        self._error_label = QLabel()
+        self._error_label.setStyleSheet(
+            "background: #fdecea; color: #c0392b;"
+            " padding: 4px 8px; border-radius: 4px;"
+        )
+        self._error_label.setWordWrap(True)
+        self._error_label.hide()
+        layout.addWidget(self._error_label)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -371,7 +538,7 @@ class InvestmentDetailPanel(QWidget):
         body_layout.setContentsMargins(0, 0, 0, 0)
         body_layout.setSpacing(2)
 
-        self._field_values: dict[str, QLabel] = {}
+        self._field_values: dict[str, _EditableField] = {}
         for label_text, key in self._FIELD_KEYS:
             row = QHBoxLayout()
             row.setContentsMargins(0, 2, 0, 2)
@@ -379,8 +546,7 @@ class InvestmentDetailPanel(QWidget):
             lbl.setStyleSheet("color: #666666;")
             lbl.setFixedWidth(100)
             lbl.setAlignment(Qt.AlignmentFlag.AlignTop)
-            val = QLabel()
-            val.setWordWrap(True)
+            val = _EditableField(key, self._save_field, self._set_error)
             self._field_values[key] = val
             row.addWidget(lbl)
             row.addWidget(val, stretch=1)
@@ -391,40 +557,100 @@ class InvestmentDetailPanel(QWidget):
         layout.addWidget(scroll, stretch=1)
 
     def show_investment(self, inv) -> None:
+        self._set_error(None)
+
+        # Same-id refresh (e.g. re-entrancy from refresh_table after a field
+        # save): adopt the freshly-persisted object and update header widgets
+        # only. Skip the set_value loop so any field mid-commit is not reset.
+        if self._current_inv is not None and inv.id == self._current_inv.id:
+            self._current_inv = inv
+            product_name = rules_for(inv.product).display_name
+            self._identity_label.setText(f"{inv.issuer.name} — {product_name}")
+            if inv.source != InvestmentSource.MANUAL:
+                self._source_banner.setText("Imported — only description is editable.")
+                self._source_banner.show()
+            else:
+                self._source_banner.hide()
+            return
+
+        # Genuine row switch: full rebuild, discarding any in-progress edit.
         self._current_inv = inv
         product_name = rules_for(inv.product).display_name
         self._identity_label.setText(f"{inv.issuer.name} — {product_name}")
 
-        if inv.source == InvestmentSource.XP_IMPORT:
-            self._source_banner.setText(
-                "Imported from XP — only description is editable."
-            )
+        if inv.source != InvestmentSource.MANUAL:
+            self._source_banner.setText("Imported — only description is editable.")
             self._source_banner.show()
         else:
             self._source_banner.hide()
+
+        editable_keys = (
+            self._EDITABLE_FOR_MANUAL
+            if inv.source == InvestmentSource.MANUAL
+            else self._EDITABLE_FOR_IMPORT
+        )
 
         def _fmt_date(d: date) -> str:
             return _PT_BR.toString(
                 QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat
             )
 
-        self._field_values["issuer"].setText(inv.issuer.name)
-        self._field_values["conglomerate"].setText(inv.issuer.conglomerate)
-        self._field_values["product"].setText(product_name)
-        self._field_values["principal"].setText(inv.principal.to_display())
-        self._field_values["rate"].setText(inv.rate.to_display())
-        self._field_values["purchase_date"].setText(_fmt_date(inv.purchase_date))
-        self._field_values["issue_date"].setText(_fmt_date(inv.issue_date))
-        self._field_values["maturity_date"].setText(_fmt_date(inv.maturity_date))
-        self._field_values["coupon_frequency"].setText(inv.coupon_frequency.to_display())
-        self._field_values["description"].setText(inv.description or "—")
+        f = self._field_values
+        f["issuer"].set_value(inv.issuer.name, inv.issuer.name, editable=False)
+        f["conglomerate"].set_value(inv.issuer.conglomerate, inv.issuer.conglomerate, editable=False)
+        f["product"].set_value(product_name, product_name, editable=False)
+        f["principal"].set_value(inv.principal, inv.principal.to_display(), editable="principal" in editable_keys)
+        f["rate"].set_value(inv.rate, inv.rate.to_display(), editable=False)
+        f["purchase_date"].set_value(inv.purchase_date, _fmt_date(inv.purchase_date), editable="purchase_date" in editable_keys)
+        f["issue_date"].set_value(inv.issue_date, _fmt_date(inv.issue_date), editable="issue_date" in editable_keys)
+        f["maturity_date"].set_value(inv.maturity_date, _fmt_date(inv.maturity_date), editable="maturity_date" in editable_keys)
+        f["coupon_frequency"].set_value(inv.coupon_frequency, inv.coupon_frequency.to_display(), editable="coupon_frequency" in editable_keys)
+        f["description"].set_value(inv.description or "", inv.description or "—", editable="description" in editable_keys)
 
     def clear(self) -> None:
         self._current_inv = None
         self._identity_label.setText("No investment selected.")
         self._source_banner.hide()
-        for val in self._field_values.values():
-            val.setText("")
+        self._set_error(None)
+        for field in self._field_values.values():
+            field.set_value(None, "", editable=False)
+
+    # ── Field save helpers ────────────────────────────────────────────────────
+
+    def _save_field(self, key: str, typed_value) -> str:
+        """Validate, persist, and refresh for one field edit.
+
+        Returns the new formatted string on success. Raises ValueError (from
+        Investment.__post_init__) or Exception (from the repo) on failure.
+        The caller (_EditableField._do_commit) catches and shows the error.
+        """
+        new_inv = dataclasses.replace(self._current_inv, **{key: typed_value})
+        InvestmentRepository(self._session_factory).save(new_inv)
+        self._current_inv = new_inv
+        self._main_window.refresh_table()
+        return self._format_field(key, new_inv)
+
+    def _format_field(self, key: str, inv) -> str:
+        if key == "principal":
+            return inv.principal.to_display()
+        if key in ("purchase_date", "issue_date", "maturity_date"):
+            d = getattr(inv, key)
+            return _PT_BR.toString(
+                QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat
+            )
+        if key == "coupon_frequency":
+            return inv.coupon_frequency.to_display()
+        if key == "description":
+            return inv.description or "—"
+        return ""
+
+    def _set_error(self, message: str | None) -> None:
+        if message is None:
+            self._error_label.setText("")
+            self._error_label.hide()
+        else:
+            self._error_label.setText(message)
+            self._error_label.show()
 
 
 # ── Delegate ──────────────────────────────────────────────────────────────────
