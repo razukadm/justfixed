@@ -739,6 +739,37 @@ work happens, `LoadResult` (and any other cross-importer types) should
 move to a common module (e.g. `importers/loader_types.py`) so no loader
 depends on a sibling loader's internals.
 
+### B34. Delete investment
+
+**Source:** Session 2026-05-21, after C′ commit 6 (manual-entry form) shipped.
+
+**What it is:** A user-facing action to remove an investment from the
+portfolio. `InvestmentRepository.delete` already exists at the persistence
+layer; this is the UI affordance plus the policy decisions around it.
+
+**Open decision — scope:** whether Delete applies to manually-created
+investments only, or also to imported ones. Deleting an imported investment
+is in tension with import idempotency: the importer's natural-key
+find-or-create (`find_by_natural_key`, the 5-tuple) has no "deleted"
+tombstone, so the next statement import would simply re-create a deleted
+imported investment. Manual-only Delete sidesteps this entirely. If imported
+investments should be deletable, it needs either a soft-delete/tombstone
+mechanism the importer respects, or an accepted "re-import resurrects it"
+behaviour. Resolve before implementation.
+
+**Open decision — issuer cleanup:** if deleting the last investment for a
+manually-added issuer, is the now-orphan issuer removed or left in place?
+(C′ commit 6's manual-entry form already accepts orphan issuers as harmless;
+Delete should decide whether it actively cleans them up.) Related: B19
+(issuer edit/delete UI) covers issuer removal directly — the two should be
+designed consistently.
+
+**Why deferred:** Surfaced as a feature idea once creation shipped; the
+scope decisions above need resolving before it's built.
+
+**Trigger to revisit:** When the user needs to remove a position — a sold
+investment, a correction, or a test entry.
+
 ---
 
 ## Part 3 — Open questions
