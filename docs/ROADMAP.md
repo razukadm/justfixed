@@ -566,42 +566,7 @@ complexity. Defer until real user feedback confirms this is a pain point.
 
 ### B27. Investments tab: Type and Rate columns
 
-**Source:** User request 2026-05-17, mid-B9a Phase 1.
-
-**What it is:** Add two new columns to the Investments tab, between
-"Product" and "Principal":
-
-- "Type" — short rate-type category label (Pré / Pós / Pós+ / IPCA+).
-  Single source of truth: the investment's rate type from
-  `domain/rates.py`. No computation; mapping table from rate-type
-  class to display string.
-
-- "Taxa" — the configured rate followed by the effective annualized
-  rate in parentheses on a single line. Format examples:
-  - PostFixedCDI(1.12): "112% CDI (16.13% a.a.)"
-  - PostFixedCDIPlusSpread(0.0205): "CDI + 2.05% (16.85% a.a.)"
-  - Prefixado(0.125): "12.5% a.a. (12.5% a.a.)" — for prefixed, configured == effective; consider deduplicating display in this case
-  - IPCALinkedSpread(0.06): "IPCA + 6% (10.34% a.a.)"
-
-**Pinned decisions:**
-- Column headers in Portuguese ("Taxa") to match existing UI style.
-  Type column header tentatively also Portuguese ("Tipo"); confirm
-  in implementation.
-- Single-line format: configured rate, then effective in parens.
-- Effective rate computation: use `curve.rate_at(maturity_date)` for the
-  per-investment effective rate when a curve is available (B9a shipped);
-  fall back to `_ASSUMED_CDI` / `_ASSUMED_IPCA` when not.
-- For Prefixado rates where configured == effective, consider displaying
-  only one value rather than redundant text. Final formatting decision
-  in implementation.
-
-**Why deferred:** UI feature. Curve infrastructure (B9a) is now shipped;
-this is ready to implement any time.
-
-**Effort:** ~1-2 calibrated sessions. New columns in `QTableWidget`,
-per-rate-type formatter functions, tests for each format pattern.
-
-**Trigger to revisit:** Any time. Curve infrastructure is ready (B9a shipped).
+**Shipped:** 2026-05-19, commit 32a433d ("B27: Type and Rate columns on Investments tab"). Two columns added to the Investments tab between Product and Principal: "Type" (Pré / Pós / Pós+ / IPCA+, via `_format_type`) and "Taxa" (configured rate, with effective annualized rate in parentheses for post-fixed types via `_format_rate`; Prefixed shows the single rate without a redundant parenthetical). Effective rate uses the CDI curve when available, `_ASSUMED_CDI`/`_ASSUMED_IPCA` fallback otherwise. Changes in `src/justfixed/ui/main.py`; tests in `tests/ui/test_main_window.py`.
 
 ### B28. XLSX export for Investments and Conglomerates tabs
 
