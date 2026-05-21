@@ -770,6 +770,72 @@ scope decisions above need resolving before it's built.
 **Trigger to revisit:** When the user needs to remove a position — a sold
 investment, a correction, or a test entry.
 
+### B35. Run the curve daily-routine inside JustFixed (dev mode)
+
+**Source:** Session 2026-05-21, after the publish_curves.py pymupdf speedup.
+
+**What it is:** Move the curve-update routine from a standalone PowerShell/tools/ workflow into the app itself, under JUSTFIXED_DEV. The admin uploads the B3 BDI PDF and ANBIMA ETTJ CSV through a dev-view file picker; the app runs the existing publish_curves.py parse logic and writes latest.json into the local justfixed-data clone. The admin still reviews and git pushes manually.
+
+**Why deferred:** Convenience/automation layer on top of B9a (shipped) and the now-fast importer. Not blocking — the PowerShell routine works and is documented in docs/DEV_ROUTINE.md.
+
+**Design note — the deliberate stopping point:** The git push publishes latest.json to all users on next launch; that review-then-push gate exists by design and must stay human. Automate the upload-and-parse; do not automate the publish. Related: B29 and B31 (dev-view curve capabilities — build coherently with this), and B39 (a further automation increment on the fetch side).
+
+**Trigger to revisit:** When the manual PowerShell routine becomes frequent enough to be a chore.
+
+### B36. Review and correct error messages
+
+**Source:** Session 2026-05-21.
+
+**What it is:** An audit pass over user-facing error and warning messages across the app — accuracy, clarity, consistency, actionability. Correct the ones that are wrong, vague, or stale.
+
+**Why deferred:** Quality/polish pass, not a feature. Best done as one focused sweep rather than ad hoc.
+
+**Trigger to revisit:** Before beta release to non-developer users, where unclear errors become real support burden. Pairs naturally with B37 (i18n) — reviewing message text and translating it touch the same strings.
+
+### B37. Translate the app to Brazilian Portuguese (i18n)
+
+**Source:** Session 2026-05-21.
+
+**What it is:** Localize the UI to pt-BR. This is not a one-time text swap — it means introducing internationalization: externalizing every UI string into a catalog and adding a locale mechanism.
+
+**Why deferred / why it matters:** The entire user base and all data sources are Brazilian, so the value is high. The app is already drifting into mixed-language state ad hoc — B27 adds Portuguese column headers ("Taxa", "Tipo") while QMessageBox text, the dev view, and error messages stay English. An i18n pass makes language a deliberate decision instead of an accretion. Real effort: every string, plus the locale plumbing.
+
+**Trigger to revisit:** Before beta release to Brazilian non-developer users. Sequence after or alongside B36 — same strings, touch once.
+
+### B38. UI design-review pass
+
+**Source:** Session 2026-05-21.
+
+**What it is:** A holistic review of the UI as a whole — distinct from the specific, already-scoped UI features (B19, B22, B25, B27, B28). Step back, evaluate the current interface against real usage, and produce a prioritized list of improvements. The specific improvements identified then either become their own roadmap entries or feed the existing ones.
+
+**Why deferred:** The existing UI backlog items are all specific features; no entry currently covers an open-ended "evaluate and improve the UI overall" pass. This is that pass.
+
+**Scope note:** To stay actionable rather than becoming a permanent "make it nicer" item, this is a bounded design-review with a definable output (the prioritized improvement list), not open-ended polishing. UI design work for this project routes through the Claude Design tool — see CLAUDE.md.
+
+**Trigger to revisit:** Before beta release, or when accumulated UI friction makes a deliberate review worthwhile.
+
+### B39. InfoMoney endpoint investigation for automated curve fetch
+
+**Source:** Session 2026-05-21 (deferred during the publish_curves.py speedup work).
+
+**What it is:** The B3 BDI PDF and ANBIMA CSV are downloaded manually each day. InfoMoney's juros-futuros-di tool serves the DI curve from a backend JSON endpoint (the page's "Baixar arquivo" button). Investigate whether that endpoint is stable and usable as an automated CDI-curve source, replacing the manual BDI download.
+
+**Why deferred:** The pymupdf speedup fixed the parse cost; the manual fetch remains. This is the next increment. Not done because it needs a browser network-tab investigation to isolate the endpoint, and a decision on intraday-quotes vs. B3 official settlement rates.
+
+**Caveat to capture:** InfoMoney rates are intraday quotes, not B3 official ajuste settlement rates — a different measurement, not a drop-in equivalent. Decide which the curve file should hold before adopting. Pairs with B35 (the in-app routine).
+
+**Trigger to revisit:** When the manual daily fetch becomes a chore, or B3 changes the BDI layout and breaks the current parser.
+
+### B40. Real-PDF regression fixture for publish_curves.py
+
+**Source:** Session 2026-05-21, after the pymupdf swap.
+
+**What it is:** tests/tools/test_publish_curves.py uses synthetic word-tuple fixtures (_REAL_DI1_PAGE_WORDS) — realistic irregular spacing, but hand-built, not captured from a real BDI. Capture one real BDI page's actual get_text("words") output as a committed fixture so the suite would catch a genuine pymupdf-output-shape regression.
+
+**Why deferred:** Minor hardening. The synthetic fixture already exercises irregular spacing; this strengthens the guarantee. The pymupdf round's near-misses (zero rows extracted, then an off-by-one) slipped past green unit tests because the fixtures were synthetic — that is the case for doing it.
+
+**Trigger to revisit:** If publish_curves.py parsing breaks again, or before relying heavily on the curve pipeline.
+
 ---
 
 ## Part 3 — Open questions

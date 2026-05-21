@@ -207,3 +207,5 @@ clearer — it does not replace it.
 
 The JustFixed project's claude.ai instructions mirror this section; if the
 working agreement changes, revise both together.
+
+**UI design workflow.** UI design work for JustFixed routes through the Claude Design tool — mockups, prototypes, and UI flows are produced there before implementation. Claude Code implements from reviewed designs; it does not originate visual work.
