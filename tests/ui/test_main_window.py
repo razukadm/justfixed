@@ -1068,15 +1068,17 @@ class TestSelectionHandlers:
         self_mock = MagicMock(spec=MainWindow)
         self_mock._table = MagicMock()
         self_mock._detail_panel = MagicMock()
+        self_mock._right_pane = MagicMock()
         self_mock._table.selectedItems.return_value = []
         MainWindow._on_selection_changed(self_mock)
         self_mock._detail_panel.clear.assert_called_once()
-        self_mock._detail_panel.hide.assert_called_once()
+        self_mock._right_pane.hide.assert_called_once()
 
     def test_on_selection_changed_with_row_shows_investment(self) -> None:
         self_mock = MagicMock(spec=MainWindow)
         self_mock._table = MagicMock()
         self_mock._detail_panel = MagicMock()
+        self_mock._right_pane = MagicMock()
         inv = MagicMock()
         item = MagicMock()
         item.row.return_value = 0
@@ -1084,7 +1086,7 @@ class TestSelectionHandlers:
         self_mock.visible_investments.return_value = [inv]
         MainWindow._on_selection_changed(self_mock)
         self_mock._detail_panel.show_investment.assert_called_once_with(inv)
-        self_mock._detail_panel.show.assert_called_once()
+        self_mock._right_pane.show.assert_called_once()
 
     def test_on_panel_close_requested_clears_table_selection(self) -> None:
         self_mock = MagicMock(spec=MainWindow)
@@ -1115,9 +1117,10 @@ class TestRestoreSelection:
         self_mock = MagicMock(spec=MainWindow)
         self_mock._table = MagicMock()
         self_mock._detail_panel = MagicMock()
+        self_mock._right_pane = MagicMock()
         inv = MagicMock()
         inv.id = uuid.uuid4()
         other_id = uuid.uuid4()
         MainWindow._restore_selection(self_mock, other_id, [inv])
         self_mock._detail_panel.clear.assert_called_once()
-        self_mock._detail_panel.hide.assert_called_once()
+        self_mock._right_pane.hide.assert_called_once()

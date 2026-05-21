@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -44,9 +44,9 @@ from PySide6.QtWidgets import (
 
 from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
-from justfixed.domain.investment import InvestmentSource
+from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.money import Money
-from justfixed.domain.product import CouponFrequency, rules_for
+from justfixed.domain.product import CouponFrequency, ProductType, rules_for
 from justfixed.domain.rates import (
     Prefixed,
     PostFixedCDI,
@@ -776,6 +776,294 @@ class InvestmentDetailPanel(QWidget):
             self._error_label.show()
 
 
+# ── Add-investment form ───────────────────────────────────────────────────────
+
+_NEW_ISSUER_SENTINEL = "__new_issuer__"
+
+
+class _AddInvestmentPanel(QWidget):
+    """Form for creating a new Investment from scratch (source=MANUAL).
+
+    reset() must be called before each use — it clears all editors and
+    re-populates the issuer combo from the DB so newly-added issuers
+    from a prior session appear in the list.
+    """
+
+    saved     = Signal(uuid.UUID)
+    cancelled = Signal()
+
+    def __init__(self, session_factory, main_window, parent=None) -> None:
+        super().__init__(parent)
+        self._session_factory = session_factory
+        self._main_window = main_window
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        title = QLabel("Add Investment")
+        title.setStyleSheet("font-weight: bold;")
+        layout.addWidget(title)
+
+        self._error_label = QLabel()
+        self._error_label.setStyleSheet(
+            "background: #fdecea; color: #c0392b;"
+            " padding: 4px 8px; border-radius: 4px;"
+        )
+        self._error_label.setWordWrap(True)
+        self._error_label.hide()
+        layout.addWidget(self._error_label)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        body = QWidget()
+        self._body_layout = QVBoxLayout(body)
+        self._body_layout.setContentsMargins(0, 0, 0, 0)
+        self._body_layout.setSpacing(2)
+
+        self._build_form()
+
+        self._body_layout.addStretch()
+        scroll.setWidget(body)
+        layout.addWidget(scroll, stretch=1)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        self._save_btn = QPushButton("Save investment")
+        self._save_btn.clicked.connect(self._on_save_clicked)
+        self._cancel_btn = QPushButton("Cancel")
+        self._cancel_btn.clicked.connect(lambda: self.cancelled.emit())
+        btn_row.addWidget(self._save_btn)
+        btn_row.addWidget(self._cancel_btn)
+        layout.addLayout(btn_row)
+
+    # ── Form construction ─────────────────────────────────────────────────────
+
+    def _add_form_row(self, label_text: str, widget: QWidget) -> None:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 2, 0, 2)
+        lbl = QLabel(label_text + ":")
+        lbl.setStyleSheet("color: #666666;")
+        lbl.setFixedWidth(100)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        row.addWidget(lbl)
+        row.addWidget(widget, stretch=1)
+        self._body_layout.addLayout(row)
+
+    def _build_form(self) -> None:
+        # Issuer combo
+        self._issuer_combo = QComboBox()
+        self._issuer_combo.currentIndexChanged.connect(self._on_issuer_combo_changed)
+        self._add_form_row("Issuer", self._issuer_combo)
+
+        # New-issuer sub-group — revealed when the sentinel entry is selected
+        self._new_issuer_group = QWidget()
+        nig = QVBoxLayout(self._new_issuer_group)
+        nig.setContentsMargins(104, 0, 0, 0)  # indent to align under the field column
+        nig.setSpacing(2)
+
+        self._new_name_edit = QLineEdit()
+        self._new_name_edit.setPlaceholderText("Issuer name")
+        name_row = QHBoxLayout()
+        name_lbl = QLabel("Name:")
+        name_lbl.setStyleSheet("color: #888888;")
+        name_lbl.setFixedWidth(96)
+        name_row.addWidget(name_lbl)
+        name_row.addWidget(self._new_name_edit)
+        nig.addLayout(name_row)
+
+        self._new_kind_combo = QComboBox()
+        for kind in IssuerKind:
+            self._new_kind_combo.addItem(kind.value.replace("_", " ").title(), kind)
+        kind_row = QHBoxLayout()
+        kind_lbl = QLabel("Type:")
+        kind_lbl.setStyleSheet("color: #888888;")
+        kind_lbl.setFixedWidth(96)
+        kind_row.addWidget(kind_lbl)
+        kind_row.addWidget(self._new_kind_combo)
+        nig.addLayout(kind_row)
+
+        self._new_cong_edit = QLineEdit()
+        self._new_cong_edit.setPlaceholderText(
+            "Conglomerate (leave blank to mark as unverified)"
+        )
+        cong_row = QHBoxLayout()
+        cong_lbl = QLabel("Conglomerate:")
+        cong_lbl.setStyleSheet("color: #888888;")
+        cong_lbl.setFixedWidth(96)
+        cong_row.addWidget(cong_lbl)
+        cong_row.addWidget(self._new_cong_edit)
+        nig.addLayout(cong_row)
+
+        self._new_issuer_group.hide()
+        self._body_layout.addWidget(self._new_issuer_group)
+
+        # Product
+        self._product_combo = QComboBox()
+        for pt in ProductType:
+            self._product_combo.addItem(rules_for(pt).display_name, pt)
+        self._add_form_row("Product", self._product_combo)
+
+        # Principal
+        self._principal_edit = QLineEdit()
+        self._principal_edit.setPlaceholderText("e.g. 10.000,00")
+        self._add_form_row("Principal", self._principal_edit)
+
+        # Rate — reuse _RateEditor directly
+        self._rate_editor = _RateEditor()
+        self._add_form_row("Rate", self._rate_editor)
+
+        # Dates
+        self._purchase_date_edit = QDateEdit()
+        self._purchase_date_edit.setDisplayFormat("dd/MM/yyyy")
+        self._add_form_row("Purchase date", self._purchase_date_edit)
+
+        self._issue_date_edit = QDateEdit()
+        self._issue_date_edit.setDisplayFormat("dd/MM/yyyy")
+        self._add_form_row("Issue date", self._issue_date_edit)
+
+        self._maturity_date_edit = QDateEdit()
+        self._maturity_date_edit.setDisplayFormat("dd/MM/yyyy")
+        self._add_form_row("Maturity date", self._maturity_date_edit)
+
+        # Coupon frequency
+        self._coupon_combo = QComboBox()
+        for cf in CouponFrequency:
+            self._coupon_combo.addItem(cf.to_display(), cf)
+        self._add_form_row("Coupon", self._coupon_combo)
+
+        # Description
+        self._description_edit = QLineEdit()
+        self._description_edit.setPlaceholderText("Optional note")
+        self._add_form_row("Description", self._description_edit)
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def reset(self) -> None:
+        """Clear the form and re-populate the issuer combo from the DB."""
+        self._set_error(None)
+        self._populate_issuer_combo()
+        self._product_combo.setCurrentIndex(0)
+        self._principal_edit.setText("")
+        self._rate_editor.set_rate(PostFixedCDI.from_percent("100"))
+        today = date.today()
+        qtoday = QDate(today.year, today.month, today.day)
+        self._purchase_date_edit.setDate(qtoday)
+        self._issue_date_edit.setDate(qtoday)
+        mat = today + timedelta(days=365)
+        self._maturity_date_edit.setDate(QDate(mat.year, mat.month, mat.day))
+        idx = self._coupon_combo.findData(CouponFrequency.NONE)
+        if idx >= 0:
+            self._coupon_combo.setCurrentIndex(idx)
+        self._description_edit.setText("")
+        self._new_name_edit.setText("")
+        self._new_cong_edit.setText("")
+        self._new_kind_combo.setCurrentIndex(0)
+
+    # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _populate_issuer_combo(self) -> None:
+        self._issuer_combo.blockSignals(True)
+        self._issuer_combo.clear()
+        issuers = IssuerRepository(self._session_factory).list_all()
+        for issuer in sorted(issuers, key=lambda i: i.name):
+            self._issuer_combo.addItem(issuer.name, issuer)
+        self._issuer_combo.addItem("➕ Add new issuer…", _NEW_ISSUER_SENTINEL)
+        self._issuer_combo.blockSignals(False)
+        self._issuer_combo.setCurrentIndex(0)
+        self._on_issuer_combo_changed()
+
+    def _on_issuer_combo_changed(self) -> None:
+        data = self._issuer_combo.currentData()
+        self._new_issuer_group.setVisible(data == _NEW_ISSUER_SENTINEL)
+
+    def _on_save_clicked(self) -> None:
+        self._set_error(None)
+
+        try:
+            issuer = self._resolve_issuer()
+        except ValueError as exc:
+            self._set_error(str(exc))
+            return
+
+        try:
+            principal = parse_brazilian_money(self._principal_edit.text().strip())
+        except Exception as exc:
+            self._set_error(f"Principal: {exc}")
+            return
+
+        try:
+            rate = self._rate_editor.get_rate()
+        except ValueError as exc:
+            self._set_error(f"Rate: {exc}")
+            return
+
+        product       = self._product_combo.currentData()
+        purchase_date = self._qdate_to_date(self._purchase_date_edit.date())
+        issue_date    = self._qdate_to_date(self._issue_date_edit.date())
+        maturity_date = self._qdate_to_date(self._maturity_date_edit.date())
+        coupon_frequency = self._coupon_combo.currentData()
+        description   = self._description_edit.text().strip()
+
+        try:
+            investment = Investment(
+                product=product,
+                issuer=issuer,
+                principal=principal,
+                rate=rate,
+                purchase_date=purchase_date,
+                maturity_date=maturity_date,
+                issue_date=issue_date,
+                coupon_frequency=coupon_frequency,
+                description=description,
+                source=InvestmentSource.MANUAL,
+            )
+        except ValueError as exc:
+            self._set_error(str(exc))
+            return
+
+        InvestmentRepository(self._session_factory).save(investment)
+        self.saved.emit(investment.id)
+
+    def _resolve_issuer(self) -> Issuer:
+        """Return the selected Issuer, persisting a new one if the sentinel is active."""
+        data = self._issuer_combo.currentData()
+        if data != _NEW_ISSUER_SENTINEL:
+            return data  # stored Issuer object
+
+        name = self._new_name_edit.text().strip()
+        if not name:
+            raise ValueError("Issuer name cannot be empty.")
+        kind        = self._new_kind_combo.currentData()
+        conglomerate = self._new_cong_edit.text().strip()
+        if not conglomerate:
+            conglomerate = f"{UNVERIFIED_CONGLOMERATE_PREFIX}{name}"
+
+        existing = IssuerRepository(self._session_factory).find_by_normalized_name(name)
+        if existing is not None:
+            raise ValueError(
+                f"An issuer named \"{existing.name}\" already exists — "
+                "select it from the list instead."
+            )
+
+        new_issuer = Issuer.create(name=name, conglomerate=conglomerate, kind=kind)
+        IssuerRepository(self._session_factory).save(new_issuer)
+        return new_issuer
+
+    @staticmethod
+    def _qdate_to_date(qd: QDate) -> date:
+        return date(qd.year(), qd.month(), qd.day())
+
+    def _set_error(self, message: str | None) -> None:
+        if message is None:
+            self._error_label.setText("")
+            self._error_label.hide()
+        else:
+            self._error_label.setText(message)
+            self._error_label.show()
+
+
 # ── Delegate ──────────────────────────────────────────────────────────────────
 
 class ConglomerateEditDelegate(QStyledItemDelegate):
@@ -1040,12 +1328,20 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._build_empty_state_widget()) # index 1 — empty
 
         self._detail_panel = InvestmentDetailPanel(self._session_factory, self)
-        self._detail_panel.hide()
         self._detail_panel.closed.connect(self._on_panel_close_requested)
+
+        self._add_panel = _AddInvestmentPanel(self._session_factory, self)
+        self._add_panel.saved.connect(self._on_add_saved)
+        self._add_panel.cancelled.connect(self._on_panel_close_requested)
+
+        self._right_pane = QStackedWidget()
+        self._right_pane.addWidget(self._detail_panel)  # index 0
+        self._right_pane.addWidget(self._add_panel)     # index 1
+        self._right_pane.hide()
 
         self._splitter = QSplitter(Qt.Orientation.Horizontal)
         self._splitter.addWidget(self._stack)
-        self._splitter.addWidget(self._detail_panel)
+        self._splitter.addWidget(self._right_pane)
         self._splitter.setSizes([700, 300])
         root.addWidget(self._splitter, stretch=1)
 
@@ -1534,22 +1830,23 @@ class MainWindow(QMainWindow):
                 self._table.selectRow(i)
                 return
         self._detail_panel.clear()
-        self._detail_panel.hide()
+        self._right_pane.hide()
 
     def _on_selection_changed(self) -> None:
         items = self._table.selectedItems()
         if not items:
             self._detail_panel.clear()
-            self._detail_panel.hide()
+            self._right_pane.hide()
             return
         row = items[0].row()
         visible = self.visible_investments()
         if row >= len(visible):
             self._detail_panel.clear()
-            self._detail_panel.hide()
+            self._right_pane.hide()
             return
+        self._right_pane.setCurrentIndex(0)
         self._detail_panel.show_investment(visible[row])
-        self._detail_panel.show()
+        self._right_pane.show()
 
     def _on_panel_close_requested(self) -> None:
         self._table.clearSelection()
@@ -1657,7 +1954,19 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "Import failed", message)
 
     def _on_add_investment_clicked(self) -> None:
-        pass  # filled in commit 6
+        self._table.clearSelection()
+        self._add_panel.reset()
+        self._right_pane.setCurrentIndex(1)
+        self._right_pane.show()
+
+    def _on_add_saved(self, investment_id: uuid.UUID) -> None:
+        self._right_pane.setCurrentIndex(0)
+        self.refresh_table()
+        visible = self.visible_investments()
+        for i, inv in enumerate(visible):
+            if inv.id == investment_id:
+                self._table.selectRow(i)
+                return
 
     # ── Startup helpers ───────────────────────────────────────────────────────
 
