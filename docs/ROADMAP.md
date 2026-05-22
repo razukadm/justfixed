@@ -954,15 +954,24 @@ parser commit through `282bd73`.
 Verified against the real statement file and by manual UI click-test (BTG
 import, XP import, unrecognized-file error). Nothing pending on BTG itself.
 
-### C′ milestone — OPEN, resumes at commit 5b
+### C′ milestone — shipped through commit 6
 
-Investment detail-panel editing. Predates the BTG importer; was set aside
-to complete BTG. Commit 5a (detail panel, view mode) landed. Pending:
-commit 5b (the `_EditableField` widget — per-field editing, double-click to
-edit, per-field save via `dataclasses.replace`), and C′ commits 6–8.
+Investment detail-panel editing and the manual-entry form. All defined
+commits landed: 1 (`74b18b6`) through 6 (`08a2ead`, 2026-05-21). Delivered:
+side panel scaffolding and row selection, field-by-field view mode,
+per-field editing via `_EditableField` (double-click to edit,
+`dataclasses.replace` save), rate editing, and `_AddInvestmentPanel` for
+manually entering non-XP investments.
 
-This is the largest genuinely-pending piece of work and is the natural
-thing to resume next.
+"Commits 7–8" were referenced in the original C′ plan but had no defined
+content — no design note, no `UI_DESIGN.md` section, no concrete scope.
+They are not remaining work.
+
+Two real gaps persist in this area, better tracked as their own items than
+as unfinished C′: (a) the detail panel does not yet show the computed
+accrual breakdown, IR tax, or net-at-maturity that `ARCHITECTURE.md`'s C′
+description calls for — the main feature gap; (b) per-investment delete is
+not wired into the detail panel UI — already tracked as B34.
 
 ### Next broker importer — touchpoints
 
