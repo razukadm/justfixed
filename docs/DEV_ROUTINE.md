@@ -118,6 +118,8 @@ Other flags (`--version`, `--no-clean`) and full details are in
 Launches the installed app with the dev environment variable set.
 
 ```powershell
+cd C:\Projects\JustFixed
+.\.venv\Scripts\Activate.ps1 
 $env:JUSTFIXED_DEV = "1"
 & "$env:LOCALAPPDATA\Programs\JustFixed\JustFixed.exe"
 ```
