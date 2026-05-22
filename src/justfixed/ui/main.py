@@ -1965,7 +1965,7 @@ class MainWindow(QMainWindow):
         path_str, _ = QFileDialog.getOpenFileName(
             self, "Import Statement",
             dirs[0] if dirs else "",
-            "Excel files (*.xlsx)",
+            "Statement files (*.xlsx *.txt)",
         )
         if not path_str:
             return
@@ -1981,6 +1981,7 @@ class MainWindow(QMainWindow):
     _BROKER_DISPLAY = {
         Broker.XP:  "XP",
         Broker.BTG: "BTG Pactual",
+        Broker.BB:  "Banco do Brasil",
     }
 
     def _on_import_done(self, payload) -> None:

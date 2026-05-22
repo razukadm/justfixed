@@ -44,6 +44,7 @@ from justfixed.domain.rates import Rate
 class InvestmentSource(str, Enum):
     XP_IMPORT  = "xp_import"
     BTG_IMPORT = "btg_import"
+    BB_IMPORT  = "bb_import"
     MANUAL     = "manual"
 
 

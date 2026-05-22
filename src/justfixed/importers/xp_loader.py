@@ -58,6 +58,7 @@ class LoadResult:
     skipped: int
     issuers_created: int
     issuers_reused: int
+    skipped_matured: int = 0  # matured positions skipped before persist (BB only)
 
 
 def load_xp_statement(

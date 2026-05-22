@@ -12,9 +12,10 @@ from justfixed.importers.xp_loader import LoadResult
 from justfixed.persistence.database import Base, make_engine, make_session_factory
 
 
-FIXTURES = Path(__file__).parent / "fixtures"
+FIXTURES   = Path(__file__).parent / "fixtures"
 XP_FIXTURE  = FIXTURES / "synthetic_xp_statement.xlsx"
 BTG_FIXTURE = FIXTURES / "synthetic_btg_statement.xlsx"
+BB_FIXTURE  = FIXTURES / "synthetic_bb_statement.txt"
 
 
 # ---------- Fixtures ----------
@@ -112,3 +113,69 @@ class TestLoadStatement:
         assert broker == Broker.BTG
         assert result.inserted == 0
         assert result.skipped == 2
+
+
+# ---------- LoadResult default field (regression guard) ----------
+
+
+class TestLoadResultDefault:
+    def test_skipped_matured_defaults_to_zero(self) -> None:
+        """XP and BTG construction sites pass 4 positional args — must not break."""
+        result = LoadResult(inserted=10, skipped=2, issuers_created=1, issuers_reused=3)
+        assert result.skipped_matured == 0
+
+    def test_skipped_matured_can_be_set(self) -> None:
+        result = LoadResult(inserted=5, skipped=4, issuers_created=1, issuers_reused=0, skipped_matured=4)
+        assert result.skipped_matured == 4
+
+
+# ---------- detect_broker — BB ----------
+
+
+class TestDetectBrokerBB:
+    def test_bb_fixture_detected_as_bb(self) -> None:
+        assert detect_broker(BB_FIXTURE) == Broker.BB
+
+    def test_txt_without_sisbb_header_raises(self, tmp_path: Path) -> None:
+        plain_txt = tmp_path / "random.txt"
+        plain_txt.write_text("Just some random text\nNo SISBB header here.\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="SISBB"):
+            detect_broker(plain_txt)
+
+    def test_unknown_extension_raises(self, tmp_path: Path) -> None:
+        bad_file = tmp_path / "statement.csv"
+        bad_file.write_text("col1,col2\n1,2\n", encoding="utf-8")
+        with pytest.raises(ValueError, match=r"\.csv"):
+            detect_broker(bad_file)
+
+    # --- Regression: existing XLSX detection unchanged ---
+
+    def test_xp_fixture_still_detected_as_xp(self) -> None:
+        assert detect_broker(XP_FIXTURE) == Broker.XP
+
+    def test_btg_fixture_still_detected_as_btg(self) -> None:
+        assert detect_broker(BTG_FIXTURE) == Broker.BTG
+
+
+# ---------- load_statement — BB ----------
+
+
+class TestLoadStatementBB:
+    def test_bb_fixture_returns_bb_broker(self, factory) -> None:
+        broker, result = load_statement(BB_FIXTURE, factory)
+        assert broker == Broker.BB
+
+    def test_bb_fixture_returns_load_result(self, factory) -> None:
+        _, result = load_statement(BB_FIXTURE, factory)
+        assert isinstance(result, LoadResult)
+
+    def test_bb_fixture_inserts_active_rows(self, factory) -> None:
+        _, result = load_statement(BB_FIXTURE, factory)
+        assert result.inserted == 5
+
+    def test_bb_load_statement_is_idempotent(self, factory) -> None:
+        load_statement(BB_FIXTURE, factory)
+        broker, result = load_statement(BB_FIXTURE, factory)
+        assert broker == Broker.BB
+        assert result.inserted == 0
+        assert result.skipped == 9
