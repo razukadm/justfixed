@@ -1124,3 +1124,42 @@ class TestRestoreSelection:
         MainWindow._restore_selection(self_mock, other_id, [inv])
         self_mock._detail_panel.clear.assert_called_once()
         self_mock._right_pane.hide.assert_called_once()
+
+
+class TestInvestmentDeleted:
+    def test_evicts_matching_cache_entry_and_refreshes(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        inv_id = uuid.uuid4()
+        other_id = uuid.uuid4()
+        proj_keep = MagicMock()
+        proj_keep.investment.id = other_id
+        proj_evict = MagicMock()
+        proj_evict.investment.id = inv_id
+        self_mock.projection_cache = [proj_evict, proj_keep]
+
+        MainWindow._on_investment_deleted(self_mock, inv_id)
+
+        assert self_mock.projection_cache == [proj_keep]
+        self_mock.refresh_table.assert_called_once()
+
+    def test_leaves_other_cache_entries_intact(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        inv_id = uuid.uuid4()
+        proj_a = MagicMock()
+        proj_a.investment.id = uuid.uuid4()
+        proj_b = MagicMock()
+        proj_b.investment.id = uuid.uuid4()
+        self_mock.projection_cache = [proj_a, proj_b]
+
+        MainWindow._on_investment_deleted(self_mock, inv_id)
+
+        assert self_mock.projection_cache == [proj_a, proj_b]
+
+    def test_no_crash_when_cache_is_none(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock.projection_cache = None
+
+        MainWindow._on_investment_deleted(self_mock, uuid.uuid4())
+
+        self_mock.refresh_table.assert_called_once()
+        assert self_mock.projection_cache is None

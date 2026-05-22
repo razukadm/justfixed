@@ -594,6 +594,7 @@ class InvestmentDetailPanel(QWidget):
     """
 
     closed = Signal()
+    investment_deleted = Signal(uuid.UUID)
 
     _FIELD_KEYS = [
         ("Issuer",        "issuer"),
@@ -677,8 +678,26 @@ class InvestmentDetailPanel(QWidget):
         scroll.setWidget(body)
         layout.addWidget(scroll, stretch=1)
 
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
+        layout.addWidget(sep)
+
+        self._delete_btn = QPushButton("Delete investment")
+        self._delete_btn.setStyleSheet(
+            "QPushButton { background-color: #e74c3c; color: white; border: none;"
+            " border-radius: 4px; padding: 6px 12px; }"
+            "QPushButton:hover { background-color: #c0392b; }"
+            "QPushButton:pressed { background-color: #a93226; }"
+            "QPushButton:disabled { background-color: #f5b7b1; color: #888888; }"
+        )
+        self._delete_btn.setEnabled(False)
+        self._delete_btn.clicked.connect(self._on_delete_clicked)
+        layout.addWidget(self._delete_btn)
+
     def show_investment(self, inv) -> None:
         self._set_error(None)
+        self._delete_btn.setEnabled(True)
 
         # Same-id refresh (e.g. re-entrancy from refresh_table after a field
         # save): adopt the freshly-persisted object and update header widgets
@@ -733,8 +752,35 @@ class InvestmentDetailPanel(QWidget):
         self._identity_label.setText("No investment selected.")
         self._source_banner.hide()
         self._set_error(None)
+        self._delete_btn.setEnabled(False)
         for field in self._field_values.values():
             field.set_value(None, "", editable=False)
+
+    # ── Delete ────────────────────────────────────────────────────────────────
+
+    def _on_delete_clicked(self) -> None:
+        inv = self._current_inv
+        if inv is None:
+            return
+        product_name = rules_for(inv.product).display_name
+        maturity_str = _PT_BR.toString(
+            QDate(inv.maturity_date.year, inv.maturity_date.month, inv.maturity_date.day),
+            QLocale.FormatType.ShortFormat,
+        )
+        reply = QMessageBox.question(
+            self,
+            "Delete Investment",
+            f"Permanently delete this investment?\n\n"
+            f"{inv.issuer.name}  ·  {product_name}\n"
+            f"Principal: {inv.principal.to_display()}  ·  Maturity: {maturity_str}\n\n"
+            "This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        InvestmentRepository(self._session_factory).delete(inv.id)
+        self.investment_deleted.emit(inv.id)
 
     # ── Field save helpers ────────────────────────────────────────────────────
 
@@ -1329,6 +1375,7 @@ class MainWindow(QMainWindow):
 
         self._detail_panel = InvestmentDetailPanel(self._session_factory, self)
         self._detail_panel.closed.connect(self._on_panel_close_requested)
+        self._detail_panel.investment_deleted.connect(self._on_investment_deleted)
 
         self._add_panel = _AddInvestmentPanel(self._session_factory, self)
         self._add_panel.saved.connect(self._on_add_saved)
@@ -1850,6 +1897,14 @@ class MainWindow(QMainWindow):
 
     def _on_panel_close_requested(self) -> None:
         self._table.clearSelection()
+
+    def _on_investment_deleted(self, investment_id: uuid.UUID) -> None:
+        if self.projection_cache is not None:
+            self.projection_cache = [
+                p for p in self.projection_cache if p.investment.id != investment_id
+            ]
+        self.refresh_table()
+        self.statusBar().showMessage("Investment deleted.", 4000)
 
     def trigger_conglomerate_highlight(self, issuer_id: uuid.UUID) -> None:
         """Highlight all rows for issuer_id for 3 seconds, then snap back.

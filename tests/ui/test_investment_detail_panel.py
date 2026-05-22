@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from PySide6.QtCore import QDate, QEvent
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.issuer import Issuer, IssuerKind
@@ -463,6 +463,75 @@ class TestInvestmentDetailPanelSave:
         # intermediate object _save_field set — confirms same-id-distinct-object
         # adoption, not a trivial is-identity pass.
         assert panel._current_inv is distinct_inv_holder[0]
+
+
+# ── Delete tests ─────────────────────────────────────────────────────────────
+
+class TestInvestmentDetailPanelDelete:
+    def test_delete_button_exists(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        assert hasattr(panel, "_delete_btn")
+
+    def test_delete_button_disabled_before_investment_shown(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        assert not panel._delete_btn.isEnabled()
+
+    def test_delete_button_enabled_after_show_investment(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        panel.show_investment(_mock_inv())
+        assert panel._delete_btn.isEnabled()
+
+    def test_delete_button_disabled_after_clear(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        panel.show_investment(_mock_inv())
+        panel.clear()
+        assert not panel._delete_btn.isEnabled()
+
+    def test_confirm_calls_repo_delete_and_emits_signal(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        inv = _make_real_inv()
+        panel.show_investment(inv)
+
+        deleted_ids: list = []
+        panel.investment_deleted.connect(lambda uid: deleted_ids.append(uid))
+
+        with patch("justfixed.ui.main.InvestmentRepository") as MockRepo:
+            with patch(
+                "justfixed.ui.main.QMessageBox.question",
+                return_value=QMessageBox.StandardButton.Yes,
+            ):
+                panel._on_delete_clicked()
+
+        MockRepo.return_value.delete.assert_called_once_with(inv.id)
+        assert deleted_ids == [inv.id]
+
+    def test_cancel_does_nothing(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        inv = _make_real_inv()
+        panel.show_investment(inv)
+
+        deleted_ids: list = []
+        panel.investment_deleted.connect(lambda uid: deleted_ids.append(uid))
+
+        with patch("justfixed.ui.main.InvestmentRepository") as MockRepo:
+            with patch(
+                "justfixed.ui.main.QMessageBox.question",
+                return_value=QMessageBox.StandardButton.No,
+            ):
+                panel._on_delete_clicked()
+
+        MockRepo.return_value.delete.assert_not_called()
+        assert deleted_ids == []
+
+    def test_no_op_when_no_investment_shown(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+
+        with patch("justfixed.ui.main.InvestmentRepository") as MockRepo:
+            with patch("justfixed.ui.main.QMessageBox.question") as mock_dlg:
+                panel._on_delete_clicked()
+
+        mock_dlg.assert_not_called()
+        MockRepo.return_value.delete.assert_not_called()
 
 
 # ── _RateEditor tests ─────────────────────────────────────────────────────────
