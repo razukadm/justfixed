@@ -802,6 +802,38 @@ investment, a correction, or a test entry.
 
 **Trigger to revisit:** If publish_curves.py parsing breaks again, or before relying heavily on the curve pipeline.
 
+### B41. Calculator tab — mock an investment, project, FGC headroom
+
+**Source:** Beta-tester request, 2026-05-21. Refined same day.
+
+**What it is:** A new "Calculator" tab where the user mocks a hypothetical investment (product type, principal, rate, dates), clicks Project, and sees its projected value at maturity — without saving it to the portfolio. The mock is then shown inside the conglomerate's investment list, as a highlighted row (distinct background colour marking it as hypothetical, not a real holding), so the user sees the mock sitting among the conglomerate's real investments with the running FGC exposure and status. In addition, JustFixed computes a suggested maximum amount to invest while staying under FGC coverage.
+
+**Parts, easy to hard:**
+
+- **Calculator tab + mock projection (straightforward).** A form plus a Project button that runs the projection engine on an unsaved, hypothetical investment. Heavy reuse: the projection engine already exists, and C′ commit 6 shipped a manual-entry form — the calculator's input form is largely that form without the save-to-portfolio step.
+- **Mock as a highlighted row in the conglomerate view (straightforward — reuses B24).** Inject the mock investment into the Conglomerates-tab display for its conglomerate, rendered with a highlighted background. The Conglomerates tab (B24) already computes per-conglomerate exposure with sequential, maturity-ascending drawdown — the calculator feeds it one extra (mock) row and lets that existing logic show the resulting exposure and FGC status. The time-varying drawdown across maturities is therefore already handled by the reused tab logic. The highlight colour is the same UI primitive as B22 (background differentiation for matured rows).
+- **Computed "maximum amount to stay under FGC coverage" (the hard part — an inverse problem).** Beyond the visual what-if, JustFixed still computes a suggested max. The whole app runs forward: given an investment, compute future value and FGC exposure. This asks it to run backward: given a target (the R$250k FGC ceiling for the conglomerate), solve for the input principal whose projected maturity value, added to the conglomerate's existing exposure, lands at the ceiling — solving through the projection function, not subtracting from R$250k.
+
+**Pinned decisions:**
+
+- The feature is what-if view plus a computed hint: the highlighted-row view is the primary surface, AND a suggested max amount is computed and shown. (The alternative — a pure what-if with no computed suggestion, where the user discovers the limit by adjusting the mock — was considered and rejected; the user wants the number provided.)
+- The suggested maximum is shown both ways: the deposit amount (principal to invest) and the maturity value it grows to. Example: "Invest up to R$X, maturing at R$Y, keeping [conglomerate] at the R$250k FGC ceiling."
+- Exposure comparison basis for the computed suggestion: measured at the mock investment's maturity date.
+
+**Open question — investments that mature before the mock (applies to part 3, the computed suggestion).** Measuring exposure only at the mock's maturity date understates risk: a conglomerate investment that matures earlier was FGC-exposed alongside the mock during the overlap, but has paid out and is invisible by the mock's maturity. Three candidate treatments, unresolved:
+
+- Ignore them — simple, one clear number, but understates risk during the overlap period.
+- Peak exposure across the mock's lifetime — correct (captures the worst moment), but more complex and harder to explain.
+- Count all current conglomerate investments at value — overstates risk, but errs safe; defensible for an FGC-headroom figure.
+
+Note: this ambiguity affects only the computed suggestion (part 3). The highlighted-row view (part 2) inherits B24's sequential-drawdown handling and does not face this question. Resolve when the feature is built and the actual numbers can be seen. B24's drawdown approach is a reference point.
+
+**Dependencies / sequencing:** The input form should reuse whatever C′ commit 6's manual-entry form established, and part 2 reuses the B24 Conglomerates-tab rendering — sequence after C′. The FGC and projection engines are already in place.
+
+**Why deferred:** New feature from beta feedback. Parts 1 and 2 are ready once C′'s form exists; part 3 needs the open question resolved before implementation.
+
+**Trigger to revisit:** After C′ ships, when the manual-entry form is available to build the calculator's input form on.
+
 ---
 
 ## Part 3 — Open questions
