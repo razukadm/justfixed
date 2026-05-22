@@ -10,16 +10,16 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 
 | Layer | Status | Test count |
 |---|---|---|
-| Domain | Complete | 153 |
-| Persistence | Complete | 86 |
+| Domain | Complete | 202 |
+| Persistence | Complete | 87 |
 | Engine | Complete | 181 |
-| Importer (parser, mapper) | Complete | 80 |
-| Importer (loader / DB persistence) | Complete | 14 |
-| UI (PySide6) | B′, B′ companion, B24, and B9a complete (curve infrastructure, dev view, B30 load-from-file) | 48 |
+| Importers | Complete | 171 |
+| UI (PySide6) | B′, B′ companion, B24, B9a, and C′ partial complete (manual-entry shipped; projection detail pending) | 149 |
 | Exports (calendar / ICS) | Complete | 9 |
-| Tools (admin scripts) | Complete | 48 |
+| Tools (admin scripts) | Complete | 51 |
+| Build info | Complete | 3 |
 
-622 tests pass in ~4 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+853 tests pass in ~12 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -244,7 +244,7 @@ The engine exposes two FGC report functions. `fgc_concentration_report(investmen
 
 ## Importers (`src/justfixed/importers/`)
 
-The XP Investimentos pipeline is split into three layers, all complete. Multi-broker importers (BTG, Itaú, Nu) are Phase 2.
+The XP Investimentos and BTG Pactual pipelines are each split into three layers, all complete. A broker-detection layer (`importers/detection.py`) dispatches to the appropriate loader. Further multi-broker importers (Itaú, Nu) are Phase 2.
 
 ### Layer 1: `xp.py` — XLSX → strings
 
@@ -367,19 +367,19 @@ Design choices:
 
 PySide6 single-window desktop application. Two tabs: **Conglomerates** (default landing, B24) and **Investments**. The Conglomerates tab shows an accordion layout — one collapsible section per conglomerate with summary totals, FGC status badge, and expandable detail rows (per-investment projected balance via sequential drawdown). The Investments tab imports an XP statement, displays investments in a table with per-row FGC concentration badges and an inline-editable Conglomerate column (B′ curation), and filters by conglomerate and issuer via dropdowns with a totals strip below the table (B′ companion). Both tabs share a projection cache populated by a single "Project as of today" button. Background work (statement loading, projection) runs on `QThread` workers; a single `_set_busy` guard prevents overlapping operations. Empty state (no investments loaded) swaps the table for a centered prompt via `QStackedWidget`.
 
-The module imports from `domain`, `persistence`, `engine.projection`, `engine.fgc`, `exports.calendar`, and `importers.xp_loader`. It introduces no new architectural layer between itself and those — direct calls, no service or presenter layer.
+The module imports from `domain`, `persistence`, `engine.projection`, `engine.fgc`, `exports.calendar`, `importers.xp_loader`, `importers.btg_loader`, and `importers.detection`. It introduces no new architectural layer between itself and those — direct calls, no service or presenter layer.
 
 CDI curve is fetched from `razukadm/justfixed-data` on launch (`engine/fetcher.py`); cached at `~/.justfixed/curve_cache.json`. The projection path uses the live curve when available; `_ASSUMED_CDI` is the offline fallback. (B9a shipped May 2026.)
 
 UI tests live in `tests/ui/` and use a "real method, MagicMock self" pattern: actual `MainWindow` or `ConglomerateEditDelegate` methods are called with a `MagicMock(spec=...)` stand-in for `self`, avoiding Qt window instantiation entirely. Layout and interaction verification remains a human "build, run, look at it" loop.
 
-See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′ shipped; C′ deferred — manual-entry form, projection detail view).
+See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′, and C′ partial shipped; C′ remaining: per-investment projection detail view — accrual breakdown, IR tax, net at maturity).
 
 ---
 
 ## Test discipline
 
-**622 tests, ~4 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**853 tests, ~12 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
@@ -471,12 +471,12 @@ The project uses what's in `pyproject.toml` and nothing else. Don't add a new de
 
 In rough order:
 
-1. **UI — milestone C′ (manual entry, detail view)** — manual-entry form for investments outside XP statements, per-investment detail view (accrual breakdown, IR tax, net at maturity). ~3-4 sessions.
+1. **UI — milestone C′ (detail view)** — per-investment detail view (accrual breakdown, IR tax, net at maturity). The manual-entry form shipped (commit 08a2ead); the projection detail view remains. ~1-2 sessions.
 
 Phase 2 (post-MVP):
 - DI-curve mark-to-market
 - Real index data fetching (B3 for CDI history, IBGE for IPCA)
-- Multi-broker importers (BTG, Itaú, Nu)
+- Multi-broker importers (Itaú, Nu)
 - Backup/restore for the SQLite database
 
 ---
