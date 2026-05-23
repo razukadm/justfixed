@@ -853,9 +853,15 @@ class _AddInvestmentPanel(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
 
+        header = QHBoxLayout()
         title = QLabel("Add Investment")
         title.setStyleSheet("font-weight: bold;")
-        layout.addWidget(title)
+        self._close_btn = QPushButton("✕")
+        self._close_btn.setFixedSize(24, 24)
+        self._close_btn.clicked.connect(lambda: self.cancelled.emit())
+        header.addWidget(title, stretch=1)
+        header.addWidget(self._close_btn)
+        layout.addLayout(header)
 
         self._error_label = QLabel()
         self._error_label.setStyleSheet(
@@ -1914,6 +1920,9 @@ class MainWindow(QMainWindow):
 
     def _on_panel_close_requested(self) -> None:
         self._table.clearSelection()
+        self._right_pane.setCurrentIndex(0)
+        self._add_panel.reset()
+        self._right_pane.hide()
 
     def _on_investment_deleted(self, investment_id: uuid.UUID) -> None:
         if self.projection_cache is not None:

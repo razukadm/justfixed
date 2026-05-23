@@ -25,7 +25,7 @@ from justfixed.domain.money import Money
 from justfixed.domain.rates import Prefixed, PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA
 from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fgc import ExposureStatus
-from justfixed.ui.main import ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow, compute_totals, _format_type, _format_rate
+from justfixed.ui.main import _AddInvestmentPanel, ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow, compute_totals, _format_type, _format_rate
 
 
 class TestProjectionCachePopulation:
@@ -1091,8 +1091,36 @@ class TestSelectionHandlers:
     def test_on_panel_close_requested_clears_table_selection(self) -> None:
         self_mock = MagicMock(spec=MainWindow)
         self_mock._table = MagicMock()
+        self_mock._right_pane = MagicMock()
+        self_mock._add_panel = MagicMock()
         MainWindow._on_panel_close_requested(self_mock)
         self_mock._table.clearSelection.assert_called_once()
+
+    def test_on_panel_close_requested_resets_stack_and_hides_pane(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._table = MagicMock()
+        self_mock._right_pane = MagicMock()
+        self_mock._add_panel = MagicMock()
+        MainWindow._on_panel_close_requested(self_mock)
+        self_mock._right_pane.setCurrentIndex.assert_called_once_with(0)
+        self_mock._right_pane.hide.assert_called_once()
+
+    def test_on_panel_close_requested_resets_add_panel(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._table = MagicMock()
+        self_mock._right_pane = MagicMock()
+        self_mock._add_panel = MagicMock()
+        MainWindow._on_panel_close_requested(self_mock)
+        self_mock._add_panel.reset.assert_called_once()
+
+
+class TestAddPanelCloseButton:
+    def test_header_close_button_emits_cancelled(self, qapp) -> None:
+        panel = _AddInvestmentPanel(MagicMock(), MagicMock())
+        received: list[bool] = []
+        panel.cancelled.connect(lambda: received.append(True))
+        panel._close_btn.click()
+        assert received == [True]
 
 
 class TestRestoreSelection:
