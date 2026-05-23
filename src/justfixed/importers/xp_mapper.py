@@ -40,8 +40,7 @@ _MONEY_RE = re.compile(
     r"""^\s*
         (?:R\$)?\s*       # optional R$ prefix with optional space after
         (-?)\s*           # optional sign (rare but possible for losses)
-        (\d{1,3}          # leading digit group, 1-3 digits
-        (?:\.\d{3})*)     # zero or more thousands groups (.123)
+        (\d{1,3}(?:\.\d{3})*|\d+)  # grouped (299.768) OR plain run (299768)
         (?:,(\d+))?       # optional decimal part (,XX or ,XXXXXXXX)
         \s*$""",
     re.VERBOSE,

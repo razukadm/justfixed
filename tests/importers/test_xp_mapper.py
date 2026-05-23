@@ -79,6 +79,29 @@ class TestParseMoney:
         with pytest.raises(ValueError):
             parse_brazilian_money("R$")
 
+    # -- dotless (no thousands separator) --
+
+    def test_dotless_with_decimal(self) -> None:
+        # "299768,09" == "299.768,09" == 299768.09
+        assert parse_brazilian_money("299768,09") == Money.from_reais("299768.09")
+
+    def test_dotless_integer_no_decimal(self) -> None:
+        # "10000" == 10000.00
+        assert parse_brazilian_money("10000") == Money.from_reais("10000.00")
+
+    def test_dotless_large_integer_with_decimal(self) -> None:
+        # "1000000,00" == 1000000.00
+        assert parse_brazilian_money("1000000,00") == Money.from_reais("1000000.00")
+
+    def test_dotless_same_as_dotted(self) -> None:
+        # Both forms must parse to the same value
+        assert parse_brazilian_money("299768,09") == parse_brazilian_money("299.768,09")
+
+    def test_rejects_dot_decimal(self) -> None:
+        # A dot used as a decimal separator (not BR) — must raise
+        with pytest.raises(ValueError):
+            parse_brazilian_money("1234.56")
+
 
 # ---------- Brazilian date ----------
 
