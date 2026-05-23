@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from PySide6.QtCore import QDate, QEvent, QLocale, QStandardPaths, QStringListModel, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QFont, QIcon
+from PySide6.QtGui import QAction, QColor, QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -43,6 +43,8 @@ from PySide6.QtWidgets import (
 )
 
 from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
+from justfixed.ui.qss import make_stylesheet
+from justfixed.ui.theme import COLORS
 from justfixed.ui.curve_inspector import (
     CurveInspectorWindow,
     SERIES_CDI,
@@ -130,48 +132,23 @@ _PT_BR = QLocale(QLocale.Language.Portuguese, QLocale.Country.Brazil)
 # Unified badge data for both ExposureStatus and ConglomerateStatus.
 # Keyed by .value string — both enums share "under"/"approaching"/"over".
 _BADGE_STYLE: dict[str, tuple[str, str]] = {
-    "under":       ("● UNDER",       "#2ecc71"),
-    "approaching": ("● APPROACHING", "#e67e22"),
-    "over":        ("● OVER",        "#e74c3c"),
-    "not_fgc":     ("N/A",           "#aaaaaa"),
+    "under":       ("● UNDER",       COLORS.FGC_UNDER),
+    "approaching": ("● APPROACHING", COLORS.WARN),
+    "over":        ("● OVER",        COLORS.DANGER),
+    "not_fgc":     ("N/A",           COLORS.FGC_NA),
 }
-
-TOOLBAR_BUTTON_GREEN             = "#58d68d"
-TOOLBAR_BUTTON_GREEN_HOVER       = "#6fdc9f"
-TOOLBAR_BUTTON_GREEN_PRESSED     = "#4cae6a"
-TOOLBAR_BUTTON_GREEN_BORDER      = "#4cae6a"
-TOOLBAR_BUTTON_GREEN_DISABLED_BG = "#c8e6c9"
-TOOLBAR_BUTTON_GREEN_DISABLED_FG = "#888888"
-
-TOOLBAR_BUTTON_STYLE = f"""QPushButton {{
-    background-color: {TOOLBAR_BUTTON_GREEN};
-    border: 1px solid {TOOLBAR_BUTTON_GREEN_BORDER};
-    border-radius: 4px;
-    padding: 6px 12px;
-    color: #1a1a1a;
-}}
-QPushButton:hover {{
-    background-color: {TOOLBAR_BUTTON_GREEN_HOVER};
-}}
-QPushButton:pressed {{
-    background-color: {TOOLBAR_BUTTON_GREEN_PRESSED};
-}}
-QPushButton:disabled {{
-    background-color: {TOOLBAR_BUTTON_GREEN_DISABLED_BG};
-    color: {TOOLBAR_BUTTON_GREEN_DISABLED_FG};
-}}"""
 
 
 def _make_fgc_badge(status, width: int) -> QLabel:
     """Return a styled FGC badge QLabel for either ExposureStatus or ConglomerateStatus."""
-    text, color = _BADGE_STYLE[status.value]
+    text, _ = _BADGE_STYLE[status.value]
     lbl = QLabel(text)
     lbl.setFixedWidth(width)
-    lbl.setStyleSheet(f"color: {color};")
+    lbl.setProperty("fgcStatus", status.value)
     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
     return lbl
 
-_HIGHLIGHT_COLOR = QColor("#FFF8DC")
+_HIGHLIGHT_COLOR = QColor(COLORS.HIGHLIGHT_ROW)
 
 
 def _format_type(rate: Rate) -> str:
@@ -633,7 +610,7 @@ class InvestmentDetailPanel(QWidget):
 
         header = QHBoxLayout()
         self._identity_label = QLabel("No investment selected.")
-        self._identity_label.setStyleSheet("font-weight: bold;")
+        self._identity_label.setProperty("role", "panelTitle")
         self._close_btn = QPushButton("✕")
         self._close_btn.setFixedSize(24, 24)
         self._close_btn.clicked.connect(lambda: self.closed.emit())
@@ -642,18 +619,12 @@ class InvestmentDetailPanel(QWidget):
         layout.addLayout(header)
 
         self._source_banner = QLabel()
-        self._source_banner.setStyleSheet(
-            "background: #fff3e0; color: #e65100;"
-            " padding: 4px 8px; border-radius: 4px;"
-        )
+        self._source_banner.setProperty("role", "infoBanner")
         self._source_banner.hide()
         layout.addWidget(self._source_banner)
 
         self._error_label = QLabel()
-        self._error_label.setStyleSheet(
-            "background: #fdecea; color: #c0392b;"
-            " padding: 4px 8px; border-radius: 4px;"
-        )
+        self._error_label.setProperty("role", "error")
         self._error_label.setWordWrap(True)
         self._error_label.hide()
         layout.addWidget(self._error_label)
@@ -671,7 +642,7 @@ class InvestmentDetailPanel(QWidget):
             row = QHBoxLayout()
             row.setContentsMargins(0, 2, 0, 2)
             lbl = QLabel(label_text + ":")
-            lbl.setStyleSheet("color: #666666;")
+            lbl.setProperty("role", "fieldLabel")
             lbl.setFixedWidth(100)
             lbl.setAlignment(Qt.AlignmentFlag.AlignTop)
             val = _EditableField(key, self._save_field, self._set_error)
@@ -690,13 +661,7 @@ class InvestmentDetailPanel(QWidget):
         layout.addWidget(sep)
 
         self._delete_btn = QPushButton("Delete investment")
-        self._delete_btn.setStyleSheet(
-            "QPushButton { background-color: #e74c3c; color: white; border: none;"
-            " border-radius: 4px; padding: 6px 12px; }"
-            "QPushButton:hover { background-color: #c0392b; }"
-            "QPushButton:pressed { background-color: #a93226; }"
-            "QPushButton:disabled { background-color: #f5b7b1; color: #888888; }"
-        )
+        self._delete_btn.setProperty("role", "danger")
         self._delete_btn.setEnabled(False)
         self._delete_btn.clicked.connect(self._on_delete_clicked)
         layout.addWidget(self._delete_btn)
@@ -855,7 +820,7 @@ class _AddInvestmentPanel(QWidget):
 
         header = QHBoxLayout()
         title = QLabel("Add Investment")
-        title.setStyleSheet("font-weight: bold;")
+        title.setProperty("role", "panelTitle")
         self._close_btn = QPushButton("✕")
         self._close_btn.setFixedSize(24, 24)
         self._close_btn.clicked.connect(lambda: self.cancelled.emit())
@@ -864,10 +829,7 @@ class _AddInvestmentPanel(QWidget):
         layout.addLayout(header)
 
         self._error_label = QLabel()
-        self._error_label.setStyleSheet(
-            "background: #fdecea; color: #c0392b;"
-            " padding: 4px 8px; border-radius: 4px;"
-        )
+        self._error_label.setProperty("role", "error")
         self._error_label.setWordWrap(True)
         self._error_label.hide()
         layout.addWidget(self._error_label)
@@ -902,7 +864,7 @@ class _AddInvestmentPanel(QWidget):
         row = QHBoxLayout()
         row.setContentsMargins(0, 2, 0, 2)
         lbl = QLabel(label_text + ":")
-        lbl.setStyleSheet("color: #666666;")
+        lbl.setProperty("role", "fieldLabel")
         lbl.setFixedWidth(100)
         lbl.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         row.addWidget(lbl)
@@ -925,7 +887,7 @@ class _AddInvestmentPanel(QWidget):
         self._new_name_edit.setPlaceholderText("Issuer name")
         name_row = QHBoxLayout()
         name_lbl = QLabel("Name:")
-        name_lbl.setStyleSheet("color: #888888;")
+        name_lbl.setProperty("role", "subLabel")
         name_lbl.setFixedWidth(96)
         name_row.addWidget(name_lbl)
         name_row.addWidget(self._new_name_edit)
@@ -936,7 +898,7 @@ class _AddInvestmentPanel(QWidget):
             self._new_kind_combo.addItem(kind.value.replace("_", " ").title(), kind)
         kind_row = QHBoxLayout()
         kind_lbl = QLabel("Type:")
-        kind_lbl.setStyleSheet("color: #888888;")
+        kind_lbl.setProperty("role", "subLabel")
         kind_lbl.setFixedWidth(96)
         kind_row.addWidget(kind_lbl)
         kind_row.addWidget(self._new_kind_combo)
@@ -948,7 +910,7 @@ class _AddInvestmentPanel(QWidget):
         )
         cong_row = QHBoxLayout()
         cong_lbl = QLabel("Conglomerate:")
-        cong_lbl.setStyleSheet("color: #888888;")
+        cong_lbl.setProperty("role", "subLabel")
         cong_lbl.setFixedWidth(96)
         cong_row.addWidget(cong_lbl)
         cong_row.addWidget(self._new_cong_edit)
@@ -1325,16 +1287,16 @@ class MainWindow(QMainWindow):
         toolbar = QHBoxLayout()
         self._import_btn = QPushButton("Import Statement…")
         self._import_btn.clicked.connect(self._on_import_clicked)
-        self._import_btn.setStyleSheet(TOOLBAR_BUTTON_STYLE)
+        self._import_btn.setProperty("role", "toolbar")
         self._add_btn = QPushButton("Add investment…")
         self._add_btn.clicked.connect(self._on_add_investment_clicked)
-        self._add_btn.setStyleSheet(TOOLBAR_BUTTON_STYLE)
+        self._add_btn.setProperty("role", "toolbar")
         self._project_btn = QPushButton("Project as of today")
         self._project_btn.clicked.connect(self._on_project_clicked)
-        self._project_btn.setStyleSheet(TOOLBAR_BUTTON_STYLE)
+        self._project_btn.setProperty("role", "toolbar")
         self._export_btn = QPushButton("Export calendar…")
         self._export_btn.clicked.connect(self._on_export_clicked)
-        self._export_btn.setStyleSheet(TOOLBAR_BUTTON_STYLE)
+        self._export_btn.setProperty("role", "toolbar")
         self._status_label = QLabel("Ready.")
         toolbar.addWidget(self._import_btn)
         toolbar.addWidget(self._add_btn)
@@ -1481,11 +1443,7 @@ class MainWindow(QMainWindow):
         self, section: ConglomerateSection, index: int = 0
     ) -> tuple[QWidget, QLabel]:
         row_widget = QWidget()
-        bg = "#ffffff" if index % 2 == 0 else "#f5f5f5"
-        row_widget.setObjectName(f"congRow{index}")
-        row_widget.setStyleSheet(
-            f"#congRow{index} {{ background-color: {bg}; border-bottom: 1px solid #dddddd; }}"
-        )
+        row_widget.setProperty("congRowParity", "even" if index % 2 == 0 else "odd")
         h = QHBoxLayout(row_widget)
         h.setContentsMargins(8, 6, 8, 6)
 
@@ -1568,10 +1526,6 @@ class MainWindow(QMainWindow):
     def _make_detail_header(self) -> QWidget:
         w = QWidget()
         w.setObjectName("detailHeader")
-        w.setStyleSheet(
-            "#detailHeader { background-color: #f0f0f0; border-bottom: 1px solid #dddddd; }"
-            " QLabel { font-weight: bold; }"
-        )
         h = QHBoxLayout(w)
         h.setContentsMargins(8, 4, 8, 4)
         for text, width, stretch in [
@@ -1592,11 +1546,7 @@ class MainWindow(QMainWindow):
 
     def _make_detail_row(self, row: ConglomerateDetailRow, idx: int) -> QWidget:
         w = QWidget()
-        bg = "#fafafa" if idx % 2 == 0 else "#f0f0f0"
-        w.setObjectName(f"detailRow{idx}")
-        w.setStyleSheet(
-            f"#detailRow{idx} {{ background-color: {bg}; border-bottom: 1px solid #eeeeee; }}"
-        )
+        w.setProperty("detailRowParity", "even" if idx % 2 == 0 else "odd")
         h = QHBoxLayout(w)
         h.setContentsMargins(8, 4, 8, 4)
 
@@ -1638,10 +1588,6 @@ class MainWindow(QMainWindow):
     def _make_summary_header(self) -> QWidget:
         row_widget = QWidget()
         row_widget.setObjectName("congHeader")
-        row_widget.setStyleSheet(
-            "#congHeader { background-color: #eaeaea; border-bottom: 1px solid #dddddd; }"
-            " QLabel { font-weight: bold; }"
-        )
         h = QHBoxLayout(row_widget)
         h.setContentsMargins(8, 6, 8, 6)
 
@@ -1837,7 +1783,7 @@ class MainWindow(QMainWindow):
             font = cong_item.font()
             font.setItalic(True)
             cong_item.setFont(font)
-            cong_item.setForeground(QColor("#888888"))
+            cong_item.setForeground(QColor(COLORS.INK_3))
         self._table.setItem(row, _COL_CONGLOMERATE, cong_item)
 
         self._cell(row, _COL_PRODUCT, rules_for(inv.product).display_name)
@@ -1857,7 +1803,7 @@ class MainWindow(QMainWindow):
         # FGC badge
         if inv.issuer.kind == IssuerKind.TREASURY:
             badge = QTableWidgetItem("N/A — Tesouro")
-            badge.setForeground(QColor("#aaaaaa"))
+            badge.setForeground(QColor(COLORS.FGC_NA))
         elif fgc_status is None:
             badge = QTableWidgetItem("—")
         else:
@@ -2124,12 +2070,9 @@ class MainWindow(QMainWindow):
         root.setSpacing(6)
         root.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        bold = QFont()
-        bold.setBold(True)
-
         def _title(text: str) -> QLabel:
             lbl = QLabel(text)
-            lbl.setFont(bold)
+            lbl.setProperty("role", "panelTitle")
             return lbl
 
         def _sep() -> QFrame:
@@ -2261,6 +2204,7 @@ class MainWindow(QMainWindow):
 
 def main() -> None:
     app = QApplication(sys.argv)
+    app.setStyleSheet(make_stylesheet())
     if is_expired():
         box = QMessageBox()
         box.setIcon(QMessageBox.Icon.Critical)
