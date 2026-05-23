@@ -2,8 +2,8 @@
 
 Uses the 'real method, MagicMock self' pattern — no Qt windows instantiated.
 Tests cover: series titles, precise label strings (including IPCA-real warning),
-cross-check link sets, availability detection, table row counts, and the
-unavailable-state degradation.
+cross-check link sets, availability detection, table row counts, the
+unavailable-state degradation, and hover-sync index mapping.
 """
 
 from __future__ import annotations
@@ -278,3 +278,52 @@ class TestChartXValues:
         curve = _make_curve(7)
         m = _mock(SERIES_IPCA, curve=curve)
         assert len(CurveInspectorWindow._chart_xs(m)) == 7
+
+
+# ── Hover-sync index mapping ──────────────────────────────────────────────────
+
+class TestVertexIndexForPoint:
+    def test_matches_first_vertex(self) -> None:
+        xs = [0.25, 0.5, 0.75]
+        ys = [14.40, 14.41, 14.42]
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 0.25, 14.40) == 0
+
+    def test_matches_middle_vertex(self) -> None:
+        xs = [0.25, 0.5, 0.75]
+        ys = [14.40, 14.41, 14.42]
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 0.5, 14.41) == 1
+
+    def test_matches_last_vertex(self) -> None:
+        xs = [0.25, 0.5, 0.75]
+        ys = [14.40, 14.41, 14.42]
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 0.75, 14.42) == 2
+
+    def test_no_close_match_returns_none(self) -> None:
+        xs = [0.25, 0.5, 0.75]
+        ys = [14.40, 14.41, 14.42]
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 1.0, 14.50) is None
+
+    def test_empty_lists_return_none(self) -> None:
+        assert CurveInspectorWindow._vertex_index_for_point([], [], 0.5, 14.0) is None
+
+    def test_single_vertex_matches(self) -> None:
+        xs = [63 / 252]
+        ys = [14.40]
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 63 / 252, 14.40) == 0
+
+    def test_near_but_not_matching_returns_none(self) -> None:
+        xs = [0.25]
+        ys = [14.40]
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 0.25, 14.401) is None
+
+    def test_returns_int_for_valid_point(self) -> None:
+        xs = [63 / 252, 126 / 252]
+        ys = [14.40, 14.41]
+        result = CurveInspectorWindow._vertex_index_for_point(xs, ys, 63 / 252, 14.40)
+        assert isinstance(result, int)
+
+    def test_uses_vertex_order_not_closest_by_distance_alone(self) -> None:
+        # Two vertices with identical x, differing y — each maps to its own index
+        xs = [0.5, 0.5]
+        ys = [14.40, 14.50]
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 0.5, 14.50) == 1

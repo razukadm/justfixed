@@ -8,9 +8,10 @@ the three windows share this code.
 from __future__ import annotations
 
 from PySide6.QtCharts import QChart, QChartView, QLineSeries, QScatterSeries, QValueAxis
-from PySide6.QtCore import QMargins, Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtCore import QEvent, QMargins, QPointF, Qt, QTimer
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -49,6 +50,8 @@ _LINK         = "#1f6feb"
 _WARN         = "#e67e22"
 _CALLOUT_BG   = "#eef4fb"
 _CALLOUT_EDGE = "#c5dbf2"
+_ACCENT       = "#d35400"
+_ROW_HOVER    = "#fff7d6"
 
 # ── Series keys ───────────────────────────────────────────────────────────────
 
@@ -71,6 +74,11 @@ class CurveInspectorWindow(QWidget):
         self._series = series
         self._curve = curve
         self._fetch_result = fetch_result
+        self._table: QTableWidget | None = None
+        self._highlight_dot: QScatterSeries | None = None
+        self._hover_xs: list[float] = []
+        self._hover_ys: list[float] = []
+        self._hover_row: int = -1
         self._build_ui()
         self.setWindowTitle(self._series_title())
         self.resize(960, 640)
@@ -150,6 +158,95 @@ class CurveInspectorWindow(QWidget):
         if not (self._curve and self._curve.vertices):
             return []
         return [v.business_days / BUSINESS_DAYS_PER_YEAR for v in self._curve.vertices]
+
+    @staticmethod
+    def _vertex_index_for_point(
+        xs: list[float], ys: list[float], px: float, py: float
+    ) -> int | None:
+        """Return the vertex index whose (x, y) matches (px, py) exactly, or None."""
+        if not xs:
+            return None
+        best = min(range(len(xs)), key=lambda i: abs(xs[i] - px) + abs(ys[i] - py))
+        if abs(xs[best] - px) < 1e-9 and abs(ys[best] - py) < 1e-9:
+            return best
+        return None
+
+    # ── Hover-sync handlers ───────────────────────────────────────────────────
+
+    def eventFilter(self, obj, event: QEvent) -> bool:
+        if self._table is not None and obj is self._table.viewport():
+            if event.type() == QEvent.Type.MouseMove:
+                row = self._table.rowAt(int(event.position().y()))
+                self._on_table_hover_row(row)
+            elif event.type() == QEvent.Type.Leave:
+                self._clear_hover()
+        return super().eventFilter(obj, event)
+
+    def _on_chart_hover(self, point: QPointF, state: bool) -> None:
+        # Defer all updates: modifying a QScatterSeries synchronously inside
+        # QXYSeries.hovered crashes QtCharts (C++-level reentrancy in the
+        # hit-test code path). QTimer.singleShot(0) queues the work to run
+        # after the signal dispatch returns.
+        try:
+            if not state:
+                QTimer.singleShot(0, self._clear_hover)
+                return
+            idx = self._vertex_index_for_point(
+                self._hover_xs, self._hover_ys, point.x(), point.y()
+            )
+            if idx is None:
+                return
+            def _deferred(i: int = idx) -> None:
+                self._highlight_table_row(i)
+                self._highlight_chart_dot(i)
+            QTimer.singleShot(0, _deferred)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+    def _on_table_hover_row(self, row: int) -> None:
+        if row < 0:
+            self._clear_hover()
+            return
+        self._highlight_table_row(row)
+        self._highlight_chart_dot(row)
+
+    def _highlight_table_row(self, idx: int) -> None:
+        if self._table is None:
+            return
+        if self._hover_row >= 0 and self._hover_row != idx:
+            for col in range(self._table.columnCount()):
+                item = self._table.item(self._hover_row, col)
+                if item is not None:
+                    item.setBackground(QBrush())
+        self._hover_row = idx
+        brush = QBrush(QColor(_ROW_HOVER))
+        for col in range(self._table.columnCount()):
+            item = self._table.item(idx, col)
+            if item is not None:
+                item.setBackground(brush)
+        visible_item = self._table.item(idx, 0)
+        if visible_item is not None:
+            self._table.scrollToItem(
+                visible_item, QAbstractItemView.ScrollHint.EnsureVisible
+            )
+
+    def _highlight_chart_dot(self, idx: int) -> None:
+        if self._highlight_dot is None:
+            return
+        self._highlight_dot.clear()
+        if 0 <= idx < len(self._hover_xs):
+            self._highlight_dot.append(self._hover_xs[idx], self._hover_ys[idx])
+
+    def _clear_hover(self) -> None:
+        if self._table is not None and self._hover_row >= 0:
+            for col in range(self._table.columnCount()):
+                item = self._table.item(self._hover_row, col)
+                if item is not None:
+                    item.setBackground(QBrush())
+        self._hover_row = -1
+        if self._highlight_dot is not None:
+            self._highlight_dot.clear()
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -282,6 +379,8 @@ class CurveInspectorWindow(QWidget):
 
         xs = self._chart_xs()
         ys = [float(v.rate * 100) for v in self._curve.vertices]
+        self._hover_xs = xs
+        self._hover_ys = ys
 
         line = QLineSeries()
         pen = QPen(QColor(_INK))
@@ -293,12 +392,19 @@ class CurveInspectorWindow(QWidget):
         dots.setBorderColor(QColor(_INK))
         dots.setMarkerSize(6)
 
+        self._highlight_dot = QScatterSeries()
+        self._highlight_dot.setColor(QColor(_ACCENT))
+        self._highlight_dot.setBorderColor(QColor(_ACCENT))
+        self._highlight_dot.setMarkerSize(10)
+
         for x, y in zip(xs, ys):
             line.append(x, y)
             dots.append(x, y)
 
         chart.addSeries(line)
         chart.addSeries(dots)
+        chart.addSeries(self._highlight_dot)
+        dots.hovered.connect(self._on_chart_hover)
 
         x_axis = QValueAxis()
         x_axis.setTitleText("Years")
@@ -326,6 +432,8 @@ class CurveInspectorWindow(QWidget):
         line.attachAxis(y_axis)
         dots.attachAxis(x_axis)
         dots.attachAxis(y_axis)
+        self._highlight_dot.attachAxis(x_axis)
+        self._highlight_dot.attachAxis(y_axis)
 
         view = QChartView(chart)
         view.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -368,6 +476,10 @@ class CurveInspectorWindow(QWidget):
             table.setItem(r, 0, t_item)
             table.setItem(r, 1, s_item)
             table.setItem(r, 2, r_item)
+        self._table = table
+        table.setMouseTracking(True)
+        table.viewport().setMouseTracking(True)
+        table.viewport().installEventFilter(self)
         return table
 
     def _build_crosscheck(self) -> QFrame:
