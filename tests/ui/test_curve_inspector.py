@@ -8,11 +8,9 @@ unavailable-state degradation.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
-
-import pytest
 
 from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fetcher import FetchResult
@@ -221,14 +219,13 @@ class TestUnavailableState:
     def test_provenance_asof_shows_dash_when_no_curve(self) -> None:
         assert CurveInspectorWindow._provenance_asof(_mock(SERIES_CDI, curve=None)) == "—"
 
-    def test_provenance_badge_no_data_when_fetch_result_none(self) -> None:
-        m = _mock(SERIES_CDI, curve=None, fetch_result=None)
-        assert CurveInspectorWindow._provenance_badge(m) == "no data"
+    def test_provenance_badge_method_removed(self) -> None:
+        assert not hasattr(CurveInspectorWindow, "_provenance_badge")
 
-    def test_provenance_badge_no_data_when_source_unavailable(self) -> None:
-        fetch = FetchResult(curve=None, source="unavailable")
-        m = _mock(SERIES_CDI, curve=None, fetch_result=fetch)
-        assert CurveInspectorWindow._provenance_badge(m) == "no data"
+    def test_asof_works_without_fetch_result(self) -> None:
+        curve = _make_curve(anchor="2026-05-20")
+        m = _mock(SERIES_CDI, curve=curve, fetch_result=None)
+        assert CurveInspectorWindow._provenance_asof(m) == "2026-05-20"
 
     def test_status_bar_shows_unavailable_when_no_curve(self) -> None:
         m = _mock(SERIES_CDI, curve=None)
@@ -248,23 +245,6 @@ class TestProvenanceWithData:
         m = _mock(SERIES_CDI, curve=curve)
         assert CurveInspectorWindow._provenance_asof(m) == "2026-05-20"
 
-    def test_badge_shows_live_source_and_time(self) -> None:
-        fetch = FetchResult(
-            curve=None, source="live", source_time=datetime(2026, 5, 20, 9, 14)
-        )
-        m = _mock(SERIES_CDI, fetch_result=fetch)
-        badge = CurveInspectorWindow._provenance_badge(m)
-        assert "live" in badge
-        assert "09:14" in badge
-
-    def test_badge_shows_cached_source(self) -> None:
-        fetch = FetchResult(
-            curve=None, source="cached", source_time=datetime(2026, 5, 20, 8, 0)
-        )
-        m = _mock(SERIES_CDI, fetch_result=fetch)
-        badge = CurveInspectorWindow._provenance_badge(m)
-        assert "cached" in badge
-
     def test_status_bar_shows_anchor_and_vertex_count(self) -> None:
         curve = _make_curve(47, anchor="2026-05-20")
         m = _mock(SERIES_CDI, curve=curve)
@@ -272,3 +252,29 @@ class TestProvenanceWithData:
         assert "2026-05-20" in text
         assert "47 vertices" in text
         assert "justfixed-data" in text
+
+
+# ── Chart x values ────────────────────────────────────────────────────────────
+
+class TestChartXValues:
+    def test_chart_xs_converts_bd_to_years(self) -> None:
+        curve = _make_curve(3)  # vertices at 63, 126, 189 bd
+        m = _mock(SERIES_CDI, curve=curve)
+        xs = CurveInspectorWindow._chart_xs(m)
+        assert xs == [63 / 252, 126 / 252, 189 / 252]
+
+    def test_chart_xs_uses_business_days_per_year_constant(self) -> None:
+        from justfixed.engine.calendar import BUSINESS_DAYS_PER_YEAR
+        curve = _make_curve(1)
+        m = _mock(SERIES_CDI, curve=curve)
+        xs = CurveInspectorWindow._chart_xs(m)
+        assert xs[0] == 63 / BUSINESS_DAYS_PER_YEAR
+
+    def test_chart_xs_empty_when_no_curve(self) -> None:
+        m = _mock(SERIES_CDI, curve=None)
+        assert CurveInspectorWindow._chart_xs(m) == []
+
+    def test_chart_xs_length_matches_vertex_count(self) -> None:
+        curve = _make_curve(7)
+        m = _mock(SERIES_IPCA, curve=curve)
+        assert len(CurveInspectorWindow._chart_xs(m)) == 7

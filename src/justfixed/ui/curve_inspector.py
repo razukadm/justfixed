@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from justfixed.domain.rates import _format_brazilian_percent
-from justfixed.engine.calendar import add_business_days
+from justfixed.engine.calendar import BUSINESS_DAYS_PER_YEAR, add_business_days
 from justfixed.engine.curve import Curve
 from justfixed.engine.fetcher import FetchResult
 
@@ -126,13 +126,6 @@ class CurveInspectorWindow(QWidget):
             return self._curve.anchor.strftime("%Y-%m-%d")
         return "—"
 
-    def _provenance_badge(self) -> str:
-        if not self._fetch_result or self._fetch_result.source == "unavailable":
-            return "no data"
-        src = self._fetch_result.source
-        t = self._fetch_result.source_time
-        return f"{src} · {t:%H:%M}" if t else src
-
     def _status_bar_text(self) -> str:
         if not (self._curve and self._curve.vertices):
             return "Curve: unavailable"
@@ -152,6 +145,12 @@ class CurveInspectorWindow(QWidget):
             rows.append((tenor, settle_str, rate_pct))
         return rows
 
+    def _chart_xs(self) -> list[float]:
+        """X values for the chart: business_days / BUSINESS_DAYS_PER_YEAR for each vertex."""
+        if not (self._curve and self._curve.vertices):
+            return []
+        return [v.business_days / BUSINESS_DAYS_PER_YEAR for v in self._curve.vertices]
+
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
@@ -161,7 +160,6 @@ class CurveInspectorWindow(QWidget):
         root.setContentsMargins(16, 14, 16, 0)
         root.setSpacing(10)
         root.addWidget(self._build_provenance())
-        root.addWidget(self._build_series_label())
         if self._is_available():
             root.addWidget(self._build_body(), stretch=1)
         else:
@@ -212,41 +210,47 @@ class CurveInspectorWindow(QWidget):
     def _build_provenance(self) -> QFrame:
         frame = QFrame()
         frame.setObjectName("provenance")
-        layout = QHBoxLayout(frame)
+        layout = QVBoxLayout(frame)
         layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
-        lbl_asof = QLabel("Curve as-of:")
+        # Row 1: series label (rich text, same content as before)
+        series_lbl = QLabel()
+        series_lbl.setTextFormat(Qt.TextFormat.RichText)
+        series_lbl.setText(self._series_label_html())
+        series_lbl.setStyleSheet(f"color: {_INK}; font-size: 13px; border: none;")
+        series_lbl.setWordWrap(True)
+        layout.addWidget(series_lbl)
+
+        # Row 2: 1px divider in callout-edge color
+        divider = QWidget()
+        divider.setFixedHeight(1)
+        divider.setStyleSheet(f"background: {_CALLOUT_EDGE};")
+        layout.addWidget(divider)
+
+        # Row 3: as-of row — uppercase label + mono date value
+        asof_row = QWidget()
+        asof_row.setStyleSheet("background: transparent;")
+        asof_layout = QHBoxLayout(asof_row)
+        asof_layout.setContentsMargins(0, 0, 0, 0)
+        asof_layout.setSpacing(6)
+
+        lbl_asof = QLabel("CURVE AS-OF")
         lbl_asof.setStyleSheet(
-            f"color: {_INK_3}; font-size: 11px; letter-spacing: 0.05em; border: none;"
+            f"color: {_INK_3}; font-size: 9px; letter-spacing: 0.06em; border: none;"
         )
 
         val_asof = QLabel(self._provenance_asof())
         val_asof.setStyleSheet(
             f"font-family: Consolas, 'Courier New', monospace; "
-            f"font-size: 11px; font-weight: 600; color: {_INK}; border: none;"
+            f"font-size: 9px; font-weight: 500; color: {_INK}; border: none;"
         )
 
-        badge = QLabel(self._provenance_badge())
-        badge.setStyleSheet(
-            f"font-family: Consolas, 'Courier New', monospace; font-size: 11px; "
-            f"color: {_INK_2}; background: {_PANEL}; "
-            f"border: 1px solid {_CALLOUT_EDGE}; border-radius: 3px; padding: 3px 8px;"
-        )
-
-        layout.addWidget(lbl_asof)
-        layout.addWidget(val_asof)
-        layout.addStretch()
-        layout.addWidget(badge)
+        asof_layout.addWidget(lbl_asof)
+        asof_layout.addWidget(val_asof)
+        asof_layout.addStretch()
+        layout.addWidget(asof_row)
         return frame
-
-    def _build_series_label(self) -> QLabel:
-        lbl = QLabel()
-        lbl.setTextFormat(Qt.TextFormat.RichText)
-        lbl.setText(self._series_label_html())
-        lbl.setStyleSheet(f"color: {_INK}; font-size: 13px; padding: 2px 2px 4px;")
-        lbl.setWordWrap(True)
-        return lbl
 
     def _build_body(self) -> QWidget:
         body = QWidget()
@@ -276,7 +280,7 @@ class CurveInspectorWindow(QWidget):
         chart.setMargins(QMargins(4, 4, 4, 4))
         chart.legend().setVisible(False)
 
-        xs = [float(v.business_days) for v in self._curve.vertices]
+        xs = self._chart_xs()
         ys = [float(v.rate * 100) for v in self._curve.vertices]
 
         line = QLineSeries()
@@ -297,11 +301,12 @@ class CurveInspectorWindow(QWidget):
         chart.addSeries(dots)
 
         x_axis = QValueAxis()
-        x_axis.setTitleText("Business days")
-        x_axis.setLabelFormat("%.0f")
+        x_axis.setTitleText("Years")
+        x_axis.setLabelFormat("%.1f")
         x_axis.setLabelsFont(QFont("Consolas", 8))
         x_axis.setTitleFont(QFont("Segoe UI", 9))
-        x_axis.setRange(0, max(xs) * 1.02 if xs else 100)
+        x_axis.setRange(0, max(xs) * 1.02 if xs else 10)
+        x_axis.setTickCount(7)
         x_axis.setGridLineColor(QColor(_RULE_2))
 
         y_min, y_max = min(ys), max(ys)
