@@ -7,8 +7,8 @@ the three windows share this code.
 
 from __future__ import annotations
 
-from PySide6.QtCharts import QChart, QChartView, QLineSeries, QScatterSeries, QValueAxis
-from PySide6.QtCore import QEvent, QMargins, QPointF, Qt, QTimer
+from PySide6.QtCharts import QChart, QChartView, QDateTimeAxis, QLineSeries, QScatterSeries, QValueAxis
+from PySide6.QtCore import QDate, QDateTime, QEvent, QMargins, QPointF, Qt, QTime, QTimer
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from justfixed.domain.rates import _format_brazilian_percent
-from justfixed.engine.calendar import BUSINESS_DAYS_PER_YEAR, add_business_days
+from justfixed.engine.calendar import add_business_days
 from justfixed.engine.curve import Curve
 from justfixed.engine.fetcher import FetchResult
 
@@ -140,36 +140,48 @@ class CurveInspectorWindow(QWidget):
         anchor = self._curve.anchor.strftime("%Y-%m-%d")
         return f"Curve: justfixed-data ({anchor})  ·  {len(self._curve.vertices)} vertices"
 
-    def _table_rows(self) -> list[tuple[str, str, str]]:
-        """Returns [(tenor, settle_date, rate_pct), ...] for the curve."""
+    def _table_rows(self) -> list[tuple[str, str]]:
+        """Returns [(settle_date, rate_pct), ...] for the curve."""
         if not (self._curve and self._curve.vertices):
             return []
         rows = []
         for v in self._curve.vertices:
-            tenor = f"{v.business_days} bd"
             settle = add_business_days(self._curve.anchor, v.business_days)
             settle_str = settle.strftime("%d/%m/%Y")
             rate_pct = _format_brazilian_percent(v.rate * 100)
-            rows.append((tenor, settle_str, rate_pct))
+            rows.append((settle_str, rate_pct))
         return rows
 
     def _chart_xs(self) -> list[float]:
-        """X values for the chart: business_days / BUSINESS_DAYS_PER_YEAR for each vertex."""
+        """X values for the chart: settlement date as milliseconds since UTC epoch."""
         if not (self._curve and self._curve.vertices):
             return []
-        return [v.business_days / BUSINESS_DAYS_PER_YEAR for v in self._curve.vertices]
+        result = []
+        for v in self._curve.vertices:
+            settle = add_business_days(self._curve.anchor, v.business_days)
+            qdt = QDateTime(
+                QDate(settle.year, settle.month, settle.day),
+                QTime(0, 0, 0),
+                Qt.TimeSpec.UTC,
+            )
+            result.append(float(qdt.toMSecsSinceEpoch()))
+        return result
 
     @staticmethod
     def _vertex_index_for_point(
         xs: list[float], ys: list[float], px: float, py: float
     ) -> int | None:
-        """Return the vertex index whose (x, y) matches (px, py) exactly, or None."""
+        """Return the index of the nearest vertex to (px, py), or None if xs is empty.
+
+        Uses nearest-vertex semantics rather than an exact-equality gate.
+        QScatterSeries.hovered only fires when the cursor is genuinely over a
+        plotted point, so the nearest vertex is always the correct match.
+        An absolute tolerance (e.g. 1e-9) breaks at ms-epoch x-scales (~1.7e12)
+        where one floating-point ULP is on the order of 1e-4.
+        """
         if not xs:
             return None
-        best = min(range(len(xs)), key=lambda i: abs(xs[i] - px) + abs(ys[i] - py))
-        if abs(xs[best] - px) < 1e-9 and abs(ys[best] - py) < 1e-9:
-            return best
-        return None
+        return min(range(len(xs)), key=lambda i: abs(xs[i] - px) + abs(ys[i] - py))
 
     # ── Hover-sync handlers ───────────────────────────────────────────────────
 
@@ -406,14 +418,20 @@ class CurveInspectorWindow(QWidget):
         chart.addSeries(self._highlight_dot)
         dots.hovered.connect(self._on_chart_hover)
 
-        x_axis = QValueAxis()
-        x_axis.setTitleText("Years")
-        x_axis.setLabelFormat("%.1f")
-        x_axis.setLabelsFont(QFont("Consolas", 8))
+        x_axis = QDateTimeAxis()
+        x_axis.setTitleText("Settlement date")
+        x_axis.setFormat("MMM yyyy")
+        x_axis.setLabelsFont(QFont("Segoe UI", 8))
         x_axis.setTitleFont(QFont("Segoe UI", 9))
-        x_axis.setRange(0, max(xs) * 1.02 if xs else 10)
         x_axis.setTickCount(7)
         x_axis.setGridLineColor(QColor(_RULE_2))
+        if xs:
+            span_ms = max(xs) - min(xs)
+            margin_ms = int(span_ms * 0.02)
+            x_axis.setRange(
+                QDateTime.fromMSecsSinceEpoch(int(min(xs)) - margin_ms),
+                QDateTime.fromMSecsSinceEpoch(int(max(xs)) + margin_ms),
+            )
 
         y_min, y_max = min(ys), max(ys)
         y_margin = max((y_max - y_min) * 0.05, 0.1)
@@ -453,13 +471,11 @@ class CurveInspectorWindow(QWidget):
 
     def _build_table(self) -> QTableWidget:
         rows = self._table_rows()
-        table = QTableWidget(len(rows), 3)
-        table.setHorizontalHeaderLabels(["Tenor", "Settles on", "Rate a.a."])
-        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
-        table.setColumnWidth(0, 80)
-        table.setColumnWidth(2, 90)
+        table = QTableWidget(len(rows), 2)
+        table.setHorizontalHeaderLabels(["Settles on", "Rate a.a."])
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        table.setColumnWidth(1, 90)
         table.verticalHeader().setVisible(False)
         table.setAlternatingRowColors(True)
         table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
@@ -467,15 +483,12 @@ class CurveInspectorWindow(QWidget):
         table.setShowGrid(False)
         table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
-        for r, (tenor, settle, rate) in enumerate(rows):
-            t_item = QTableWidgetItem(tenor)
-            t_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        for r, (settle, rate) in enumerate(rows):
             s_item = QTableWidgetItem(settle)
             r_item = QTableWidgetItem(rate)
             r_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            table.setItem(r, 0, t_item)
-            table.setItem(r, 1, s_item)
-            table.setItem(r, 2, r_item)
+            table.setItem(r, 0, s_item)
+            table.setItem(r, 1, r_item)
         self._table = table
         table.setMouseTracking(True)
         table.viewport().setMouseTracking(True)

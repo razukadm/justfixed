@@ -8,10 +8,11 @@ unavailable-state degradation, and hover-sync index mapping.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+from justfixed.engine.calendar import add_business_days
 from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fetcher import FetchResult
 from justfixed.ui.curve_inspector import (
@@ -27,6 +28,11 @@ from justfixed.ui.curve_inspector import (
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _settle_ms(d: date) -> float:
+    """Milliseconds since UTC epoch for midnight UTC on date d."""
+    return float(datetime(d.year, d.month, d.day, tzinfo=timezone.utc).timestamp() * 1000)
+
 
 def _make_curve(n: int = 3, anchor: str = "2026-05-20") -> Curve:
     vertices = tuple(
@@ -169,25 +175,25 @@ class TestTableRows:
         rows = CurveInspectorWindow._table_rows(_mock(SERIES_CDI, curve=curve))
         assert len(rows) == 47
 
-    def test_each_row_has_three_elements(self) -> None:
+    def test_each_row_has_two_elements(self) -> None:
         curve = _make_curve(1)
         rows = CurveInspectorWindow._table_rows(_mock(SERIES_CDI, curve=curve))
-        assert len(rows[0]) == 3
+        assert len(rows[0]) == 2
 
-    def test_tenor_ends_with_bd(self) -> None:
+    def test_settle_date_is_first_column(self) -> None:
         curve = _make_curve(1)
         rows = CurveInspectorWindow._table_rows(_mock(SERIES_CDI, curve=curve))
-        assert rows[0][0].endswith(" bd")
+        assert "/" in rows[0][0]
 
-    def test_tenor_shows_business_day_count(self) -> None:
-        curve = _make_curve(1)  # first vertex at 63 bd
+    def test_rate_is_second_column(self) -> None:
+        curve = _make_curve(1)
         rows = CurveInspectorWindow._table_rows(_mock(SERIES_CDI, curve=curve))
-        assert rows[0][0] == "63 bd"
+        assert "%" in rows[0][1]
 
     def test_rate_uses_brazilian_comma_format(self) -> None:
         curve = _make_curve(1)
         rows = CurveInspectorWindow._table_rows(_mock(SERIES_CDI, curve=curve))
-        rate_str = rows[0][2]
+        rate_str = rows[0][1]
         assert "," in rate_str
         assert "%" in rate_str
 
@@ -195,7 +201,7 @@ class TestTableRows:
         curve = _make_curve(1)
         rows = CurveInspectorWindow._table_rows(_mock(SERIES_CDI, curve=curve))
         # The fractional part should not contain a dot
-        rate_str = rows[0][2].rstrip("%")
+        rate_str = rows[0][1].rstrip("%")
         assert "." not in rate_str.split(",")[1] if "," in rate_str else True
 
     def test_empty_when_curve_none(self) -> None:
@@ -205,7 +211,7 @@ class TestTableRows:
     def test_settle_date_format_ddmmyyyy(self) -> None:
         curve = _make_curve(1)
         rows = CurveInspectorWindow._table_rows(_mock(SERIES_CDI, curve=curve))
-        settle = rows[0][1]
+        settle = rows[0][0]
         parts = settle.split("/")
         assert len(parts) == 3
         assert len(parts[0]) == 2   # dd
@@ -257,18 +263,24 @@ class TestProvenanceWithData:
 # ── Chart x values ────────────────────────────────────────────────────────────
 
 class TestChartXValues:
-    def test_chart_xs_converts_bd_to_years(self) -> None:
-        curve = _make_curve(3)  # vertices at 63, 126, 189 bd
+    def test_chart_xs_returns_settlement_date_ms(self) -> None:
+        curve = _make_curve(3, anchor="2026-05-20")
         m = _mock(SERIES_CDI, curve=curve)
         xs = CurveInspectorWindow._chart_xs(m)
-        assert xs == [63 / 252, 126 / 252, 189 / 252]
+        anchor = date.fromisoformat("2026-05-20")
+        expected = [
+            _settle_ms(add_business_days(anchor, 63)),
+            _settle_ms(add_business_days(anchor, 126)),
+            _settle_ms(add_business_days(anchor, 189)),
+        ]
+        assert xs == expected
 
-    def test_chart_xs_uses_business_days_per_year_constant(self) -> None:
-        from justfixed.engine.calendar import BUSINESS_DAYS_PER_YEAR
-        curve = _make_curve(1)
+    def test_chart_xs_first_value_matches_first_settlement_date(self) -> None:
+        curve = _make_curve(1, anchor="2026-05-20")
         m = _mock(SERIES_CDI, curve=curve)
         xs = CurveInspectorWindow._chart_xs(m)
-        assert xs[0] == 63 / BUSINESS_DAYS_PER_YEAR
+        settle = add_business_days(date.fromisoformat("2026-05-20"), 63)
+        assert xs[0] == _settle_ms(settle)
 
     def test_chart_xs_empty_when_no_curve(self) -> None:
         m = _mock(SERIES_CDI, curve=None)
@@ -282,48 +294,56 @@ class TestChartXValues:
 
 # ── Hover-sync index mapping ──────────────────────────────────────────────────
 
+_MS_A = 1_700_000_000_000.0
+_MS_B = 1_710_000_000_000.0
+_MS_C = 1_720_000_000_000.0
+
+
 class TestVertexIndexForPoint:
-    def test_matches_first_vertex(self) -> None:
-        xs = [0.25, 0.5, 0.75]
+    def test_matches_first_vertex_approximately(self) -> None:
+        # Qt hovered signal hands back near-but-not-bit-identical values
+        xs = [_MS_A, _MS_B, _MS_C]
         ys = [14.40, 14.41, 14.42]
-        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 0.25, 14.40) == 0
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, _MS_A + 50, 14.40) == 0
 
-    def test_matches_middle_vertex(self) -> None:
-        xs = [0.25, 0.5, 0.75]
+    def test_matches_middle_vertex_approximately(self) -> None:
+        xs = [_MS_A, _MS_B, _MS_C]
         ys = [14.40, 14.41, 14.42]
-        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 0.5, 14.41) == 1
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, _MS_B + 50, 14.41) == 1
 
-    def test_matches_last_vertex(self) -> None:
-        xs = [0.25, 0.5, 0.75]
+    def test_matches_last_vertex_approximately(self) -> None:
+        xs = [_MS_A, _MS_B, _MS_C]
         ys = [14.40, 14.41, 14.42]
-        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 0.75, 14.42) == 2
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, _MS_C - 50, 14.42) == 2
 
-    def test_no_close_match_returns_none(self) -> None:
-        xs = [0.25, 0.5, 0.75]
+    def test_nearest_returned_for_off_point_input(self) -> None:
+        # Even a far-off query returns the nearest vertex — nearest-match, not exact-gate
+        xs = [_MS_A, _MS_B, _MS_C]
         ys = [14.40, 14.41, 14.42]
-        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 1.0, 14.50) is None
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, _MS_C + 1e11, 14.50) == 2
 
     def test_empty_lists_return_none(self) -> None:
-        assert CurveInspectorWindow._vertex_index_for_point([], [], 0.5, 14.0) is None
+        assert CurveInspectorWindow._vertex_index_for_point([], [], _MS_A, 14.0) is None
 
-    def test_single_vertex_matches(self) -> None:
-        xs = [63 / 252]
+    def test_single_vertex_matches_approximately(self) -> None:
+        xs = [_MS_A]
         ys = [14.40]
-        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 63 / 252, 14.40) == 0
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, _MS_A + 50, 14.40) == 0
 
-    def test_near_but_not_matching_returns_none(self) -> None:
-        xs = [0.25]
+    def test_near_but_not_exact_still_matches(self) -> None:
+        # y offset of 0.001 — nearest-match returns the only vertex, not None
+        xs = [_MS_A]
         ys = [14.40]
-        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 0.25, 14.401) is None
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, _MS_A, 14.401) == 0
 
     def test_returns_int_for_valid_point(self) -> None:
-        xs = [63 / 252, 126 / 252]
+        xs = [_MS_A, _MS_B]
         ys = [14.40, 14.41]
-        result = CurveInspectorWindow._vertex_index_for_point(xs, ys, 63 / 252, 14.40)
+        result = CurveInspectorWindow._vertex_index_for_point(xs, ys, _MS_A + 50, 14.40)
         assert isinstance(result, int)
 
-    def test_uses_vertex_order_not_closest_by_distance_alone(self) -> None:
-        # Two vertices with identical x, differing y — each maps to its own index
-        xs = [0.5, 0.5]
+    def test_uses_full_xy_metric_for_disambiguation(self) -> None:
+        # Two vertices with identical x, differing y — nearest by full x+y metric picks correct one
+        xs = [_MS_A, _MS_A]
         ys = [14.40, 14.50]
-        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, 0.5, 14.50) == 1
+        assert CurveInspectorWindow._vertex_index_for_point(xs, ys, _MS_A, 14.50) == 1
