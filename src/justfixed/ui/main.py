@@ -43,6 +43,12 @@ from PySide6.QtWidgets import (
 )
 
 from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
+from justfixed.ui.curve_inspector import (
+    CurveInspectorWindow,
+    SERIES_CDI,
+    SERIES_IPCA,
+    SERIES_PRE,
+)
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.money import Money
@@ -1429,6 +1435,17 @@ class MainWindow(QMainWindow):
         self._hide_matured_action.setChecked(True)
         self._hide_matured_action.triggered.connect(self._on_hide_matured_toggled)
         view_menu.addAction(self._hide_matured_action)
+        view_menu.addSeparator()
+        for _title, _series in (
+            ("CDI Curve", SERIES_CDI),
+            ("IPCA-real Curve", SERIES_IPCA),
+            ("Prefixado Curve", SERIES_PRE),
+        ):
+            _act = QAction(_title, self)
+            _act.triggered.connect(
+                lambda checked=False, s=_series: self._open_curve_inspector(s)
+            )
+            view_menu.addAction(_act)
         help_menu = menu_bar.addMenu("Help")
         about_action = QAction("About JustFixed", self)
         about_action.triggered.connect(self._on_about_clicked)
@@ -2028,6 +2045,23 @@ class MainWindow(QMainWindow):
 
     def _set_startup_tab(self) -> None:
         self._tabs.setCurrentIndex(1 if not self._investments else 0)
+
+    # ── Curve Inspector ───────────────────────────────────────────────────────
+
+    def _open_curve_inspector(self, series: str) -> None:
+        curve = {
+            SERIES_CDI:  self._cdi_curve,
+            SERIES_IPCA: self._ipca_curve,
+            SERIES_PRE:  self._pre_curve,
+        }[series]
+        w = CurveInspectorWindow(
+            series=series,
+            curve=curve,
+            fetch_result=self._fetch_result,
+            parent=self,
+        )
+        w.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        w.show()
 
     # ── Project ───────────────────────────────────────────────────────────────
 
