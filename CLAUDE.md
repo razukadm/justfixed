@@ -8,10 +8,13 @@ this file is the working-style and conventions summary.
 
 JustFixed is a Windows desktop portfolio tracker for Brazilian fixed-income investments
 (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, single-user. Engine,
-persistence, exports, and the XP importer are complete; the UI (PySide6) is through
-B24 (read-only viewer, conglomerate curation, filter dropdowns, totals strip,
-Conglomerates accordion tab) plus B9a (live curve fetch, seed DB loader, dev view tab).
-The README covers the user-facing intent; ARCHITECTURE.md covers the internal shape.
+persistence, exports, and the XP, BTG, and BB importers are complete; the UI (PySide6)
+covers B24, B9a, B27, B34, C′ partial, and the Curve Inspector (read-only viewer,
+conglomerate curation, filter dropdowns, Conglomerates accordion tab, live curve fetch,
+seed DB loader, dev view, Curve Inspector, manual entry, per-investment delete).
+Projection detail view (accrual breakdown / IR tax / net-at-maturity in the detail
+panel) remains. The README covers the user-facing intent; ARCHITECTURE.md covers the
+internal shape.
 
 ## Architectural shape
 
@@ -20,10 +23,10 @@ Strict layer ordering, no upward dependencies:
 - `domain/` — pure value/entity types (Money, Rate, Issuer, Investment). No I/O.
 - `persistence/` — SQLAlchemy models, mappers, repositories, alembic migrations.
 - `engine/` — calendar, accrual, tax, projection, fgc. Pure functions over domain types.
-- `importers/` — three layers: parser (xlsx → strings), mapper (strings → typed),
-  loader (typed → persisted).
+- `importers/` — three layers: parser (file → strings), mapper (strings → typed),
+  loader (typed → persisted). Three complete pipelines: XP (XLSX), BTG (XLSX), BB (fixed-width .txt).
 - `exports/` — calendar.py: iCalendar (.ics) export. Depends on domain + engine, not persistence.
-- `ui/` — PySide6 single-window app. Milestones A′, B′, B24, and B9a shipped (read-only viewer, conglomerate curation, Conglomerates accordion tab, dev view with curve/seed status). See docs/UI_DESIGN.md.
+- `ui/` — PySide6 single-window app. Milestones A′, B′, B24, B9a, B27, B34, C′ partial, and Curve Inspector shipped (read-only viewer, conglomerate curation, Conglomerates accordion tab, dev view with curve/seed status, Curve Inspector, manual entry, per-investment delete). See docs/UI_DESIGN.md.
 
 Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 
@@ -35,7 +38,7 @@ Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 - **Domain types validate in `__post_init__`.** Corrupt data fails to load with a
   clear `ValueError`. The domain is the gatekeeper for invariants.
 - **Tests are the spec.** If behavior changes, the test changes first. Currently
-  622 tests, ~4 second runtime, no skips. Tests pass on every commit.
+  998 tests, ~5 second runtime, no skips. Tests pass on every commit.
 - **Hand-compute financial test expected values.** Show all decimals; don't approximate.
   Approximation has been a real source of bugs.
 - **Repositories are the only public access to persistence.** Engine, UI, and importers
@@ -79,8 +82,8 @@ Re-importing the same statement does not duplicate investments. The natural key 
 
 There is **no unique constraint** on this tuple in the database. A user can legitimately
 hold two identical positions through separate orders; only the importer enforces
-deduplication, not the schema. Manual UI entry (Phase 2) is free to create natural-key
-duplicates.
+deduplication, not the schema. The manual-entry UI (C′, shipped) is free to create
+natural-key duplicates.
 
 ## The "audit when it crashes" rule
 

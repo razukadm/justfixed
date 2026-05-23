@@ -24,12 +24,16 @@ careful pace this project uses (2–4 hours each).
 
 ### 1. UI — PySide6
 
-**Status:** Milestones A′, A′-plus, B′, and B′ companion complete. See
-`docs/UI_DESIGN.md` and `docs/ARCHITECTURE.md` for what shipped.
+**Status:** Milestones A′, A′-plus, B′, B′ companion, B24, B9a, B27,
+C′ partial, B34, and Curve Inspector complete. See `docs/UI_DESIGN.md`
+and `docs/ARCHITECTURE.md` for what shipped.
 
-**C′ — manual entry and detail view (~3-4 sessions, deferred).**
-Manual-entry form for non-XP investments, per-investment detail
-view with accrual breakdown and IR tax.
+**C′ — projection detail view (remaining scope).**
+Manual-entry form (C′ commits 1–6, commit `08a2ead`) and per-investment
+delete (B34, commit `a0e333e`) have shipped. The remaining C′ gap is the
+per-investment projection detail view: accrual breakdown, IR tax, and
+net-at-maturity shown in the detail panel. This is the main open feature
+in this area. See B44 below.
 
 Deferred scope (from B27, 2026-05-19): display payment frequency for
 each investment (Mensal / Vencimento / Trimestral / Semestral / Anual).
@@ -48,6 +52,25 @@ All three layers shipped (2026-05-20). Commit range: btg.py (parser) through
 loader: `Broker` enum, `detect_broker` (sheet-name fingerprints), `load_statement`
 dispatcher. UI rewired to a single broker-agnostic "Import Statement" button.
 See the session-status section below for full details.
+
+### 3a. BB importer — SHIPPED
+
+All three layers shipped (2026-05-23). Commits `2544a43` (Layer 1 parser),
+`251c120` (Layer 2 mapper), `45e4f58` (Layer 3 loader + detection wiring).
+Layer 1 (`bb.py`) reads a fixed-width plain-text BB/SISBB terminal dump
+(`.txt`), not XLSX. Layer 2 infers rate type from TAXA magnitude via
+`_RATE_BANDS`. Layer 3 skips matured positions (saldo == zero) before
+persisting. The `Broker.BB` enum member and dispatch case were added to
+`detection.py`. This is the third broker importer — the stated trigger for
+cashing in B32 and B33.
+
+### 3b. Curve Inspector — SHIPPED
+
+Three read-only yield-curve windows shipped (2026-05-23). Commits `58d4259`
+(Part 1, static), `bbd728e` (provenance callout), `b98bd10` (chart/table
+hover-sync), `1017af1` (date-based x-axis and 2-column table). Accessible
+from the View menu — one window each for CDI, PRE, and IPCA curves.
+`ui/curve_inspector.py`; wired from `MainWindow._open_curve_inspector`.
 
 ### 4. Model guarantee funds (FGC / FGCoop) as first-class entities
 
@@ -205,10 +228,10 @@ pipeline).
 or when a beta user from a different broker asks.
 
 **Architectural note:** The three-layer importer pattern
-(parser/mapper/loader) generalizes. A second broker importer would
-follow XP's footprint. If a third importer is ever built, that's the
-moment to consider whether common parser/mapper utilities should be
-extracted — not before.
+(parser/mapper/loader) generalizes. XP (XLSX), BTG (XLSX), and BB
+(fixed-width .txt) are all complete. The third importer (BB) has
+shipped — the stated trigger for extracting shared utilities (B32, B33)
+has now fired. Those items are no longer parked.
 
 ### B9. DI-curve mark-to-market — SPLIT
 
@@ -677,8 +700,10 @@ draw from a clean internal API. Deferred because two importers don't
 yet justify the extraction; the private import is a known smell, not a
 breaking problem.
 
-**Trigger to revisit:** When a third broker importer is added, or
-sooner if `xp_mapper` internals change and the import breaks.
+**Trigger to revisit:** ~~When a third broker importer is added~~ — the
+BB importer (commits `2544a43`, `251c120`, `45e4f58`) is the third broker.
+The trigger has fired; this item is ready to pick up. The secondary
+trigger (xp_mapper internals change and break the import) also still applies.
 
 ### B33. Unified issuer-kind classifier across broker importers
 
@@ -694,9 +719,10 @@ development-bank exception list; BTG needed a broader kind map from the
 start. A shared `importers/_kind_catalog.py` (or equivalent) would give
 all loaders a single name→IssuerKind lookup with one source of truth.
 
-**Trigger to revisit:** When a third broker importer is added, or sooner
-if the catalogs drift (e.g. a BTG development bank surfaces that is not
-in XP's set). See B32 as a sibling importer-coupling item.
+**Trigger to revisit:** ~~When a third broker importer is added~~ — the
+BB importer is the third broker; the trigger has fired. This item is ready
+to pick up. The secondary trigger (catalog drift between importers) also
+still applies. See B32 as a sibling importer-coupling item.
 
 **Broader scope note:** The same coupling smell applies to `LoadResult`:
 it is defined in `xp_loader.py` and imported by `btg_loader.py` — a
@@ -705,36 +731,21 @@ work happens, `LoadResult` (and any other cross-importer types) should
 move to a common module (e.g. `importers/loader_types.py`) so no loader
 depends on a sibling loader's internals.
 
-### B34. Delete investment
+### B34. Delete investment — SHIPPED
 
-**Source:** Session 2026-05-21, after C′ commit 6 (manual-entry form) shipped.
+**Shipped:** 2026-05-22, commit `a0e333e`. Detail-panel delete button
+(`InvestmentDetailPanel._on_delete_clicked`), confirmed via `QMessageBox`,
+calls `InvestmentRepository.delete`. `MainWindow._on_investment_deleted`
+removes the entry from the projection cache and refreshes both tabs.
 
-**What it is:** A user-facing action to remove an investment from the
-portfolio. `InvestmentRepository.delete` already exists at the persistence
-layer; this is the UI affordance plus the policy decisions around it.
+**What shipped:** delete applies to all investments regardless of source
+(imported or manually created). No source branch, no tombstone, no orphan-issuer
+cleanup — the issuer is left in place when its last investment is deleted.
 
-**Open decision — scope:** whether Delete applies to manually-created
-investments only, or also to imported ones. Deleting an imported investment
-is in tension with import idempotency: the importer's natural-key
-find-or-create (`find_by_natural_key`, the 5-tuple) has no "deleted"
-tombstone, so the next statement import would simply re-create a deleted
-imported investment. Manual-only Delete sidesteps this entirely. If imported
-investments should be deletable, it needs either a soft-delete/tombstone
-mechanism the importer respects, or an accepted "re-import resurrects it"
-behaviour. Resolve before implementation.
-
-**Open decision — issuer cleanup:** if deleting the last investment for a
-manually-added issuer, is the now-orphan issuer removed or left in place?
-(C′ commit 6's manual-entry form already accepts orphan issuers as harmless;
-Delete should decide whether it actively cleans them up.) Related: B19
-(issuer edit/delete UI) covers issuer removal directly — the two should be
-designed consistently.
-
-**Why deferred:** Surfaced as a feature idea once creation shipped; the
-scope decisions above need resolving before it's built.
-
-**Trigger to revisit:** When the user needs to remove a position — a sold
-investment, a correction, or a test entry.
+**Known limitation:** re-importing a statement that contained a deleted
+imported investment resurrects it, because the importer's natural-key
+find-or-create (`find_by_natural_key`) has no "deleted" record to consult.
+This is accepted behaviour, not a planned fix.
 
 ### B35. Run the curve daily-routine inside JustFixed (dev mode)
 
@@ -936,6 +947,35 @@ alongside B38.
 
 ---
 
+### B44. C′ projection detail view — accrual breakdown, IR tax, net-at-maturity
+
+**Source:** C′ design; the open gap first recorded in the 2026-05-20
+session-status section after C′ commits 1–6 landed.
+
+**What it is:** The investment detail panel (`InvestmentDetailPanel`)
+currently shows the static investment fields (issuer, product, rate, dates,
+principal). The remaining C′ scope is adding a computed projection section
+below those fields: accrual-to-date, IR tax bracket and amount, and
+net-at-maturity. `ProjectionResult` already exposes all these values;
+this is purely a UI wiring and layout task.
+
+**Why not yet built:** C′ commits 1–6 covered manual entry; the projection
+display was flagged as the remaining gap but not scheduled in the original
+C′ plan. Promoted here from the session-status note so it has a trackable
+entry.
+
+**Dependencies:** Requires a projection to be cached for the selected
+investment. The panel should show placeholder text ("Project first") when
+no projection is available. `_ASSUMED_CDI` / `_ASSUMED_IPCA` are the
+assumption source until B10 lands.
+
+**Effort:** ~1 session. Engine and data are already in place; this is
+reading from `ProjectionResult` and laying out the fields.
+
+**Trigger to revisit:** Now — this is the most immediate open UI feature.
+
+---
+
 ## Part 3 — Open questions
 
 Decisions that surfaced as "we should figure this out before X"
@@ -1075,16 +1115,51 @@ not wired into the detail panel UI — already tracked as B34.
 
 ### Next broker importer — touchpoints
 
-When a third broker is added, the only touchpoints are:
-1. A `Broker` enum member in `detection.py`
-2. A fingerprint case in `detect_broker`
+~~When a third broker is added~~ — the BB importer (commits `2544a43`,
+`251c120`, `45e4f58`) is now the third. Touchpoints were exactly as predicted:
+1. `Broker.BB` enum member in `detection.py`
+2. A fingerprint case in `detect_broker` (BB is `.txt`; routed by extension,
+   then confirmed by a header line containing both `"SISBB"` and `"Banco do Brasil"`)
 3. A dispatch case in `load_statement`
 
-The UI does not change. A third importer is the stated trigger for cashing
-in B32 and B33.
+The UI did not change. The third-importer trigger for B32 and B33 has fired.
 
 ### Open items (pointers)
 
 B32 (shared Brazilian-number parsing), B33 (unified issuer-kind classifier),
 and the GuaranteeFund milestone (Part 1 §4, "Model guarantee funds
-(FGC / FGCoop) as first-class entities") remain open as previously recorded.
+(FGC / FGCoop) as first-class entities") remain open. B32 and B33 are no
+longer parked — the third-importer trigger fired with BB.
+
+---
+
+## Session status — 2026-05-23
+
+### BB importer — SHIPPED
+
+All three layers shipped. Commits `2544a43` (Layer 1), `251c120` (Layer 2),
+`45e4f58` (Layer 3 + detection). Parser reads fixed-width `.txt`, not XLSX.
+Mapper infers rate type from TAXA magnitude (`_RATE_BANDS`). Loader skips
+matured positions (saldo == zero). Verified against the synthetic fixture
+(`synthetic_bb_statement.txt`). Third-importer trigger for B32 and B33 has fired.
+
+### Curve Inspector — SHIPPED
+
+Three read-only yield-curve windows shipped. Commits `58d4259` (Part 1,
+static), `bbd728e` (provenance callout restructure), `b98bd10` (chart/table
+hover-sync, chart-hover crash fix), `1017af1` (date-based x-axis, 2-column
+table, hover-match fix at ms scale). Accessible from the View menu — CDI,
+PRE, IPCA. `ui/curve_inspector.py` wired from `MainWindow._open_curve_inspector`.
+
+### B34 — per-investment delete — SHIPPED
+
+Commit `a0e333e`. Detail-panel delete button, `QMessageBox` confirm,
+`InvestmentRepository.delete`, projection cache cleared. Applies to all
+investments; no tombstone. Re-importing resurrects a deleted imported
+investment (known, accepted).
+
+### Open items
+
+B44 (C′ projection detail view — accrual breakdown, IR tax, net-at-maturity
+in the detail panel) is the most immediate remaining UI feature. B32, B33,
+and the GuaranteeFund milestone remain open.

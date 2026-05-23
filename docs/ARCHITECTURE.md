@@ -13,13 +13,13 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Domain | Complete | 202 |
 | Persistence | Complete | 87 |
 | Engine | Complete | 181 |
-| Importers | Complete | 171 |
-| UI (PySide6) | B′, B′ companion, B24, B9a, and C′ partial complete (manual-entry shipped; projection detail pending) | 149 |
+| Importers | Complete — XP, BTG, and BB pipelines all three layers done | 253 |
+| UI (PySide6) | B′, B′ companion, B24, B9a, B27, B34, C′ partial, and Curve Inspector complete (manual-entry and delete shipped; projection detail pending) | 212 |
 | Exports (calendar / ICS) | Complete | 9 |
 | Tools (admin scripts) | Complete | 51 |
 | Build info | Complete | 3 |
 
-853 tests pass in ~12 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+998 tests pass in ~5 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -244,7 +244,7 @@ The engine exposes two FGC report functions. `fgc_concentration_report(investmen
 
 ## Importers (`src/justfixed/importers/`)
 
-The XP Investimentos and BTG Pactual pipelines are each split into three layers, all complete. A broker-detection layer (`importers/detection.py`) dispatches to the appropriate loader. Further multi-broker importers (Itaú, Nu) are Phase 2.
+The XP Investimentos, BTG Pactual, and Banco do Brasil pipelines are each split into three layers, all complete. A broker-detection layer (`importers/detection.py`) dispatches to the appropriate loader. Further multi-broker importers (Itaú, Nu) are Phase 2.
 
 ### Layer 1: `xp.py` — XLSX → strings
 
@@ -323,6 +323,14 @@ Further examples from the A′-plus testing cycle (commits `0099c02`, `897e66e`,
 - **BDMG created as a commercial bank.** BDMG is a development bank; the loader gained an explicit `_DEVELOPMENT_BANK_NAMES` lookup set so known development banks get the right `IssuerKind` at creation time.
 - **Parser read past the Renda Fixa section.** The XLSX has non-investment sections (Dividendos, Custódia Remunerada) after Renda Fixa. The parser gained a `_RENDA_FIXA_TERMINATORS` frozenset; hitting a terminator string breaks the reading loop.
 
+### BB importer: `bb.py`, `bb_mapper.py`, `bb_loader.py`
+
+Unlike XP and BTG (which parse XLSX files), BB's Layer 1 (`bb.py`) reads a fixed-width plain-text terminal dump (`.txt`) — specifically a BB/SISBB "RESUMO DAS APLICAÇÕES LCA" export. Columns are extracted by character-position slices, not cell references. The test fixture is `tests/importers/fixtures/synthetic_bb_statement.txt`.
+
+Layer 2 (`bb_mapper.py`) infers rate type from the bare numeric magnitude of the TAXA field using a `_RATE_BANDS` lookup table, because BB omits the rate-type label that XP and BTG include explicitly. This is the principal mapping quirk in the BB pipeline; the same `PostFixedCDI` vs `PostFixedCDIPlusSpread` ~700bp distinction documented above applies here — the magnitude bands are calibrated to keep them correctly separated.
+
+Layer 3 (`bb_loader.py`) skips matured positions (saldo == Money zero) before persisting. Matured BB rows carry past maturity dates that would fail domain invariants; filtering happens here rather than at the domain layer.
+
 ---
 
 ## Exports (`src/justfixed/exports/`)
@@ -367,9 +375,13 @@ Design choices:
 
 PySide6 single-window desktop application. Two tabs: **Conglomerates** (default landing, B24) and **Investments**. The Conglomerates tab shows an accordion layout — one collapsible section per conglomerate with summary totals, FGC status badge, and expandable detail rows (per-investment projected balance via sequential drawdown). The Investments tab imports an XP statement, displays investments in a table with per-row FGC concentration badges and an inline-editable Conglomerate column (B′ curation), and filters by conglomerate and issuer via dropdowns with a totals strip below the table (B′ companion). Both tabs share a projection cache populated by a single "Project as of today" button. Background work (statement loading, projection) runs on `QThread` workers; a single `_set_busy` guard prevents overlapping operations. Empty state (no investments loaded) swaps the table for a centered prompt via `QStackedWidget`.
 
-The module imports from `domain`, `persistence`, `engine.projection`, `engine.fgc`, `exports.calendar`, `importers.xp_loader`, `importers.btg_loader`, and `importers.detection`. It introduces no new architectural layer between itself and those — direct calls, no service or presenter layer.
+The module imports from `domain`, `persistence`, `engine.projection`, `engine.fgc`, `engine.conglomerate_report`, `exports.calendar`, `importers.detection` (which dispatches to the appropriate broker loader — XP, BTG, or BB), `importers.xp_loader` (for `LoadResult`), `importers.xp_mapper` (for `parse_brazilian_money`), and `ui.curve_inspector`. It introduces no new architectural layer between itself and those — direct calls, no service or presenter layer.
 
 CDI curve is fetched from `razukadm/justfixed-data` on launch (`engine/fetcher.py`); cached at `~/.justfixed/curve_cache.json`. The projection path uses the live curve when available; `_ASSUMED_CDI` is the offline fallback. (B9a shipped May 2026.)
+
+Three read-only Curve Inspector windows (`ui/curve_inspector.py`) are accessible from the View menu — one each for CDI, PRE, and IPCA curves. Each window shows a date-based chart (yield vs. date) and a two-column vertex table; chart and table hover in sync. `MainWindow._open_curve_inspector(series)` creates the window on demand, passing the in-memory curve and fetch result. (Shipped May 2026, commits `58d4259`–`1017af1`.)
+
+B34 per-investment delete shipped via `InvestmentDetailPanel._on_delete_clicked`: confirms via `QMessageBox`, calls `InvestmentRepository.delete`, then emits `investment_deleted`. `MainWindow._on_investment_deleted` removes the entry from the projection cache and refreshes both tabs. Delete applies to all investments regardless of source; no tombstone exists, so re-importing a statement resurrects any deleted imported investment. Orphan issuers are left in place. (Commit `a0e333e`.)
 
 UI tests live in `tests/ui/` and use a "real method, MagicMock self" pattern: actual `MainWindow` or `ConglomerateEditDelegate` methods are called with a `MagicMock(spec=...)` stand-in for `self`, avoiding Qt window instantiation entirely. Layout and interaction verification remains a human "build, run, look at it" loop.
 
@@ -379,7 +391,7 @@ See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′
 
 ## Test discipline
 
-**853 tests, ~12 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**998 tests, ~5 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
@@ -471,12 +483,12 @@ The project uses what's in `pyproject.toml` and nothing else. Don't add a new de
 
 In rough order:
 
-1. **UI — milestone C′ (detail view)** — per-investment detail view (accrual breakdown, IR tax, net at maturity). The manual-entry form shipped (commit 08a2ead); the projection detail view remains. ~1-2 sessions.
+1. **UI — C′ projection detail view** — per-investment accrual breakdown, IR tax, and net-at-maturity in the detail panel. Manual entry (C′ commits 1–6, commit `08a2ead`) and per-investment delete (B34, commit `a0e333e`) have shipped; the projection detail view is the remaining C′ gap. ~1-2 sessions.
 
 Phase 2 (post-MVP):
 - DI-curve mark-to-market
 - Real index data fetching (B3 for CDI history, IBGE for IPCA)
-- Multi-broker importers (Itaú, Nu)
+- Multi-broker importers (Itaú, Nu) — XP, BTG, and BB are complete
 - Backup/restore for the SQLite database
 
 ---
