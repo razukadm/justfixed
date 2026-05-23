@@ -836,6 +836,106 @@ Note: this ambiguity affects only the computed suggestion (part 3). The highligh
 
 ---
 
+### B42. Custodian (bank of custody) as a first-class field
+
+**Source:** Session 2026-05-23. This is the use case that B3 ("Calendar
+export — bank-of-custody field") was deferred waiting for — B3's trigger
+was "when the domain gains a custodian field (itself blocked on a use
+case requiring it)." That use case is now here.
+
+**What it is:** Record, for every investment, which institution holds
+custody of the certificate — distinct from the issuer. Brazilian fixed
+income separates the issuer (the entity that pays the principal back)
+from the custodian (the brokerage holding the position). Today JustFixed
+models only the issuer.
+
+**Scope:**
+- A custodian field on the `Investment` domain model (or a `Custodian`
+  entity if a custodian needs its own attributes — open decision below).
+- Persistence-schema migration with a backfill default for existing rows.
+- Importers set custodian from the detected broker: an XP statement
+  imports with custodian "XP", a BTG statement with "BTG", a BB
+  statement with "Banco do Brasil". The broker is already detected at
+  import (`detection.py`, `Broker` enum) — this routes that known value
+  into the new field instead of discarding it.
+- Manual-entry form (`_AddInvestmentPanel`): the user picks a custodian
+  from a list of existing custodians, or adds a new one.
+- A "Custodian" filter dropdown on the Investments tab, alongside the
+  existing filters.
+- Custodian shown in the investment detail panel.
+
+**Open decisions (resolve before implementation):**
+1. Free-form string vs. a `Custodian` entity. The issuer/conglomerate
+   precedent (Q1) chose a free-form string with autocomplete over a
+   dedicated entity. Custodian has fewer attributes than a conglomerate,
+   so the same call likely applies — but decide explicitly.
+2. Migration backfill default for existing investments. Candidates:
+   a literal "Unknown", or backfilling from import provenance where the
+   originating broker is recoverable. Imported rows may be backfillable;
+   manually-entered rows are not.
+3. Whether the Investments tab can absorb another column or whether
+   custodian is detail-panel-only. B27's note already flags the
+   Investments tab at its visual-density limit; the filter dropdown
+   may be the only tab-level surface, with the value shown in detail.
+
+**Dependencies:** Unblocks B3 (calendar export can carry the custodian
+once the domain has it). Crosses every layer (domain → persistence →
+importers → UI), so it is a multi-session piece, not a quick add.
+
+**Trigger to revisit:** Now — the use case is active. Sequence as its
+own milestone when picked up.
+
+---
+
+### B43. UI theme consolidation — tokens, global QSS, shared widgets
+
+**Source:** Session 2026-05-23 handoff document ("propagating the
+curve-inspector look to the rest of JustFixed").
+
+**What it is:** The Curve Inspector windows established a visual
+language (provenance callout, panel chrome, mono numerics, the green
+toolbar). The rest of the app predates it and carries scattered inline
+`setStyleSheet` calls, magic hex codes, and ad-hoc fonts. This entry
+consolidates styling into a single source of truth before more windows
+are built on the old pattern.
+
+**Scope (ordered — each step is a no-op-or-small visual diff except
+where noted):**
+1. `justfixed/ui/theme.py` — palette and type tokens as frozen
+   dataclasses (`Color`, `Font`). Replaces magic hex in `main.py`.
+2. `justfixed/ui/qss.py` — one global stylesheet applied once on the
+   `QApplication` before `MainWindow()`, replacing inline
+   `setStyleSheet` calls.
+3. Refactor `main.py` to consume tokens and `setProperty("role", ...)`
+   selectors instead of inline styles. Visual diff should be zero on
+   existing screens.
+4. Mono-numeric convention for all money/rate cells in the Investments
+   table, the detail panel, and the totals strip.
+5. Extract `ProvenanceCallout` and `Panel` widget classes into
+   `justfixed/ui/widgets.py`; a shared `justfixed/ui/format.py` for
+   the existing scattered locale/number formatters.
+6. Once the consolidation lands, remove the now-redundant dev-tab
+   curve summaries.
+
+**Order of operations:** land tokens + global QSS as a zero-visual-diff
+refactor first; verify existing screens look identical; then add the
+shared widgets; only then build new windows on top of them.
+
+**Why deferred:** Not blocking — the app works. But every new window
+built before this entry inherits the scattered-style pattern, so this
+should land before the next significant UI surface.
+
+**Relationship to B38:** B38 is the open-ended UI design-review pass.
+B43 is narrower and mechanical — a styling-infrastructure refactor with
+a concrete, already-written plan, not a design evaluation. B43 can
+proceed independently of B38; doing B43 first gives B38 a clean
+substrate to review.
+
+**Trigger to revisit:** Before the next significant new UI window, or
+alongside B38.
+
+---
+
 ## Part 3 — Open questions
 
 Decisions that surfaced as "we should figure this out before X"
