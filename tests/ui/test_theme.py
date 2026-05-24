@@ -117,3 +117,14 @@ class TestMakeStylesheet:
     def test_secondary_hover_in_stylesheet(self) -> None:
         from justfixed.ui.qss import make_stylesheet
         assert COLORS.SECONDARY_HOVER in make_stylesheet()
+
+    def test_contains_status_bar(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert "QStatusBar" in make_stylesheet()
+
+    def test_status_bar_uses_font_tokens(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        from justfixed.ui.theme import FONTS
+        sheet = make_stylesheet()
+        assert FONTS.UI_FAMILY in sheet
+        assert str(FONTS.UI_SIZE_MD) in sheet

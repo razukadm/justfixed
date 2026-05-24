@@ -26,6 +26,8 @@ from justfixed.domain.rates import _format_brazilian_percent
 from justfixed.engine.calendar import add_business_days
 from justfixed.engine.curve import Curve
 from justfixed.engine.fetcher import FetchResult
+from justfixed.ui.widgets.panel import Panel
+from justfixed.ui.widgets.provenance_callout import ProvenanceCallout
 
 # ── Cross-check URLs ──────────────────────────────────────────────────────────
 
@@ -268,7 +270,8 @@ class CurveInspectorWindow(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 14, 16, 0)
         root.setSpacing(10)
-        root.addWidget(self._build_provenance())
+        prov_as_of = self._curve.anchor if (self._curve and self._curve.anchor) else None
+        root.addWidget(ProvenanceCallout(self._series_label_html(), prov_as_of))
         if self._is_available():
             root.addWidget(self._build_body(), stretch=1)
         else:
@@ -316,51 +319,6 @@ class CurveInspectorWindow(QWidget):
             }}
         """)
 
-    def _build_provenance(self) -> QFrame:
-        frame = QFrame()
-        frame.setObjectName("provenance")
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(6)
-
-        # Row 1: series label (rich text, same content as before)
-        series_lbl = QLabel()
-        series_lbl.setTextFormat(Qt.TextFormat.RichText)
-        series_lbl.setText(self._series_label_html())
-        series_lbl.setStyleSheet(f"color: {_INK}; font-size: 13px; border: none;")
-        series_lbl.setWordWrap(True)
-        layout.addWidget(series_lbl)
-
-        # Row 2: 1px divider in callout-edge color
-        divider = QWidget()
-        divider.setFixedHeight(1)
-        divider.setStyleSheet(f"background: {_CALLOUT_EDGE};")
-        layout.addWidget(divider)
-
-        # Row 3: as-of row — uppercase label + mono date value
-        asof_row = QWidget()
-        asof_row.setStyleSheet("background: transparent;")
-        asof_layout = QHBoxLayout(asof_row)
-        asof_layout.setContentsMargins(0, 0, 0, 0)
-        asof_layout.setSpacing(6)
-
-        lbl_asof = QLabel("CURVE AS-OF")
-        lbl_asof.setStyleSheet(
-            f"color: {_INK_3}; font-size: 9px; letter-spacing: 0.06em; border: none;"
-        )
-
-        val_asof = QLabel(self._provenance_asof())
-        val_asof.setStyleSheet(
-            f"font-family: Consolas, 'Courier New', monospace; "
-            f"font-size: 9px; font-weight: 500; color: {_INK}; border: none;"
-        )
-
-        asof_layout.addWidget(lbl_asof)
-        asof_layout.addWidget(val_asof)
-        asof_layout.addStretch()
-        layout.addWidget(asof_row)
-        return frame
-
     def _build_body(self) -> QWidget:
         body = QWidget()
         body.setStyleSheet(f"background: {_PAPER};")
@@ -371,16 +329,9 @@ class CurveInspectorWindow(QWidget):
         layout.addWidget(self._build_table_panel(), stretch=42)
         return body
 
-    def _build_chart_panel(self) -> QFrame:
-        frame = QFrame()
-        frame.setObjectName("panel_frame")
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+    def _build_chart_panel(self) -> Panel:
         n = len(self._curve.vertices)
-        layout.addWidget(self._make_panel_header("Curve shape", f"{n} vertices"))
-        layout.addWidget(self._build_chart(), stretch=1)
-        return frame
+        return Panel("Curve shape", self._build_chart(), meta=f"{n} vertices")
 
     def _build_chart(self) -> QChartView:
         chart = QChart()
@@ -458,16 +409,9 @@ class CurveInspectorWindow(QWidget):
         view.setStyleSheet("border: none;")
         return view
 
-    def _build_table_panel(self) -> QFrame:
-        frame = QFrame()
-        frame.setObjectName("panel_frame")
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+    def _build_table_panel(self) -> Panel:
         n = len(self._curve.vertices)
-        layout.addWidget(self._make_panel_header("Vertices", f"{n} rows"))
-        layout.addWidget(self._build_table(), stretch=1)
-        return frame
+        return Panel("Vertices", self._build_table(), meta=f"{n} rows")
 
     def _build_table(self) -> QTableWidget:
         rows = self._table_rows()
@@ -573,22 +517,3 @@ class CurveInspectorWindow(QWidget):
         layout.addWidget(body)
         return container
 
-    def _make_panel_header(self, title: str, meta: str) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet(
-            f"background: {_PANEL_2}; border-bottom: 1px solid {_RULE_2}; border-radius: 0px;"
-        )
-        layout = QHBoxLayout(w)
-        layout.setContentsMargins(10, 6, 10, 6)
-        layout.setSpacing(4)
-        title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(f"font-weight: 600; color: {_INK}; background: transparent;")
-        meta_lbl = QLabel(meta)
-        meta_lbl.setStyleSheet(
-            f"font-family: Consolas, 'Courier New', monospace; "
-            f"font-size: 11px; color: {_INK_3}; background: transparent;"
-        )
-        layout.addWidget(title_lbl)
-        layout.addStretch()
-        layout.addWidget(meta_lbl)
-        return w

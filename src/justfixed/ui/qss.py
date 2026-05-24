@@ -7,11 +7,12 @@ setStyleSheet calls in main.py.
 
 from __future__ import annotations
 
-from justfixed.ui.theme import COLORS
+from justfixed.ui.theme import COLORS, FONTS
 
 
 def make_stylesheet() -> str:
     c = COLORS
+    f = FONTS
     return f"""
 /* ── Toolbar action buttons ─────────────────────────────────────── */
 QPushButton[role="toolbar"] {{
@@ -142,5 +143,14 @@ QPushButton[role="secondary"]:pressed {{
 }}
 QPushButton[role="secondary"]:disabled {{
     color: {c.INK_3};
+}}
+
+/* ── Status bar ─────────────────────────────────────────────────────── */
+QStatusBar {{
+    background-color: {c.STATUS_BAR_BG};
+    font-family: '{f.UI_FAMILY}';
+    font-size: {f.UI_SIZE_MD}pt;
+    color: {c.INK_3};
+    border-top: 1px solid {c.RULE_2};
 }}
 """
