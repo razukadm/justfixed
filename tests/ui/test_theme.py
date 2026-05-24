@@ -43,6 +43,27 @@ class TestColors:
     def test_highlight_row(self) -> None:
         assert COLORS.HIGHLIGHT_ROW == "#FFF8DC"
 
+    def test_fgc_over_is_red(self) -> None:
+        assert COLORS.FGC_OVER == "#e74c3c"
+
+    def test_fgc_over_equals_danger_today(self) -> None:
+        # Intentional split: same value, separate tokens for divergence-safety.
+        assert COLORS.FGC_OVER == COLORS.DANGER
+
+    def test_error_text_is_dark_red(self) -> None:
+        assert COLORS.ERROR_TEXT == "#c0392b"
+
+    def test_error_text_equals_danger_hover_today(self) -> None:
+        # Intentional split: same value, separate tokens for divergence-safety.
+        assert COLORS.ERROR_TEXT == COLORS.DANGER_HOVER
+
+    def test_secondary_hover(self) -> None:
+        assert COLORS.SECONDARY_HOVER == "#eefbf3"
+
+    def test_secondary_border_uses_rule(self) -> None:
+        # The secondary button border reuses RULE (#d9d6cf) — no duplicate token.
+        assert COLORS.RULE == "#d9d6cf"
+
 
 class TestFonts:
     def test_singleton_is_frozen(self) -> None:
@@ -58,7 +79,7 @@ class TestFonts:
     def test_sizes(self) -> None:
         assert FONTS.UI_SIZE_SM == 8
         assert FONTS.UI_SIZE_MD == 9
-        assert FONTS.MONO_SIZE == 8
+        assert FONTS.MONO_SIZE == 10
 
 
 class TestMakeStylesheet:
@@ -88,3 +109,11 @@ class TestMakeStylesheet:
         assert COLORS.TOOLBAR_BTN in sheet
         assert COLORS.DANGER in sheet
         assert COLORS.FIELD_LABEL_FG in sheet
+
+    def test_contains_secondary_role(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert 'role="secondary"' in make_stylesheet()
+
+    def test_secondary_hover_in_stylesheet(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert COLORS.SECONDARY_HOVER in make_stylesheet()

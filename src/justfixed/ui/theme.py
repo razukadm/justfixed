@@ -39,13 +39,17 @@ class Colors:
     FGC_UNDER: str = "#2ecc71"
     FGC_NA: str = "#aaaaaa"        # not_fgc badge; treasury badge
 
-    # ── Danger (delete button, error states, FGC-over badge) ───────────────────
-    # NOTE: DANGER == FGC "over" (#e74c3c) — same red used in both contexts.
-    # NOTE: DANGER_HOVER == error label text (#c0392b) — same darker red.
+    # ── Danger (delete button — action semantics) ──────────────────────────────
     DANGER: str = "#e74c3c"
     DANGER_HOVER: str = "#c0392b"
     DANGER_PRESSED: str = "#a93226"
     DANGER_DISABLED_BG: str = "#f5b7b1"
+
+    # ── Critical status (FGC-over badge, error text — status semantics) ────────
+    # Both equal their action sibling today; split is intentional so the two
+    # semantics can diverge later without a silent visual break.
+    FGC_OVER: str = "#e74c3c"     # == DANGER today
+    ERROR_TEXT: str = "#c0392b"   # == DANGER_HOVER today
 
     # ── Toolbar action buttons ─────────────────────────────────────────────────
     # NOTE: TOOLBAR_BTN_PRESSED == TOOLBAR_BTN_BORDER (#4cae6a) — one value, two roles.
@@ -74,6 +78,10 @@ class Colors:
     DETAIL_ROW_ODD: str = "#f0f0f0"
     DETAIL_ROW_BORDER: str = "#eeeeee"
 
+    # ── Secondary (outlined) button ────────────────────────────────────────────
+    # Border uses existing RULE token (#d9d6cf). Only the hover tint is new.
+    SECONDARY_HOVER: str = "#eefbf3"
+
     # ── Investments table ──────────────────────────────────────────────────────
     HIGHLIGHT_ROW: str = "#FFF8DC"
 
@@ -84,7 +92,7 @@ class Fonts:
     UI_SIZE_SM: int = 8
     UI_SIZE_MD: int = 9
     MONO_FAMILY: str = "Consolas"
-    MONO_SIZE: int = 8
+    MONO_SIZE: int = 10
 
 
 COLORS = Colors()

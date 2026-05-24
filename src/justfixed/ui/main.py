@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from PySide6.QtCore import QDate, QEvent, QLocale, QStandardPaths, QStringListModel, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QIcon
+from PySide6.QtGui import QAction, QColor, QFont, QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
 
 from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
 from justfixed.ui.qss import make_stylesheet
-from justfixed.ui.theme import COLORS
+from justfixed.ui.theme import COLORS, FONTS
 from justfixed.ui.curve_inspector import (
     CurveInspectorWindow,
     SERIES_CDI,
@@ -134,7 +134,7 @@ _PT_BR = QLocale(QLocale.Language.Portuguese, QLocale.Country.Brazil)
 _BADGE_STYLE: dict[str, tuple[str, str]] = {
     "under":       ("● UNDER",       COLORS.FGC_UNDER),
     "approaching": ("● APPROACHING", COLORS.WARN),
-    "over":        ("● OVER",        COLORS.DANGER),
+    "over":        ("● OVER",        COLORS.FGC_OVER),
     "not_fgc":     ("N/A",           COLORS.FGC_NA),
 }
 
@@ -149,6 +149,7 @@ def _make_fgc_badge(status, width: int) -> QLabel:
     return lbl
 
 _HIGHLIGHT_COLOR = QColor(COLORS.HIGHLIGHT_ROW)
+_MONO_FONT = QFont(FONTS.MONO_FAMILY, FONTS.MONO_SIZE)
 
 
 def _format_type(rate: Rate) -> str:
@@ -337,6 +338,9 @@ class _EditableField(QWidget):
     def revert_to_view(self) -> None:
         """Discard any in-progress edit silently and return to label mode."""
         self._show_label()
+
+    def set_display_font(self, font: QFont) -> None:
+        self._label.setFont(font)
 
     # ── Event filter ──────────────────────────────────────────────────────────
 
@@ -597,6 +601,7 @@ class InvestmentDetailPanel(QWidget):
         "maturity_date", "coupon_frequency", "description",
     })
     _EDITABLE_FOR_IMPORT = frozenset({"description"})
+    _MONO_FIELD_KEYS = frozenset({"rate", "purchase_date", "issue_date", "maturity_date", "principal"})
 
     def __init__(self, session_factory, main_window, parent=None) -> None:
         super().__init__(parent)
@@ -646,6 +651,8 @@ class InvestmentDetailPanel(QWidget):
             lbl.setFixedWidth(100)
             lbl.setAlignment(Qt.AlignmentFlag.AlignTop)
             val = _EditableField(key, self._save_field, self._set_error)
+            if key in self._MONO_FIELD_KEYS:
+                val.set_display_font(_MONO_FONT)
             self._field_values[key] = val
             row.addWidget(lbl)
             row.addWidget(val, stretch=1)
@@ -1273,6 +1280,7 @@ class MainWindow(QMainWindow):
         cong_bottom = QHBoxLayout()
         self._cong_project_btn = QPushButton("Project as of today")
         self._cong_project_btn.clicked.connect(self._on_project_clicked)
+        self._cong_project_btn.setProperty("role", "secondary")
         cong_bottom.addStretch()
         cong_bottom.addWidget(self._cong_project_btn)
         _cong_outer.addLayout(cong_bottom)
@@ -1332,6 +1340,7 @@ class MainWindow(QMainWindow):
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.itemSelectionChanged.connect(self._on_selection_changed)
         self._table.verticalHeader().setVisible(False)
+        self._table.verticalHeader().setDefaultSectionSize(26)
         hdr = self._table.horizontalHeader()
         _Stretch = QHeaderView.ResizeMode.Stretch
         _Fixed   = QHeaderView.ResizeMode.Fixed
@@ -1369,8 +1378,11 @@ class MainWindow(QMainWindow):
         # Totals strip — principal, current, projected, row count
         totals_row = QHBoxLayout()
         self._principal_label = QLabel("Principal: —")
+        self._principal_label.setFont(_MONO_FONT)
         self._current_label = QLabel("Current: —")
+        self._current_label.setFont(_MONO_FONT)
         self._projected_label = QLabel("Projected: —")
+        self._projected_label.setFont(_MONO_FONT)
         self._rows_label = QLabel("Rows: 0")
         totals_row.addWidget(self._principal_label)
         totals_row.addSpacing(16)
@@ -1432,8 +1444,10 @@ class MainWindow(QMainWindow):
         _ew_layout.addSpacing(12)
         self._empty_import_btn = QPushButton("Import Statement…")
         self._empty_import_btn.clicked.connect(self._on_import_clicked)
+        self._empty_import_btn.setProperty("role", "secondary")
         self._empty_add_btn = QPushButton("Add investment…")
         self._empty_add_btn.clicked.connect(self._on_add_investment_clicked)
+        self._empty_add_btn.setProperty("role", "secondary")
         _ew_layout.addWidget(self._empty_import_btn)
         _ew_layout.addSpacing(4)
         _ew_layout.addWidget(self._empty_add_btn)
@@ -1459,18 +1473,22 @@ class MainWindow(QMainWindow):
             _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat)
         )
         next_lbl.setFixedWidth(120)
+        next_lbl.setFont(_MONO_FONT)
         h.addWidget(next_lbl)
 
         principal_lbl = QLabel(section.total_principal.to_display())
         principal_lbl.setFixedWidth(120)
+        principal_lbl.setFont(_MONO_FONT)
         h.addWidget(principal_lbl)
 
         current_lbl = QLabel(section.total_current_value.to_display())
         current_lbl.setFixedWidth(120)
+        current_lbl.setFont(_MONO_FONT)
         h.addWidget(current_lbl)
 
         projected_lbl = QLabel(section.total_projected_value.to_display())
         projected_lbl.setFixedWidth(120)
+        projected_lbl.setFont(_MONO_FONT)
         h.addWidget(projected_lbl)
 
         h.addWidget(_make_fgc_badge(section.summary_fgc_status, 130))
@@ -1555,6 +1573,7 @@ class MainWindow(QMainWindow):
             _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat)
         )
         mat_lbl.setFixedWidth(100)
+        mat_lbl.setFont(_MONO_FONT)
         h.addWidget(mat_lbl)
 
         issuer_lbl = QLabel(row.issuer_name)
@@ -1572,6 +1591,7 @@ class MainWindow(QMainWindow):
         ]:
             lbl = QLabel(val)
             lbl.setFixedWidth(width)
+            lbl.setFont(_MONO_FONT)
             h.addWidget(lbl)
 
         h.addWidget(_make_fgc_badge(row.fgc_status, 110))
@@ -1788,17 +1808,18 @@ class MainWindow(QMainWindow):
 
         self._cell(row, _COL_PRODUCT, rules_for(inv.product).display_name)
         self._cell(row, _COL_TYPE, _format_type(inv.rate))
-        self._cell(row, _COL_RATE, _format_rate(inv.rate, self._cdi_curve, inv.maturity_date))
-        self._cell(row, _COL_PRINCIPAL, inv.principal.to_display())
+        self._cell(row, _COL_RATE, _format_rate(inv.rate, self._cdi_curve, inv.maturity_date), mono=True)
+        self._cell(row, _COL_PRINCIPAL, inv.principal.to_display(), mono=True)
 
         d = inv.maturity_date
         self._cell(
             row, _COL_MATURITY,
             _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat),
+            mono=True,
         )
 
-        self._cell(row, _COL_CURRENT, current_value.to_display() if current_value else "")
-        self._cell(row, _COL_PROJECTED, projected_value.to_display() if projected_value else "")
+        self._cell(row, _COL_CURRENT, current_value.to_display() if current_value else "", mono=True)
+        self._cell(row, _COL_PROJECTED, projected_value.to_display() if projected_value else "", mono=True)
 
         # FGC badge
         if inv.issuer.kind == IssuerKind.TREASURY:
@@ -1819,8 +1840,11 @@ class MainWindow(QMainWindow):
                 if item is not None:
                     item.setBackground(_HIGHLIGHT_COLOR)
 
-    def _cell(self, row: int, col: int, text: str) -> None:
-        self._table.setItem(row, col, QTableWidgetItem(text))
+    def _cell(self, row: int, col: int, text: str, *, mono: bool = False) -> None:
+        item = QTableWidgetItem(text)
+        if mono:
+            item.setFont(_MONO_FONT)
+        self._table.setItem(row, col, item)
 
     def _update_button_states(self) -> None:
         today = date.today()

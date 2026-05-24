@@ -67,7 +67,7 @@ QLabel[role="infoBanner"] {{
 /* ── Error label ────────────────────────────────────────────────── */
 QLabel[role="error"] {{
     background: {c.ERROR_BG};
-    color: {c.DANGER_HOVER};
+    color: {c.ERROR_TEXT};
     padding: 4px 8px;
     border-radius: 4px;
 }}
@@ -85,7 +85,7 @@ QLabel[role="subLabel"] {{
 /* ── FGC badge colours ──────────────────────────────────────────── */
 QLabel[fgcStatus="under"]       {{ color: {c.FGC_UNDER}; }}
 QLabel[fgcStatus="approaching"] {{ color: {c.WARN}; }}
-QLabel[fgcStatus="over"]        {{ color: {c.DANGER}; }}
+QLabel[fgcStatus="over"]        {{ color: {c.FGC_OVER}; }}
 QLabel[fgcStatus="not_fgc"]     {{ color: {c.FGC_NA}; }}
 
 /* ── Conglomerate accordion: summary header ─────────────────────── */
@@ -124,5 +124,23 @@ QWidget[detailRowParity="even"] {{
 QWidget[detailRowParity="odd"] {{
     background-color: {c.DETAIL_ROW_ODD};
     border-bottom: 1px solid {c.DETAIL_ROW_BORDER};
+}}
+
+/* ── Secondary (outlined) button ────────────────────────────────── */
+QPushButton[role="secondary"] {{
+    background-color: {c.PANEL};
+    border: 1px solid {c.RULE};
+    border-radius: 4px;
+    padding: 6px 12px;
+    color: {c.INK};
+}}
+QPushButton[role="secondary"]:hover {{
+    background-color: {c.SECONDARY_HOVER};
+}}
+QPushButton[role="secondary"]:pressed {{
+    background-color: {c.PANEL_2};
+}}
+QPushButton[role="secondary"]:disabled {{
+    color: {c.INK_3};
 }}
 """
