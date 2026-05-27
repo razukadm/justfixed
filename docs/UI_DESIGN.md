@@ -528,6 +528,59 @@ The strip updates on every filter change and after every Project
 run. FGC badges do not appear in the strip (they're
 per-conglomerate, not aggregate).
 
+### Matured investments — PAID treatment (B22)
+
+**Shipped** (commits `e4d10b1`, `ed7d4b3`, `980db97`, `163af07`).
+
+**Toggle affordance.** The Hide matured control now lives in both the
+View menu (existing) and as a `QCheckBox` labeled "Hide matured" at the
+right end of the Investments filter row. Both controls are wired to the
+same handler and stay in sync via `blockSignals()`. Default: checked
+(ON). The toggle state does not persist between app launches.
+
+**When Hide matured is ON (default):** Behavior is identical to before
+B22. Rows where `maturity_date <= today` are excluded from the table,
+from all totals, and from FGC concentration.
+
+**When Hide matured is OFF — PAID treatment:** Matured rows reappear in
+the table but are visually demoted to signal that the money has been
+paid out and is no longer an outstanding holding:
+
+- **Current and Projected cells:** show the literal string `PAID`
+  instead of a money value. Font: Consolas at `FONTS.MONO_SIZE`.
+  Meaning: PAID is a *value substitution*, not a strikethrough.
+  Strikethrough reads "this number is wrong"; PAID reads "this number no
+  longer exists." They communicate different things.
+
+- **Whole-row text:** all cells (Issuer through FGC) are set to
+  `COLORS.INK_3` (`#888888`), visually demoting the row relative to
+  active rows.
+
+- **FGC badge:** the badge text is unchanged (it retains whatever status
+  it carried) but its foreground colour is overridden to `COLORS.INK_3`,
+  greying it out to signal that FGC coverage no longer applies.
+
+**Totals exclusion is unconditional.** The Principal / Current /
+Projected totals strip always excludes matured rows regardless of the
+Hide matured toggle. When the toggle is OFF, `_update_totals` splits
+visible rows into active and matured before calling `compute_totals`;
+only active rows are passed to the sum. This ensures totals always
+reflect outstanding holdings.
+
+**Row count pill:** When at least one matured row is visible (toggle
+OFF), the pill reads `N active · M matured`. When no matured rows are
+visible (toggle ON, or portfolio contains none), the pill reads `N` or
+`N of M` (the existing filter-active format).
+
+**Implementation note — table cells and QSS.** The B43 `setProperty(
+"role", ...)` + QSS pattern applies to `QWidget` subclasses
+(`QPushButton`, `QLabel`, etc.). `QTableWidgetItem` is a `QObject` but
+*not* a `QWidget`; QSS property selectors do not fire for table items.
+The PAID treatment therefore uses imperative `setForeground()` on each
+`QTableWidgetItem`. Future table-level styling work should use
+`QStyledItemDelegate` or `Qt.ItemDataRole.ForegroundRole` rather than
+reaching for QSS selectors.
+
 ## What this document is not
 
 This is a scope and structure spec. It is intentionally silent on:

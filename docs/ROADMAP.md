@@ -496,52 +496,19 @@ predictable confusion point.
 background worker (`_ProjectWorker`), so chaining is mechanically
 trivial. The hard part is the UX decisions in #1 and #2 above.
 
-### B22. Visual differentiation for matured investments
+### B22. Visual differentiation for matured investments — SHIPPED
 
-**Source:** B′-companion smoke check.
+**Shipped:** 2026-05-27, commits `e4d10b1` (`_is_matured` predicate),
+`ed7d4b3` (Hide matured checkbox in filter row), `980db97` (PAID cell
+substitution + row demote), `163af07` (totals exclusion, pill split).
 
-**Why deferred:** Matured investments appear identical to active
-ones in the investment table. The user can see the maturity date,
-but there's no visual signal that the row represents a *redeemed*
-investment whose money has already been paid out and which no
-longer contributes to FGC exposure. With Hide-matured on by default,
-this isn't noticed; with Hide-matured off, the matured rows look
-indistinguishable from active rows.
-
-**Trigger to revisit:** When the user works with matured
-investments routinely enough that the lack of visual differentiation
-becomes confusing.
-
-**What it needs:** A design decision on how to mark matured rows.
-Candidate ideas:
-
-1. **Substitute amount cells with "PAID" text.** Replace the
-   Current and Projected values with the literal string "PAID" when
-   the investment's maturity_date is in the past. Makes clear the
-   money has been paid out and is no longer a holding.
-
-2. **Add a "PAID" FGC badge state.** Extend `ExposureStatus` with a
-   new value beyond UNDER/APPROACHING/OVER specifically for matured
-   investments. The badge becomes a categorical signal of the
-   row's lifecycle state, not just its FGC concentration.
-
-3. **Some combination.** Both ideas address the gap differently:
-   amount substitution speaks to "this isn't a holding anymore,"
-   the badge speaks to "this no longer counts for FGC."
-
-Other options not yet enumerated (row-level styling, dimmed text,
-strikethrough, an explicit "Status" column, etc.) might also be
-considered.
-
-**Architectural note:** The maturity check is straightforward —
-`inv.maturity_date <= date.today()`. The cache contains projections
-for all visible-at-projection-time investments, so the totals
-helper sees matured rows via the cache when Hide-matured is off and
-a Project has run. Visual changes are in `_populate_row` (per-row
-styling) and possibly `compute_totals` (skip matured rows from the
-sums, since they're no longer outstanding). Worth being explicit
-about whether totals include matured rows — that's a separate
-design question to resolve when this is picked up.
+**What shipped:** When Hide matured is OFF, matured rows appear with
+"PAID" substituted in Current and Projected cells, whole-row text
+demoted to `COLORS.INK_3`, and the FGC badge greyed out. Totals always
+exclude matured rows regardless of toggle. Row-count pill shows
+`N active · M matured` when at least one matured row is visible. See
+`docs/UI_DESIGN.md` — "Matured investments — PAID treatment (B22)"
+for the full design record.
 
 ### B23. Replace placeholder icon
 
@@ -1157,6 +1124,13 @@ Commit `a0e333e`. Detail-panel delete button, `QMessageBox` confirm,
 `InvestmentRepository.delete`, projection cache cleared. Applies to all
 investments; no tombstone. Re-importing resurrects a deleted imported
 investment (known, accepted).
+
+### B22 — PAID visual treatment for matured investments — SHIPPED
+
+Commits `e4d10b1`–`163af07` (2026-05-27). Hide matured checkbox added
+to filter row. When toggle is OFF: Current/Projected show "PAID", whole
+row demoted to `INK_3`, FGC badge greyed. Totals always exclude matured
+rows. Pill shows `N active · M matured` when matured rows are visible.
 
 ### Open items
 
