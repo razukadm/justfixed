@@ -533,9 +533,14 @@ class TestUpdateTotals:
         self_mock._rows_label = MagicMock()
         return self_mock
 
+    def _active_inv(self) -> MagicMock:
+        inv = MagicMock()
+        inv.maturity_date = date.today() + timedelta(days=365)
+        return inv
+
     def test_update_totals_with_full_cache(self) -> None:
         self_mock = self._make_self_mock()
-        fake_inv = MagicMock()
+        fake_inv = self._active_inv()
         self_mock.visible_investments.return_value = [fake_inv, fake_inv]
 
         totals = {
@@ -554,7 +559,7 @@ class TestUpdateTotals:
 
     def test_update_totals_no_cache_shows_dash_for_projected(self) -> None:
         self_mock = self._make_self_mock()
-        fake_inv = MagicMock()
+        fake_inv = self._active_inv()
         self_mock.visible_investments.return_value = [fake_inv]
 
         totals = {
@@ -574,9 +579,15 @@ class TestUpdateTotals:
     def test_update_totals_with_filter_shows_m_of_n(self) -> None:
         self_mock = self._make_self_mock()
         self_mock._filter_issuer = "BMG"
+        future = date.today() + timedelta(days=365)
+
+        def _active():
+            inv = MagicMock()
+            inv.maturity_date = future
+            return inv
 
         def visible_side_effect(*, apply_filter: bool = True):
-            return [MagicMock()] if apply_filter else [MagicMock(), MagicMock(), MagicMock()]
+            return [_active()] if apply_filter else [_active(), _active(), _active()]
 
         self_mock.visible_investments.side_effect = visible_side_effect
 
@@ -590,6 +601,106 @@ class TestUpdateTotals:
             MainWindow._update_totals(self_mock)
 
         self_mock._rows_label.setText.assert_called_once_with("Rows: 1 of 3")
+
+
+class TestUpdateTotalsMatured:
+    """_update_totals always excludes matured rows from sums regardless of toggle,
+    and shows 'N active · M matured' when matured rows are visible."""
+
+    def _make_self_mock(self, *, hide_matured: bool, filter_issuer=None) -> MagicMock:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._hide_matured = hide_matured
+        self_mock._filter_issuer = filter_issuer
+        self_mock._filter_conglomerate = None
+        self_mock.projection_cache = None
+        self_mock._principal_label = MagicMock()
+        self_mock._current_label = MagicMock()
+        self_mock._projected_label = MagicMock()
+        self_mock._rows_label = MagicMock()
+        return self_mock
+
+    def _active_inv(self) -> MagicMock:
+        inv = MagicMock()
+        inv.maturity_date = date.today() + timedelta(days=365)
+        return inv
+
+    def _matured_inv(self) -> MagicMock:
+        inv = MagicMock()
+        inv.maturity_date = date.today() - timedelta(days=1)
+        return inv
+
+    def test_toggle_on_no_matured_rows_pill_shows_n(self) -> None:
+        self_mock = self._make_self_mock(hide_matured=True)
+        self_mock.visible_investments.return_value = [self._active_inv()]
+        totals_stub = {
+            "principal_total": _brl("100.00"),
+            "current_value_total": None,
+            "projected_total": None,
+            "row_count": 1,
+        }
+        with patch("justfixed.ui.main.compute_totals", return_value=totals_stub):
+            MainWindow._update_totals(self_mock)
+        self_mock._rows_label.setText.assert_called_once_with("Rows: 1")
+
+    def test_toggle_on_compute_totals_receives_only_active(self) -> None:
+        self_mock = self._make_self_mock(hide_matured=True)
+        active = self._active_inv()
+        self_mock.visible_investments.return_value = [active]
+        with patch("justfixed.ui.main.compute_totals") as mock_ct:
+            mock_ct.return_value = {
+                "principal_total": _brl("100.00"),
+                "current_value_total": None,
+                "projected_total": None,
+                "row_count": 1,
+            }
+            MainWindow._update_totals(self_mock)
+        passed = mock_ct.call_args[0][0]
+        assert all(not _is_matured(inv) for inv in passed)
+
+    def test_toggle_off_matured_excluded_from_compute_totals(self) -> None:
+        self_mock = self._make_self_mock(hide_matured=False)
+        active = self._active_inv()
+        matured = self._matured_inv()
+        self_mock.visible_investments.return_value = [active, matured]
+        with patch("justfixed.ui.main.compute_totals") as mock_ct:
+            mock_ct.return_value = {
+                "principal_total": _brl("100.00"),
+                "current_value_total": None,
+                "projected_total": None,
+                "row_count": 1,
+            }
+            MainWindow._update_totals(self_mock)
+        passed = mock_ct.call_args[0][0]
+        assert len(passed) == 1
+        assert not _is_matured(passed[0])
+
+    def test_toggle_off_with_matured_pill_shows_split(self) -> None:
+        self_mock = self._make_self_mock(hide_matured=False)
+        self_mock.visible_investments.return_value = [
+            self._active_inv(), self._active_inv(), self._matured_inv(),
+        ]
+        totals_stub = {
+            "principal_total": _brl("200.00"),
+            "current_value_total": None,
+            "projected_total": None,
+            "row_count": 2,
+        }
+        with patch("justfixed.ui.main.compute_totals", return_value=totals_stub):
+            MainWindow._update_totals(self_mock)
+        self_mock._rows_label.setText.assert_called_once_with("2 active · 1 matured")
+
+    def test_toggle_off_no_matured_pill_shows_n(self) -> None:
+        self_mock = self._make_self_mock(hide_matured=False)
+        self_mock.visible_investments.return_value = [self._active_inv()]
+        totals_stub = {
+            "principal_total": _brl("100.00"),
+            "current_value_total": None,
+            "projected_total": None,
+            "row_count": 1,
+        }
+        with patch("justfixed.ui.main.compute_totals", return_value=totals_stub):
+            MainWindow._update_totals(self_mock)
+        self_mock._rows_label.setText.assert_called_once_with("Rows: 1")
 
 
 # ── Integration test helpers ──────────────────────────────────────────────────

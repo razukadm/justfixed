@@ -1736,7 +1736,11 @@ class MainWindow(QMainWindow):
 
     def _update_totals(self) -> None:
         visible = self.visible_investments()
-        totals = compute_totals(visible, self.projection_cache)
+        active  = [inv for inv in visible if not _is_matured(inv)]
+        matured = [inv for inv in visible if     _is_matured(inv)]
+
+        # Totals always exclude matured rows, independent of the Hide-matured toggle.
+        totals = compute_totals(active, self.projection_cache)
 
         principal = totals["principal_total"].to_display()
         current = (
@@ -1752,15 +1756,21 @@ class MainWindow(QMainWindow):
         self._current_label.setText(f"Current: {current}")
         self._projected_label.setText(f"Projected: {projected}")
 
-        filtered_count = len(visible)
-        filter_active = (
-            self._filter_issuer is not None or self._filter_conglomerate is not None
-        )
-        if filter_active:
-            unfiltered_count = len(self.visible_investments(apply_filter=False))
-            self._rows_label.setText(f"Rows: {filtered_count} of {unfiltered_count}")
+        if matured:
+            # At least one matured row visible (Hide matured toggle is OFF).
+            self._rows_label.setText(f"{len(active)} active · {len(matured)} matured")
         else:
-            self._rows_label.setText(f"Rows: {filtered_count}")
+            filter_active = (
+                self._filter_issuer is not None or self._filter_conglomerate is not None
+            )
+            if filter_active:
+                unfiltered_active = [
+                    inv for inv in self.visible_investments(apply_filter=False)
+                    if not _is_matured(inv)
+                ]
+                self._rows_label.setText(f"Rows: {len(active)} of {len(unfiltered_active)}")
+            else:
+                self._rows_label.setText(f"Rows: {len(active)}")
 
     def _populate_filter_dropdowns(self) -> None:
         issuer_names = sorted({i.issuer.name for i in self._investments})
