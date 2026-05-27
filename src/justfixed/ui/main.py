@@ -151,6 +151,7 @@ def _make_fgc_badge(status, width: int) -> QLabel:
 
 _HIGHLIGHT_COLOR = QColor(COLORS.HIGHLIGHT_ROW)
 _MONO_FONT = QFont(FONTS.MONO_FAMILY, FONTS.MONO_SIZE)
+_MATURED_COLOR = QColor(COLORS.INK_3)   # whole-row demote + PAID text color
 
 
 def _format_type(rate: Rate) -> str:
@@ -1829,8 +1830,16 @@ class MainWindow(QMainWindow):
             mono=True,
         )
 
-        self._cell(row, _COL_CURRENT, current_value.to_display() if current_value else "", mono=True)
-        self._cell(row, _COL_PROJECTED, projected_value.to_display() if projected_value else "", mono=True)
+        show_paid = _is_matured(inv) and not self._hide_matured
+
+        if show_paid:
+            for col in (_COL_CURRENT, _COL_PROJECTED):
+                paid = QTableWidgetItem("PAID")
+                paid.setFont(_MONO_FONT)
+                self._table.setItem(row, col, paid)
+        else:
+            self._cell(row, _COL_CURRENT, current_value.to_display() if current_value else "", mono=True)
+            self._cell(row, _COL_PROJECTED, projected_value.to_display() if projected_value else "", mono=True)
 
         # FGC badge
         if inv.issuer.kind == IssuerKind.TREASURY:
@@ -1850,6 +1859,13 @@ class MainWindow(QMainWindow):
                 item = self._table.item(row, col)
                 if item is not None:
                     item.setBackground(_HIGHLIGHT_COLOR)
+
+        # Demote entire row to muted ink when showing PAID (matured, toggle OFF).
+        if show_paid:
+            for col in range(_NCOLS):
+                item = self._table.item(row, col)
+                if item is not None:
+                    item.setForeground(_MATURED_COLOR)
 
     def _cell(self, row: int, col: int, text: str, *, mono: bool = False) -> None:
         item = QTableWidgetItem(text)
