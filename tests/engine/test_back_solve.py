@@ -34,6 +34,7 @@ from justfixed.domain.rates import (
 from justfixed.engine.back_solve import (
     BackSolveResult,
     FGC_CAP,
+    _mock_growth_factor,
     max_principal_under_fgc,
 )
 from justfixed.engine.calendar import business_days_between
@@ -299,26 +300,166 @@ def test_f_over_cap_at_start() -> None:
     assert result.projected_at_maturity == Decimal("0.00")
 
 
-# ── Test G: Rate-type guards ──────────────────────────────────────────────────
+# ── Test G: Post-fixed rate types succeed ────────────────────────────────────
 
-@pytest.mark.parametrize("bad_rate", [
-    PostFixedCDI.from_percent("110"),
-    PostFixedIPCA.from_percent("5"),
-    PostFixedCDIPlusSpread.from_percent("2"),
-])
-def test_g_non_prefixed_raises(bad_rate) -> None:
-    """All non-Prefixed rate types raise NotImplementedError (Phase 1.5 work)."""
-    with pytest.raises(NotImplementedError):
-        max_principal_under_fgc(
-            issuer_name="Banco Any",
-            product=ProductType.CDB,
-            rate=bad_rate,
-            purchase_date=date(2024, 1, 2),
-            maturity_date=date(2025, 1, 2),
-            existing_holdings=[],
-            assumed_cdi=ASSUMED_CDI,
-            assumed_ipca=ASSUMED_IPCA,
-        )
+def test_g_post_fixed_cdi_empty_holdings() -> None:
+    """PostFixedCDI with no existing holdings: maturity date is binding.
+
+    Hand-verification for PostFixedCDI at 100% CDI:
+      At 100% CDI: effective_rate = 1.00 × ASSUMED_CDI = 0.1065
+      growth = (1 + 0.1065)^(bdays(T0, T1) / 252)
+      expected_max = ROUND_DOWN(250000 / growth)
+
+    The computation below mirrors this exactly using project() on a unit
+    synthetic, the same path the back-solve takes internally.
+    """
+    rate = PostFixedCDI.from_percent("100")
+    T0 = date(2024, 1, 2)
+    T1 = date(2025, 1, 2)
+
+    expected_growth = _mock_growth_factor(
+        rate, ProductType.CDB, "Banco Theta", T0, T1, T1,
+        ASSUMED_CDI, ASSUMED_IPCA,
+    )
+    expected_max = (Decimal("250000.00") / expected_growth).quantize(
+        _CENT, rounding=ROUND_DOWN
+    )
+
+    result = max_principal_under_fgc(
+        issuer_name="Banco Theta",
+        product=ProductType.CDB,
+        rate=rate,
+        purchase_date=T0,
+        maturity_date=T1,
+        existing_holdings=[],
+        assumed_cdi=ASSUMED_CDI,
+        assumed_ipca=ASSUMED_IPCA,
+    )
+
+    assert result.max_principal == expected_max
+    assert result.peak_date == T1
+    # effective_rate_aa stores cdi_percentage (Decimal("1.00") for 100% CDI)
+    assert result.effective_rate_aa == rate.cdi_percentage
+
+
+def test_g_post_fixed_ipca_empty_holdings() -> None:
+    """PostFixedIPCA with no existing holdings: maturity date is binding."""
+    rate = PostFixedIPCA.from_percent("5")
+    T0 = date(2024, 1, 2)
+    T1 = date(2025, 1, 2)
+
+    expected_growth = _mock_growth_factor(
+        rate, ProductType.CDB, "Banco Iota", T0, T1, T1,
+        ASSUMED_CDI, ASSUMED_IPCA,
+    )
+    expected_max = (Decimal("250000.00") / expected_growth).quantize(
+        _CENT, rounding=ROUND_DOWN
+    )
+
+    result = max_principal_under_fgc(
+        issuer_name="Banco Iota",
+        product=ProductType.CDB,
+        rate=rate,
+        purchase_date=T0,
+        maturity_date=T1,
+        existing_holdings=[],
+        assumed_cdi=ASSUMED_CDI,
+        assumed_ipca=ASSUMED_IPCA,
+    )
+
+    assert result.max_principal == expected_max
+    assert result.peak_date == T1
+    # effective_rate_aa stores spread (Decimal("0.05") for IPCA+5%)
+    assert result.effective_rate_aa == rate.spread
+
+
+def test_g_post_fixed_cdi_plus_spread_empty_holdings() -> None:
+    """PostFixedCDIPlusSpread with no existing holdings: maturity date is binding."""
+    rate = PostFixedCDIPlusSpread.from_percent("2")
+    T0 = date(2024, 1, 2)
+    T1 = date(2025, 1, 2)
+
+    expected_growth = _mock_growth_factor(
+        rate, ProductType.CDB, "Banco Kappa", T0, T1, T1,
+        ASSUMED_CDI, ASSUMED_IPCA,
+    )
+    expected_max = (Decimal("250000.00") / expected_growth).quantize(
+        _CENT, rounding=ROUND_DOWN
+    )
+
+    result = max_principal_under_fgc(
+        issuer_name="Banco Kappa",
+        product=ProductType.CDB,
+        rate=rate,
+        purchase_date=T0,
+        maturity_date=T1,
+        existing_holdings=[],
+        assumed_cdi=ASSUMED_CDI,
+        assumed_ipca=ASSUMED_IPCA,
+    )
+
+    assert result.max_principal == expected_max
+    assert result.peak_date == T1
+    # effective_rate_aa stores spread (Decimal("0.02") for CDI+2%)
+    assert result.effective_rate_aa == rate.spread
+
+
+# ── Test G2: Cross-product — post-fixed mock, post-fixed existing holding ─────
+
+def test_g2_cross_product_binding_at_interior_date() -> None:
+    """Post-fixed mock with a post-fixed existing holding: binding at the
+    existing holding's maturity, not the mock's.
+
+    Mock:     T0 ──────────────────────── T2   PostFixedCDI 100% CDI
+    Existing: T0 ──────────── T1               PostFixedCDI 110% CDI, R$100,000
+
+    The existing holding grows faster than the mock (110% CDI > 100% CDI),
+    so the constraint is tightest at T1 — after which existing drops to 0
+    and the mock can grow freely to its maturity.
+
+    Approximate (with ASSUMED_CDI = 0.1065, half-year ≈ 126 bdays):
+      existing_T1 ≈ 100,000 × (1.11715)^0.5 ≈ 105,700
+      growth_mock_T1 ≈ (1.1065)^0.5 ≈ 1.0520
+      bound_T1 ≈ (250,000 − 105,700) / 1.0520 ≈ 137,166   ← binding
+      bound_T0 = (250,000 − 100,000) / 1        = 150,000
+      bound_T2 = 250,000 / (1.1065)             ≈ 225,937
+
+    This test does not assert a hard max_principal value; it asserts:
+      - max_principal is positive
+      - peak_date is T1 (interior), not T2 (mock's maturity)
+      - peak_utilization is in [0, 1]
+    """
+    issuer_name = "Banco Lambda"
+    mock_rate     = PostFixedCDI.from_percent("100")   # 100% CDI
+    existing_rate = PostFixedCDI.from_percent("110")   # 110% CDI, grows faster
+    T0 = date(2024, 1, 2)
+    T1 = date(2024, 7, 1)   # existing holding matures here
+    T2 = date(2025, 1, 2)
+
+    bank = _bank(issuer_name)
+    existing = Investment.create(
+        product=ProductType.CDB,
+        issuer=bank,
+        principal=Money.from_reais("100000"),
+        rate=existing_rate,
+        purchase_date=T0,
+        maturity_date=T1,
+    )
+
+    result = max_principal_under_fgc(
+        issuer_name=issuer_name,
+        product=ProductType.CDB,
+        rate=mock_rate,
+        purchase_date=T0,
+        maturity_date=T2,
+        existing_holdings=[existing],
+        assumed_cdi=ASSUMED_CDI,
+        assumed_ipca=ASSUMED_IPCA,
+    )
+
+    assert result.max_principal > Decimal("0")
+    assert result.peak_date == T1
+    assert Decimal("0") <= result.peak_utilization <= Decimal("1")
 
 
 # ── Test H: ROUND_DOWN, not ROUND_HALF_UP ────────────────────────────────────
