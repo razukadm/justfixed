@@ -25,7 +25,24 @@ from justfixed.domain.money import Money
 from justfixed.domain.rates import Prefixed, PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA
 from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fgc import ExposureStatus
-from justfixed.ui.main import _AddInvestmentPanel, ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow, compute_totals, _format_type, _format_rate
+from justfixed.ui.main import _AddInvestmentPanel, ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow, compute_totals, _format_type, _format_rate, _is_matured
+
+
+class TestIsMatured:
+    def test_past_maturity_is_matured(self) -> None:
+        inv = MagicMock()
+        inv.maturity_date = date.today() - timedelta(days=1)
+        assert _is_matured(inv) is True
+
+    def test_today_maturity_is_matured(self) -> None:
+        inv = MagicMock()
+        inv.maturity_date = date.today()
+        assert _is_matured(inv) is True
+
+    def test_future_maturity_is_not_matured(self) -> None:
+        inv = MagicMock()
+        inv.maturity_date = date.today() + timedelta(days=1)
+        assert _is_matured(inv) is False
 
 
 class TestProjectionCachePopulation:

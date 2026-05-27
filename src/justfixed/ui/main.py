@@ -184,6 +184,11 @@ def _format_rate(rate: Rate, cdi_curve: Curve | None, maturity_date: date) -> st
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
+def _is_matured(inv) -> bool:
+    """True when investment.maturity_date <= today (maturity-day = already paid)."""
+    return inv.maturity_date <= date.today()
+
+
 def compute_totals(
     investments: list,
     cache: list[ProjectionResult] | None,
