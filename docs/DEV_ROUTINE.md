@@ -46,11 +46,12 @@ Replace the date in both places with the trading day you are publishing.
 
 ```powershell
 cd C:\Projects\JustFixed
+.\.venv\Scripts\Activate.ps1
 .\.venv\Scripts\python.exe tools\publish_curves.py `
   --anbima C:\Projects\justfixed-data\CurvaZero_.csv `
   --b3 C:\Projects\justfixed-data\BDI.pdf `
   --data-repo C:\Projects\justfixed-data `
-  --as-of 2026-05-20 --commit
+  --as-of 2026-05-22 --commit
 ```
 
 `--as-of` is the trading day, which becomes the curve's anchor date. `--commit`
