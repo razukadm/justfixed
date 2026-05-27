@@ -17,6 +17,7 @@ from PySide6.QtGui import QAction, QColor, QFont, QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QCheckBox,
     QComboBox,
     QCompleter,
     QDateEdit,
@@ -1332,6 +1333,11 @@ class MainWindow(QMainWindow):
         self._issuer_combo.addItem("All")
         self._issuer_combo.textActivated.connect(self._on_issuer_filter_changed)
         filter_row.addWidget(self._issuer_combo)
+        filter_row.addSpacing(16)
+        self._hide_matured_cb = QCheckBox("Hide matured")
+        self._hide_matured_cb.setChecked(True)
+        self._hide_matured_cb.toggled.connect(self._on_hide_matured_toggled)
+        filter_row.addWidget(self._hide_matured_cb)
         filter_row.addStretch()
         root.addLayout(filter_row)
 
@@ -1928,6 +1934,13 @@ class MainWindow(QMainWindow):
 
     def _on_hide_matured_toggled(self, checked: bool) -> None:
         self._hide_matured = checked
+        # Keep menu action and filter-row checkbox in sync without re-triggering.
+        self._hide_matured_action.blockSignals(True)
+        self._hide_matured_action.setChecked(checked)
+        self._hide_matured_action.blockSignals(False)
+        self._hide_matured_cb.blockSignals(True)
+        self._hide_matured_cb.setChecked(checked)
+        self._hide_matured_cb.blockSignals(False)
         self.refresh_table()
 
     def _on_clear_db_clicked(self) -> None:
