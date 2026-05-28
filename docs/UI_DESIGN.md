@@ -583,15 +583,17 @@ reaching for QSS selectors.
 
 ### Calculator tab — FGC back-solve (B41)
 
-**Shipped** (commits `bca0834`, `5b2d0d8`, `48cb989`, plus 2.3b).
+**Shipped** 2026-05-28. Phases 1–2.4b, commits `5b2d0d8`–`65e50d3`.
 
 The Calculator tab surfaces `engine/back_solve.py` via two modes:
 
 **Enter-value mode.** User enters a principal amount; the tab projects
 the investment to maturity and shows: principal, projected value at
 maturity, FGC utilization (gross / cap), status pill, effective net
-rate, and tenor days. FGC status thresholds match `engine/fgc.py`
-(`ExposureStatus`).
+rate (derived from `net_at_maturity / principal` annualized rather than
+from rate parameters directly, so the figure stays consistent with the
+Projected column), and tenor days. FGC status thresholds match
+`engine/fgc.py` (`ExposureStatus`).
 
 **Solve mode.** User omits the principal; the tab calls
 `back_solve.max_principal_under_fgc(...)` and shows the maximum
@@ -618,12 +620,12 @@ rows only; the mock row shows its own `projected_at_maturity`.
 `MOCK_ROW_EDGE`, `MOCK_INK`, `PEAK_ROW_BG`, `PEAK_INDICATOR`.
 
 **Cross-tab mock rendering (B41 phase 2.4b).** Both Calculate modes
-set `MainWindow.active_mock`; Reset clears it via `clear_active_mock`. On every `_refresh_conglomerates`
-call the mock's projection is spliced into the Conglomerates report,
-and the mock's conglomerate section auto-expands so the row is
-immediately visible. The mock row renders with `rowKind="mock"`
-(amber background, sketch-orange left border) and a MOCK badge
-(`badge="mock"`) prepended to the issuer cell. The Investments tab,
+set `MainWindow.active_mock`; Reset clears it via `clear_active_mock`.
+On every Conglomerates rebuild (`_refresh_conglomerates`) the mock's
+projection is spliced into the report, and the mock's conglomerate
+section auto-expands so the row is immediately visible. The mock row
+renders with `rowKind="mock"` (amber background, sketch-orange left
+border) and a MOCK badge (`badge="mock"`) prepended to the issuer cell. The Investments tab,
 FGC totals, and `projection_cache` are unaffected — the mock is
 visible in the Conglomerates tab only. Tesouro mocks appear in (or
 create) the "Tesouro Nacional" section with NOT_FGC status on every

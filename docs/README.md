@@ -12,6 +12,7 @@ Given a portfolio of Brazilian fixed-income positions, JustFixed answers:
 - *What will it pay at maturity, gross and net of IR tax?*
 - *When are the next coupon payments?* (for juros mensais / juros semestrais bonds)
 - *How exposed are you to a single FGC conglomerate?* (R$250k per-conglomerate limit with UNDER/APPROACHING/OVER status)
+- *What is the maximum I can invest while staying under the FGC limit?* (back-solve to the R$250k ceiling, accounting for all same-conglomerate holdings across the holding window)
 - *When do my positions mature, and how much will I receive?* Export a .ics calendar file to drag into Google Calendar or Apple Calendar.
 
 It does **not** mark positions to market — accrual only. Phase 2 will add DI-curve MtM.

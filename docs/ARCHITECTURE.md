@@ -14,7 +14,7 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Persistence | Complete | 87 |
 | Engine | Complete | 181 |
 | Importers | Complete — XP, BTG, and BB pipelines all three layers done | 253 |
-| UI (PySide6) | B′, B′ companion, B24, B9a, B27, B34, C′ partial, and Curve Inspector complete (manual-entry and delete shipped; projection detail pending) | 212 |
+| UI (PySide6) | B′, B′ companion, B24, B9a, B27, B34, B41, C′ partial, and Curve Inspector complete (manual-entry and delete shipped; projection detail pending) | 212 |
 | Exports (calendar / ICS) | Complete | 9 |
 | Tools (admin scripts) | Complete | 51 |
 | Build info | Complete | 3 |
@@ -240,6 +240,30 @@ Computes per-conglomerate FGC exposure. Given a list of investments and an as-of
 
 The engine exposes two FGC report functions. `fgc_concentration_report(investments, as_of, assumed_cdi)` is the original API: takes raw investments, projects each internally, aggregates. `fgc_concentration_report_from_projections(projections)` takes already-computed `ProjectionResult` instances and aggregates without re-projecting. Both produce the same `FGCReport` and share their aggregation logic via the private helper `_build_report_from_projections`. The UI uses the second function from two call sites: `_ProjectWorker` (project once, FGC over results) and `refresh_table` (FGC over cached projections after a conglomerate edit). The first function remains for callers that don't have projections pre-computed.
 
+### `back_solve.py`
+
+Inverse projection for FGC-aware principal sizing. Single public function:
+
+```python
+max_principal_under_fgc(
+    issuer_name, product, rate, purchase_date, maturity_date,
+    existing_holdings, assumed_cdi, assumed_ipca,
+) → BackSolveResult
+```
+
+At each sample date `d` (the mock's purchase and maturity dates, plus
+every same-conglomerate existing holding's maturity that falls in the
+holding window), evaluates the closed-form per-date bound
+`(cap - existing_total(d)) / growth(d)` and takes the minimum across
+all sample dates. The closed-form sweep is valid because between any
+two consecutive sample dates `existing_total` is constant and the
+mock's growth factor is monotonically increasing, so the binding
+constraint within each segment always occurs at its later endpoint —
+checking the finite set of sample dates is sufficient. Returns the
+minimum bound as `max_principal`, together with the binding date and
+peak utilization ratio. Supports all four rate types. Used exclusively
+by the Calculator tab (B41) Solve mode; the UI is the only caller.
+
 ---
 
 ## Importers (`src/justfixed/importers/`)
@@ -373,7 +397,7 @@ Design choices:
 
 ### `main.py`
 
-PySide6 single-window desktop application. Two tabs: **Conglomerates** (default landing, B24) and **Investments**. The Conglomerates tab shows an accordion layout — one collapsible section per conglomerate with summary totals, FGC status badge, and expandable detail rows (per-investment projected balance via sequential drawdown). The Investments tab imports an XP statement, displays investments in a table with per-row FGC concentration badges and an inline-editable Conglomerate column (B′ curation), and filters by conglomerate and issuer via dropdowns with a totals strip below the table (B′ companion). Both tabs share a projection cache populated by a single "Project as of today" button. Background work (statement loading, projection) runs on `QThread` workers; a single `_set_busy` guard prevents overlapping operations. Empty state (no investments loaded) swaps the table for a centered prompt via `QStackedWidget`.
+PySide6 single-window desktop application. Three tabs: **Conglomerates** (default landing, B24), **Investments**, and **Calculator** (B41). The Conglomerates tab shows an accordion layout — one collapsible section per conglomerate with summary totals, FGC status badge, and expandable detail rows (per-investment projected balance via sequential drawdown). The Investments tab imports an XP statement, displays investments in a table with per-row FGC concentration badges and an inline-editable Conglomerate column (B′ curation), and filters by conglomerate and issuer via dropdowns with a totals strip below the table (B′ companion). Both tabs share a projection cache populated by a single "Project as of today" button. The Calculator tab models a hypothetical investment — either by entering a principal (Enter-value mode) or by solving for the maximum principal that keeps FGC exposure at or below R$250k throughout the holding window (Solve mode, via `engine/back_solve.py`) — and splices the mock into the Conglomerates expanded view for context; the mock is session-only and never touches the portfolio. Background work (statement loading, projection) runs on `QThread` workers; a single `_set_busy` guard prevents overlapping operations. Empty state (no investments loaded) swaps the table for a centered prompt via `QStackedWidget`.
 
 The module imports from `domain`, `persistence`, `engine.projection`, `engine.fgc`, `engine.conglomerate_report`, `exports.calendar`, `importers.detection` (which dispatches to the appropriate broker loader — XP, BTG, or BB), `importers.xp_loader` (for `LoadResult`), `importers.xp_mapper` (for `parse_brazilian_money`), and `ui.curve_inspector`. It introduces no new architectural layer between itself and those — direct calls, no service or presenter layer.
 
@@ -391,7 +415,7 @@ See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′
 
 ## Test discipline
 
-**998 tests, ~5 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**1133 tests, ~7 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 

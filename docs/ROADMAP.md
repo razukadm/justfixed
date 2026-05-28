@@ -780,37 +780,75 @@ This is accepted behaviour, not a planned fix.
 
 **Trigger to revisit:** If publish_curves.py parsing breaks again, or before relying heavily on the curve pipeline.
 
-### B41. Calculator tab — mock an investment, project, FGC headroom
+### B41. Calculator tab — mock an investment, project, FGC headroom — SHIPPED
 
-**Source:** Beta-tester request, 2026-05-21. Refined same day.
+**Shipped:** 2026-05-28, commits `5b2d0d8` (phase 1: back-solve engine,
+Prefixed), `bca0834` (phase 1.5: back-solve all four rate types),
+`4713559` (phase 2.1: tab shell + form), `ae75797` (phase 2.2:
+Enter-value mode), `48cb989` (phase 2.3a: Solve mode), `5f93747`
+(phase 2.3b: drawdown preview), `45edbe4` (phase 2.4a: active_mock
+state), `5edc924` (phase 2.4b-i: splice into Conglomerates report),
+`65e50d3` (phase 2.4b-ii: mock-row visual treatment cross-tab).
 
-**What it is:** A new "Calculator" tab where the user mocks a hypothetical investment (product type, principal, rate, dates), clicks Project, and sees its projected value at maturity — without saving it to the portfolio. The mock is then shown inside the conglomerate's investment list, as a highlighted row (distinct background colour marking it as hypothetical, not a real holding), so the user sees the mock sitting among the conglomerate's real investments with the running FGC exposure and status. In addition, JustFixed computes a suggested maximum amount to invest while staying under FGC coverage.
+**What shipped:** A Calculator tab that models a hypothetical
+investment without saving it to the portfolio. Enter-value mode
+projects the entered principal and shows maturity value, FGC
+utilization, status pill, effective net rate, and tenor. Solve mode
+calls `engine/back_solve.py` to compute the maximum principal that
+keeps the conglomerate's FGC exposure at or below R$ 250k across the
+entire holding window — with a drawdown preview showing how the mock
+interacts with overlapping same-issuer holdings at peak. Both modes
+splice the mock into the Conglomerates tab's expanded detail view
+(amber highlight, MOCK badge) while leaving the Investments tab, FGC
+totals, and projection cache unaffected. Session-only: the mock is
+cleared on Reset or app close. See `docs/UI_DESIGN.md` —
+"Calculator tab (B41)" for the full design record.
 
-**Parts, easy to hard:**
+---
 
-- **Calculator tab + mock projection (straightforward).** A form plus a Project button that runs the projection engine on an unsaved, hypothetical investment. Heavy reuse: the projection engine already exists, and C′ commit 6 shipped a manual-entry form — the calculator's input form is largely that form without the save-to-portfolio step.
-- **Mock as a highlighted row in the conglomerate view (straightforward — reuses B24).** Inject the mock investment into the Conglomerates-tab display for its conglomerate, rendered with a highlighted background. The Conglomerates tab (B24) already computes per-conglomerate exposure with sequential, maturity-ascending drawdown — the calculator feeds it one extra (mock) row and lets that existing logic show the resulting exposure and FGC status. The time-varying drawdown across maturities is therefore already handled by the reused tab logic. The highlight colour is the same UI primitive as B22 (background differentiation for matured rows).
-- **Computed "maximum amount to stay under FGC coverage" (the hard part — an inverse problem).** Beyond the visual what-if, JustFixed still computes a suggested max. The whole app runs forward: given an investment, compute future value and FGC exposure. This asks it to run backward: given a target (the R$250k FGC ceiling for the conglomerate), solve for the input principal whose projected maturity value, added to the conglomerate's existing exposure, lands at the ceiling — solving through the projection function, not subtracting from R$250k.
+### B41a. Promote mock to real investment
 
-**Pinned decisions:**
+**Source:** B41 design Decisions doc, open-questions list.
 
-- The feature is what-if view plus a computed hint: the highlighted-row view is the primary surface, AND a suggested max amount is computed and shown. (The alternative — a pure what-if with no computed suggestion, where the user discovers the limit by adjusting the mock — was considered and rejected; the user wants the number provided.)
-- The suggested maximum is shown both ways: the deposit amount (principal to invest) and the maturity value it grows to. Example: "Invest up to R$X, maturing at R$Y, keeping [conglomerate] at the R$250k FGC ceiling."
-- Exposure comparison basis for the computed suggestion: measured at the mock investment's maturity date.
+**What it is:** An action on the Calculator's result card that takes
+the currently-modeled mock and creates it as a real Investment via
+the Add-investment flow, pre-populated from the mock's form values.
 
-**Open question — investments that mature before the mock (applies to part 3, the computed suggestion).** Measuring exposure only at the mock's maturity date understates risk: a conglomerate investment that matures earlier was FGC-exposed alongside the mock during the overlap, but has paid out and is invisible by the mock's maturity. Three candidate treatments, unresolved:
+**Why deferred:** B41 phase 2 was already a substantial shipment. The
+promote action depends on `_AddInvestmentPanel` being pre-fillable
+from external state — its own wiring task. Deferred to avoid scope
+creep.
 
-- Ignore them — simple, one clear number, but understates risk during the overlap period.
-- Peak exposure across the mock's lifetime — correct (captures the worst moment), but more complex and harder to explain.
-- Count all current conglomerate investments at value — overstates risk, but errs safe; defensible for an FGC-headroom figure.
+**Trigger to revisit:** When a user requests it, or when comparing
+multiple mocks surfaces the need to commit one of them.
 
-Note: this ambiguity affects only the computed suggestion (part 3). The highlighted-row view (part 2) inherits B24's sequential-drawdown handling and does not face this question. Resolve when the feature is built and the actual numbers can be seen. B24's drawdown approach is a reference point.
+**What it needs:** A "Promote to real investment" button on the
+Calculator result card; a pre-fill API on `_AddInvestmentPanel`;
+opening the Add panel with those values pre-set.
 
-**Dependencies / sequencing:** The input form should reuse whatever C′ commit 6's manual-entry form established, and part 2 reuses the B24 Conglomerates-tab rendering — sequence after C′. The FGC and projection engines are already in place.
+---
 
-**Why deferred:** New feature from beta feedback. Parts 1 and 2 are ready once C′'s form exists; part 3 needs the open question resolved before implementation.
+### B41b. Calculator Solve-Tesouro hardening
 
-**Trigger to revisit:** After C′ ships, when the manual-entry form is available to build the calculator's input form on.
+**Source:** B41 phase 2.4a (the Treasury guard added in
+`_run_solve_calculation`, commit `45edbe4`).
+
+**What it is:** The Calculator's "Solve disabled for Treasury" rule is
+enforced by `setEnabled(False)` on the Solve radio button.
+Programmatic state changes (tests, future automation) can bypass the
+disable and reach the solve path with a Treasury issuer. The current
+code guards this with a silent skip; the harder enforcement would be
+a validation gate with a clear error if Solve mode is attempted for a
+Treasury issuer.
+
+**Why deferred:** The silent skip is correct for all reachable user
+paths. The harder enforcement is belt-and-suspenders code that does
+not change user-visible behavior.
+
+**Trigger to revisit:** If the Treasury-Solve path is ever reached by
+a real bug, or if the Calculator form is opened to issuer types the
+radio-disable can't catch (e.g. an issuer that toggles between
+Treasury and non-Treasury after Solve was already selected).
 
 ---
 
@@ -1134,6 +1172,9 @@ rows. Pill shows `N active · M matured` when matured rows are visible.
 
 ### Open items
 
-B44 (C′ projection detail view — accrual breakdown, IR tax, net-at-maturity
-in the detail panel) is the most immediate remaining UI feature. B32, B33,
-and the GuaranteeFund milestone remain open.
+B41 (Calculator tab) shipped 2026-05-28. B41a (promote mock to real
+investment) and B41b (Solve-Tesouro hardening) are new deferred items
+spun off from B41. B44 (C′ projection detail view — accrual breakdown,
+IR tax, net-at-maturity in the detail panel) is the most immediate
+remaining UI feature. B32, B33, and the GuaranteeFund milestone remain
+open.
