@@ -617,6 +617,19 @@ rows only; the mock row shows its own `projected_at_maturity`.
 `QLabel[indicator="peak"]`. Theme tokens: `MOCK_ROW_BG`,
 `MOCK_ROW_EDGE`, `MOCK_INK`, `PEAK_ROW_BG`, `PEAK_INDICATOR`.
 
+**Cross-tab mock rendering (B41 phase 2.4b).** Both Calculate modes
+set `MainWindow.active_mock`; Reset clears it via `clear_active_mock`. On every `_refresh_conglomerates`
+call the mock's projection is spliced into the Conglomerates report,
+and the mock's conglomerate section auto-expands so the row is
+immediately visible. The mock row renders with `rowKind="mock"`
+(amber background, sketch-orange left border) and a MOCK badge
+(`badge="mock"`) prepended to the issuer cell. The Investments tab,
+FGC totals, and `projection_cache` are unaffected — the mock is
+visible in the Conglomerates tab only. Tesouro mocks appear in (or
+create) the "Tesouro Nacional" section with NOT_FGC status on every
+row, because `build_conglomerate_report_from_projections` groups by
+conglomerate without filtering Treasury investments.
+
 ## What this document is not
 
 This is a scope and structure spec. It is intentionally silent on:

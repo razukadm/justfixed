@@ -299,9 +299,12 @@ def _make_cong_detail_header() -> QWidget:
     return w
 
 
-def _make_cong_detail_row(row: ConglomerateDetailRow, idx: int) -> QWidget:
+def _make_cong_detail_row(row: ConglomerateDetailRow, idx: int, *, is_mock: bool = False) -> QWidget:
     w = QWidget()
-    w.setProperty("detailRowParity", "even" if idx % 2 == 0 else "odd")
+    if is_mock:
+        w.setProperty("rowKind", "mock")
+    else:
+        w.setProperty("detailRowParity", "even" if idx % 2 == 0 else "odd")
     h = QHBoxLayout(w)
     h.setContentsMargins(8, 4, 8, 4)
 
@@ -313,8 +316,19 @@ def _make_cong_detail_row(row: ConglomerateDetailRow, idx: int) -> QWidget:
     mat_lbl.setFont(_MONO_FONT)
     h.addWidget(mat_lbl)
 
-    issuer_lbl = QLabel(row.issuer_name)
-    h.addWidget(issuer_lbl, stretch=1)
+    if is_mock:
+        issuer_cell = QWidget()
+        ic = QHBoxLayout(issuer_cell)
+        ic.setContentsMargins(0, 0, 0, 0)
+        ic.setSpacing(4)
+        badge = QLabel("MOCK")
+        badge.setProperty("badge", "mock")
+        ic.addWidget(badge)
+        ic.addWidget(QLabel(row.issuer_name))
+        ic.addStretch()
+        h.addWidget(issuer_cell, stretch=1)
+    else:
+        h.addWidget(QLabel(row.issuer_name), stretch=1)
 
     product_lbl = QLabel(rules_for(row.product).display_name)
     product_lbl.setFixedWidth(100)
@@ -334,6 +348,18 @@ def _make_cong_detail_row(row: ConglomerateDetailRow, idx: int) -> QWidget:
     h.addWidget(_make_fgc_badge(row.fgc_status, 110))
 
     return w
+
+
+def _row_is_mock(row: ConglomerateDetailRow, mock: _ActiveMock | None) -> bool:
+    """Return True when row's natural key matches the active mock's synth investment."""
+    if mock is None:
+        return False
+    m = mock.synth_investment
+    return (
+        row.issuer_name == m.issuer.name
+        and row.maturity_date == m.maturity_date
+        and row.principal == m.principal
+    )
 
 
 # ── Calculator: drawdown preview renderers (module-level) ─────────────────────
@@ -2592,7 +2618,7 @@ class MainWindow(QMainWindow):
         vbox.setSpacing(0)
         vbox.addWidget(_make_cong_detail_header())
         for idx, row in enumerate(section.rows):
-            vbox.addWidget(_make_cong_detail_row(row, idx))
+            vbox.addWidget(_make_cong_detail_row(row, idx, is_mock=_row_is_mock(row, self.active_mock)))
         return container
 
     def _clear_cong_layout(self) -> None:
