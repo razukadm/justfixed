@@ -275,6 +275,173 @@ def compute_totals(
     }
 
 
+# ── Conglomerate detail row renderers (module-level; no self state) ───────────
+
+def _make_cong_detail_header() -> QWidget:
+    w = QWidget()
+    w.setObjectName("detailHeader")
+    h = QHBoxLayout(w)
+    h.setContentsMargins(8, 4, 8, 4)
+    for text, width, stretch in [
+        ("Maturity",            100, 0),
+        ("Issuer",                0, 1),
+        ("Product",             100, 0),
+        ("Principal",           110, 0),
+        ("Current",             110, 0),
+        ("Projected",           110, 0),
+        ("Projected Balance",   120, 0),
+        ("FGC",                 110, 0),
+    ]:
+        lbl = QLabel(text)
+        if width:
+            lbl.setFixedWidth(width)
+        h.addWidget(lbl, stretch=stretch)
+    return w
+
+
+def _make_cong_detail_row(row: ConglomerateDetailRow, idx: int) -> QWidget:
+    w = QWidget()
+    w.setProperty("detailRowParity", "even" if idx % 2 == 0 else "odd")
+    h = QHBoxLayout(w)
+    h.setContentsMargins(8, 4, 8, 4)
+
+    d = row.maturity_date
+    mat_lbl = QLabel(
+        _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat)
+    )
+    mat_lbl.setFixedWidth(100)
+    mat_lbl.setFont(_MONO_FONT)
+    h.addWidget(mat_lbl)
+
+    issuer_lbl = QLabel(row.issuer_name)
+    h.addWidget(issuer_lbl, stretch=1)
+
+    product_lbl = QLabel(rules_for(row.product).display_name)
+    product_lbl.setFixedWidth(100)
+    h.addWidget(product_lbl)
+
+    for val, width in [
+        (row.principal.to_display(),        110),
+        (row.current_value.to_display(),     110),
+        (row.projected_value.to_display(),   110),
+        (row.projected_balance.to_display(), 120),
+    ]:
+        lbl = QLabel(val)
+        lbl.setFixedWidth(width)
+        lbl.setFont(_MONO_FONT)
+        h.addWidget(lbl)
+
+    h.addWidget(_make_fgc_badge(row.fgc_status, 110))
+
+    return w
+
+
+# ── Calculator: drawdown preview renderers (module-level) ─────────────────────
+# Separate renderer from the Conglomerates detail rows above.
+# The column sets genuinely differ — the drawdown drops the "Current value"
+# column, adds an indent/indicator column for the peak marker, and a MOCK
+# badge on the mock row's issuer cell. A shared parametrized helper would
+# carry more is-drawdown / is-mock branching than two focused functions, so
+# they are kept separate deliberately.
+
+def _make_drawdown_header() -> QWidget:
+    w = QWidget()
+    w.setObjectName("detailHeader")
+    h = QHBoxLayout(w)
+    h.setContentsMargins(8, 4, 8, 4)
+    ind = QLabel()
+    ind.setFixedWidth(20)
+    h.addWidget(ind)
+    for text, width, stretch in [
+        ("Maturity",         100, 0),
+        ("Issuer",             0, 1),
+        ("Product",          100, 0),
+        ("Principal",        110, 0),
+        ("Projected",        110, 0),
+        ("Proj. Balance",    120, 0),
+    ]:
+        lbl = QLabel(text)
+        if width:
+            lbl.setFixedWidth(width)
+        h.addWidget(lbl, stretch=stretch)
+    return w
+
+
+def _make_drawdown_row(
+    idx: int,
+    maturity_date: date,
+    issuer_name: str,
+    product: ProductType,
+    principal: Money,
+    projected: Money,
+    balance: Money,
+    *,
+    is_mock: bool,
+    is_peak: bool,
+) -> QWidget:
+    w = QWidget()
+    if is_mock:
+        w.setProperty("rowKind", "mock")
+    elif is_peak:
+        w.setProperty("rowKind", "peak")
+    else:
+        w.setProperty("detailRowParity", "even" if idx % 2 == 0 else "odd")
+
+    h = QHBoxLayout(w)
+    h.setContentsMargins(8, 4, 8, 4)
+
+    ind_lbl = QLabel("▶" if (is_peak and not is_mock) else "")
+    if is_peak and not is_mock:
+        ind_lbl.setProperty("indicator", "peak")
+    ind_lbl.setFixedWidth(20)
+    h.addWidget(ind_lbl)
+
+    d = maturity_date
+    mat_lbl = QLabel(
+        _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat)
+    )
+    mat_lbl.setFixedWidth(100)
+    mat_lbl.setFont(_MONO_FONT)
+    h.addWidget(mat_lbl)
+
+    if is_mock:
+        issuer_cell = QWidget()
+        ic = QHBoxLayout(issuer_cell)
+        ic.setContentsMargins(0, 0, 0, 0)
+        ic.setSpacing(4)
+        badge = QLabel("MOCK")
+        badge.setProperty("badge", "mock")
+        ic.addWidget(badge)
+        ic.addWidget(QLabel(issuer_name))
+        ic.addStretch()
+        h.addWidget(issuer_cell, stretch=1)
+    else:
+        h.addWidget(QLabel(issuer_name), stretch=1)
+
+    product_lbl = QLabel(rules_for(product).display_name)
+    product_lbl.setFixedWidth(100)
+    h.addWidget(product_lbl)
+
+    for val, width in [
+        (principal.to_display(), 110),
+        (projected.to_display(), 110),
+    ]:
+        lbl = QLabel(val)
+        lbl.setFixedWidth(width)
+        lbl.setFont(_MONO_FONT)
+        h.addWidget(lbl)
+
+    bal_text = balance.to_display()
+    if is_peak and not is_mock:
+        bal_text += " · cap binds"
+    bal_lbl = QLabel(bal_text)
+    bal_lbl.setFixedWidth(150)
+    bal_lbl.setFont(_MONO_FONT)
+    h.addWidget(bal_lbl)
+
+    return w
+
+
 # ── Background workers ────────────────────────────────────────────────────────
 
 class _ImportWorker(QThread):
@@ -938,6 +1105,8 @@ class _CalculatorTab(QWidget):
         self._result_stack = QStackedWidget()
         self._result_stack.addWidget(self._placeholder)  # index 0: placeholder
         self._result_panel: Panel | None = None
+        self._drawdown_panel: Panel | None = None
+        self._drawdown_rows: list[QWidget] = []
 
         # Result labels — valid only after a successful Enter-value calculation.
         self._res_principal_lbl: QLabel | None = None
@@ -1055,6 +1224,8 @@ class _CalculatorTab(QWidget):
             old.setParent(None)  # type: ignore[arg-type]
         self._result_stack.setCurrentIndex(0)
         self._result_panel = None
+        self._drawdown_panel = None
+        self._drawdown_rows = []
 
     def _on_calculate_clicked(self) -> None:
         if self._radio_solve.isChecked():
@@ -1285,7 +1456,7 @@ class _CalculatorTab(QWidget):
 
         tenor_days = (maturity_date - purchase_date).days
 
-        panel = self._build_solve_result_card(
+        solve_panel = self._build_solve_result_card(
             issuer=issuer,
             product=product,
             rate=rate,
@@ -1298,7 +1469,15 @@ class _CalculatorTab(QWidget):
             peak_exposure=peak_exposure,
             maturity_date=maturity_date,
         )
-        self._show_result_card(panel)
+        drawdown_panel = self._build_drawdown_panel(
+            result=result,
+            existing_holdings=existing,
+            issuer=issuer,
+            product=product,
+            purchase_date=purchase_date,
+            maturity_date=maturity_date,
+        )
+        self._show_solve_panels(solve_panel, drawdown_panel)
 
         if result.max_principal == Decimal("0"):
             msg = f"Existing {issuer.name} holdings already at the FGC cap."
@@ -1398,6 +1577,124 @@ class _CalculatorTab(QWidget):
         panel = Panel(title="Back-solve result", meta=meta)
         panel.set_content(body)
         return panel
+
+    def _build_drawdown_panel(
+        self,
+        *,
+        result: back_solve.BackSolveResult,
+        existing_holdings: list[Investment],
+        issuer: Issuer,
+        product: ProductType,
+        purchase_date: date,
+        maturity_date: date,
+    ) -> Panel:
+        # Same filter as back_solve.max_principal_under_fgc uses internally.
+        relevant = [
+            inv for inv in existing_holdings
+            if inv.issuer.name == issuer.name
+            and inv.issuer.kind != IssuerKind.TREASURY
+            and inv.purchase_date < maturity_date
+            and inv.maturity_date > purchase_date
+        ]
+
+        # Project each existing holding to its own maturity to get gross value.
+        existing_data: list[tuple[date, str, ProductType, Money, Money]] = []
+        for inv in relevant:
+            proj = project(
+                inv, as_of=inv.maturity_date,
+                assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA,
+            )
+            existing_data.append((
+                inv.maturity_date, inv.issuer.name, inv.product,
+                inv.principal, proj.current_value,
+            ))
+        existing_data.sort(key=lambda r: r[0])
+
+        # Right-to-left balance for existing rows only (mock excluded).
+        n = len(existing_data)
+        existing_balances: list[Decimal] = [Decimal("0")] * n
+        running = Decimal("0")
+        for i in range(n - 1, -1, -1):
+            running += existing_data[i][4].amount
+            existing_balances[i] = running
+
+        # Build combined list: (mat, name, prod, principal, projected, balance, is_mock)
+        combined: list[tuple[date, str, ProductType, Money, Money, Decimal, bool]] = [
+            (r[0], r[1], r[2], r[3], r[4], existing_balances[i], False)
+            for i, r in enumerate(existing_data)
+        ]
+        combined.append((
+            maturity_date, issuer.name, product,
+            Money(result.max_principal), Money(result.projected_at_maturity),
+            result.projected_at_maturity, True,
+        ))
+        combined.sort(key=lambda r: r[0])
+
+        self._drawdown_rows = []
+        body = QWidget()
+        vbox = QVBoxLayout(body)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+        vbox.addWidget(_make_drawdown_header())
+
+        for idx, row_data in enumerate(combined):
+            mat_d, iss_n, prod_t, principal, projected, balance, is_mock = row_data
+            is_peak = (mat_d == result.peak_date)
+            # Peak-row balance is stamped to the cap because in Solve mode
+            # the back-solve fills the cap at the binding date by
+            # construction: combined(peak) = existing(peak) + max_principal
+            # × growth(peak) ≈ cap (within one cent, ROUND_DOWN). The one
+            # exception is max_principal == 0 (existing already over cap),
+            # where the stamp would understate reality — so we show the
+            # real running balance there instead. The result card already
+            # communicates the over-cap state separately.
+            override_peak = (
+                is_peak and not is_mock
+                and result.max_principal > Decimal("0")
+            )
+            display_balance = (
+                Money(FGC_PER_CONGLOMERATE_LIMIT.amount)
+                if override_peak
+                else Money(balance)
+            )
+            w = _make_drawdown_row(
+                idx, mat_d, iss_n, prod_t, principal, projected, display_balance,
+                is_mock=is_mock, is_peak=is_peak,
+            )
+            self._drawdown_rows.append(w)
+            vbox.addWidget(w)
+
+        vbox.addStretch()
+        panel = Panel(
+            title=f"Drawdown preview — {issuer.name} sequential",
+            meta="mock highlighted",
+        )
+        panel.set_content(body)
+        return panel
+
+    def _show_solve_panels(self, solve_panel: Panel, drawdown_panel: Panel) -> None:
+        if self._result_stack.count() > 1:
+            old = self._result_stack.widget(1)
+            self._result_stack.removeWidget(old)
+            old.setParent(None)  # type: ignore[arg-type]
+
+        container = QWidget()
+        vbox = QVBoxLayout(container)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(8)
+        vbox.addWidget(solve_panel)
+        vbox.addWidget(drawdown_panel)
+        vbox.addStretch()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(container)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        self._result_stack.addWidget(scroll)
+        self._result_stack.setCurrentIndex(1)
+        self._result_panel = solve_panel
+        self._drawdown_panel = drawdown_panel
 
     def _build_result_card(
         self,
@@ -2249,67 +2546,10 @@ class MainWindow(QMainWindow):
         vbox = QVBoxLayout(container)
         vbox.setContentsMargins(20, 0, 0, 0)
         vbox.setSpacing(0)
-        vbox.addWidget(self._make_detail_header())
+        vbox.addWidget(_make_cong_detail_header())
         for idx, row in enumerate(section.rows):
-            vbox.addWidget(self._make_detail_row(row, idx))
+            vbox.addWidget(_make_cong_detail_row(row, idx))
         return container
-
-    def _make_detail_header(self) -> QWidget:
-        w = QWidget()
-        w.setObjectName("detailHeader")
-        h = QHBoxLayout(w)
-        h.setContentsMargins(8, 4, 8, 4)
-        for text, width, stretch in [
-            ("Maturity",            100, 0),
-            ("Issuer",                0, 1),
-            ("Product",             100, 0),
-            ("Principal",           110, 0),
-            ("Current",             110, 0),
-            ("Projected",           110, 0),
-            ("Projected Balance",   120, 0),
-            ("FGC",                 110, 0),
-        ]:
-            lbl = QLabel(text)
-            if width:
-                lbl.setFixedWidth(width)
-            h.addWidget(lbl, stretch=stretch)
-        return w
-
-    def _make_detail_row(self, row: ConglomerateDetailRow, idx: int) -> QWidget:
-        w = QWidget()
-        w.setProperty("detailRowParity", "even" if idx % 2 == 0 else "odd")
-        h = QHBoxLayout(w)
-        h.setContentsMargins(8, 4, 8, 4)
-
-        d = row.maturity_date
-        mat_lbl = QLabel(
-            _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat)
-        )
-        mat_lbl.setFixedWidth(100)
-        mat_lbl.setFont(_MONO_FONT)
-        h.addWidget(mat_lbl)
-
-        issuer_lbl = QLabel(row.issuer_name)
-        h.addWidget(issuer_lbl, stretch=1)
-
-        product_lbl = QLabel(rules_for(row.product).display_name)
-        product_lbl.setFixedWidth(100)
-        h.addWidget(product_lbl)
-
-        for val, width in [
-            (row.principal.to_display(),        110),
-            (row.current_value.to_display(),     110),
-            (row.projected_value.to_display(),   110),
-            (row.projected_balance.to_display(), 120),
-        ]:
-            lbl = QLabel(val)
-            lbl.setFixedWidth(width)
-            lbl.setFont(_MONO_FONT)
-            h.addWidget(lbl)
-
-        h.addWidget(_make_fgc_badge(row.fgc_status, 110))
-
-        return w
 
     def _clear_cong_layout(self) -> None:
         while self._cong_layout.count():

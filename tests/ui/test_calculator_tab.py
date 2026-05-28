@@ -529,3 +529,130 @@ class TestSolveTreasuryDisable:
         )
         tab._issuer_combo.setCurrentIndex(treasury_idx)
         assert not tab._radio_solve.isEnabled()
+
+
+# ── Test H: Drawdown preview panel ───────────────────────────────────────────
+
+class TestDrawdownPanel:
+    """H: Drawdown preview card rendered during Solve mode."""
+
+    def _run_solve(self, qapp, factory=None) -> _CalculatorTab:
+        """Run a Solve calculation on a factory that already has exactly one issuer."""
+        tab = _CalculatorTab(factory)
+        _set_form(tab)
+        tab._radio_solve.setChecked(True)
+        tab._mode_group.idClicked.emit(1)
+        tab._on_calculate_clicked()
+        return tab
+
+    def test_drawdown_panel_shown(self, qapp) -> None:
+        factory = _make_real_factory()
+        _save_issuer(factory)
+        tab = self._run_solve(qapp, factory)
+        assert tab._drawdown_panel is not None
+
+    def test_mock_row_has_mock_kind(self, qapp) -> None:
+        factory = _make_real_factory()
+        _save_issuer(factory)
+        tab = self._run_solve(qapp, factory)
+        assert tab._drawdown_rows
+        mock_rows = [w for w in tab._drawdown_rows if w.property("rowKind") == "mock"]
+        assert len(mock_rows) == 1
+
+    def test_overlapping_holding_appears(self, qapp) -> None:
+        # An existing holding that overlaps the mock window should appear as a row.
+        factory = _make_real_factory()
+        issuer = _save_issuer(factory)
+        overlapping = Investment.create(
+            product=ProductType.CDB, issuer=issuer,
+            principal=Money.from_reais("5000"),
+            rate=Prefixed.from_percent("12"),
+            purchase_date=date(2023, 6, 1),
+            maturity_date=date(2024, 6, 1),  # overlaps _PURCHASE (2024-01-02).._MATURITY (2025-01-02)
+        )
+        InvestmentRepository(factory).save(overlapping)
+        tab = self._run_solve(qapp, factory)
+        # Should have: 1 existing row + 1 mock row
+        assert len(tab._drawdown_rows) == 2
+        existing_rows = [w for w in tab._drawdown_rows if w.property("rowKind") != "mock"]
+        assert len(existing_rows) == 1
+
+    def test_non_overlapping_excluded(self, qapp) -> None:
+        # An existing holding whose window does not overlap the mock window is excluded.
+        factory = _make_real_factory()
+        issuer = _save_issuer(factory)
+        outside = Investment.create(
+            product=ProductType.CDB, issuer=issuer,
+            principal=Money.from_reais("1000"),
+            rate=Prefixed.from_percent("10"),
+            purchase_date=date(2022, 1, 2),
+            maturity_date=date(2023, 12, 31),  # matures before _PURCHASE (2024-01-02)
+        )
+        InvestmentRepository(factory).save(outside)
+        tab = self._run_solve(qapp, factory)
+        # Only the mock row — the outside holding is excluded.
+        assert len(tab._drawdown_rows) == 1
+        assert tab._drawdown_rows[0].property("rowKind") == "mock"
+
+    def test_drawdown_peak_balance_real_when_principal_zero(self, qapp) -> None:
+        # When max_principal == 0 (existing already at cap), the peak-row balance
+        # shows the real running balance — not the cap stamp (R$ 250.000,00).
+        factory = _make_real_factory()
+        issuer = _save_issuer(factory)
+        at_cap = Investment.create(
+            product=ProductType.CDB, issuer=issuer,
+            principal=Money.from_reais("250000"),
+            rate=Prefixed.from_percent("5"),
+            purchase_date=_PURCHASE,
+            maturity_date=_MATURITY,
+        )
+        InvestmentRepository(factory).save(at_cap)
+
+        tab = self._run_solve(qapp, factory)
+
+        assert tab._res_principal_lbl is not None
+        assert tab._res_principal_lbl.text() == "R$ 0,00"
+
+        peak_rows = [w for w in tab._drawdown_rows if w.property("rowKind") == "peak"]
+        assert len(peak_rows) == 1
+        bal_lbl = peak_rows[0].layout().itemAt(6).widget()
+        assert bal_lbl is not None
+
+        proj = project(
+            at_cap, as_of=_MATURITY,
+            assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA,
+        )
+        expected_prefix = proj.current_value.to_display()
+        assert bal_lbl.text().startswith(expected_prefix)
+
+
+# ── Test I: Tesouro exclusion from drawdown ───────────────────────────────────
+
+class TestDrawdownTesouroExcluded:
+    """I: Treasury holdings are excluded from the drawdown preview."""
+
+    def test_treasury_holding_not_in_drawdown(self, qapp) -> None:
+        factory = _make_real_factory()
+        issuer = _save_issuer(factory)
+        treasury_issuer = _save_issuer(
+            factory, "Tesouro Nacional", "Tesouro Nacional", IssuerKind.TREASURY
+        )
+        treasury_inv = Investment.create(
+            product=ProductType.TESOURO_PREFIXADO, issuer=treasury_issuer,
+            principal=Money.from_reais("10000"),
+            rate=Prefixed.from_percent("13"),
+            purchase_date=date(2024, 1, 2),
+            maturity_date=date(2025, 6, 1),  # overlaps the mock window
+        )
+        InvestmentRepository(factory).save(treasury_inv)
+
+        tab = _CalculatorTab(factory)
+        _set_form(tab)
+        tab._radio_solve.setChecked(True)
+        tab._mode_group.idClicked.emit(1)
+        tab._on_calculate_clicked()
+
+        # Only the mock row — Treasury is excluded by kind filter.
+        assert tab._drawdown_rows is not None
+        assert len(tab._drawdown_rows) == 1
+        assert tab._drawdown_rows[0].property("rowKind") == "mock"

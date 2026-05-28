@@ -165,4 +165,26 @@ QStatusBar {{
     color: {c.INK_3};
     border-top: 1px solid {c.RULE_2};
 }}
+
+/* ── Calculator: drawdown preview — mock row (hypothetical investment) ── */
+QWidget[rowKind="mock"] {{
+    background-color: {c.MOCK_ROW_BG};
+    border-left: 3px solid {c.MOCK_ROW_EDGE};
+    border-bottom: 1px solid {c.CONG_ROW_BORDER};
+}}
+QLabel[badge="mock"] {{
+    color: {c.MOCK_INK};
+    font-weight: bold;
+    padding-right: 4px;
+}}
+
+/* ── Calculator: drawdown preview — peak (cap-binds) row ────────────── */
+QWidget[rowKind="peak"] {{
+    background-color: {c.PEAK_ROW_BG};
+    border-bottom: 1px solid {c.CONG_ROW_BORDER};
+}}
+QLabel[indicator="peak"] {{
+    color: {c.PEAK_INDICATOR};
+    font-weight: bold;
+}}
 """

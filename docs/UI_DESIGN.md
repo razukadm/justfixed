@@ -581,6 +581,42 @@ The PAID treatment therefore uses imperative `setForeground()` on each
 `QStyledItemDelegate` or `Qt.ItemDataRole.ForegroundRole` rather than
 reaching for QSS selectors.
 
+### Calculator tab — FGC back-solve (B41)
+
+**Shipped** (commits `bca0834`, `5b2d0d8`, `48cb989`, plus 2.3b).
+
+The Calculator tab surfaces `engine/back_solve.py` via two modes:
+
+**Enter-value mode.** User enters a principal amount; the tab projects
+the investment to maturity and shows: principal, projected value at
+maturity, FGC utilization (gross / cap), status pill, effective net
+rate, and tenor days. FGC status thresholds match `engine/fgc.py`
+(`ExposureStatus`).
+
+**Solve mode.** User omits the principal; the tab calls
+`back_solve.max_principal_under_fgc(...)` and shows the maximum
+principal that keeps FGC exposure at or below R$ 250k at every sample
+date. The result card mirrors Enter-value (max principal, gross
+projected, peak utilization, status, gross effective rate, tenor).
+Disabled for Treasury issuers — they are not FGC-covered.
+
+**Drawdown preview (Solve mode only).** Below the result card, a
+"Drawdown preview" panel shows the sequence of maturities for
+same-issuer, non-Treasury, window-overlapping holdings alongside the
+hypothetical mock investment. Rows are sorted by maturity date.
+The mock row is rendered with `[rowKind="mock"]` (amber background,
+sketch-orange left border, `badge="mock"` label) to distinguish it
+from existing holdings. The row at `result.peak_date` is the
+cap-binds row: `[rowKind="peak"]` (faint amber), `▶` indicator, and
+the balance cell shows `R$ 250.000,00 · cap binds`. The balance
+column shows the right-to-left cumulative gross exposure for existing
+rows only; the mock row shows its own `projected_at_maturity`.
+
+**QSS properties introduced:** `QWidget[rowKind="mock"]`,
+`QWidget[rowKind="peak"]`, `QLabel[badge="mock"]`,
+`QLabel[indicator="peak"]`. Theme tokens: `MOCK_ROW_BG`,
+`MOCK_ROW_EDGE`, `MOCK_INK`, `PEAK_ROW_BG`, `PEAK_INDICATOR`.
+
 ## What this document is not
 
 This is a scope and structure spec. It is intentionally silent on:
