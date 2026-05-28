@@ -84,8 +84,11 @@ from justfixed.engine.conglomerate_report import (
     build_conglomerate_report_from_projections,
 )
 from justfixed.engine.calendar import business_days_between
+from justfixed.engine import back_solve
 from justfixed.engine.fgc import (
     ExposureStatus,
+    FGC_PER_CONGLOMERATE_LIMIT,
+    FGC_APPROACHING_THRESHOLD,
     fgc_concentration_report,
     fgc_concentration_report_from_projections,
 )
@@ -1008,8 +1011,14 @@ class _CalculatorTab(QWidget):
         issuer = self._issuer_combo.currentData()
         if isinstance(issuer, Issuer):
             self._cong_edit.setText(issuer.conglomerate)
+            is_treasury = issuer.kind == IssuerKind.TREASURY
+            self._radio_solve.setEnabled(not is_treasury)
+            if is_treasury and self._radio_solve.isChecked():
+                self._radio_enter.setChecked(True)
+                self._value_edit.setEnabled(True)
         else:
             self._cong_edit.setText("")
+            self._radio_solve.setEnabled(True)
 
     def _on_mode_changed(self, button_id: int) -> None:
         self._value_edit.setEnabled(button_id == 0)  # 0 = "Enter value"
@@ -1049,21 +1058,9 @@ class _CalculatorTab(QWidget):
 
     def _on_calculate_clicked(self) -> None:
         if self._radio_solve.isChecked():
-            self._show_solve_stub()
+            self._run_solve_calculation()
         else:
             self._run_enter_value_calculation()
-
-    def _show_solve_stub(self) -> None:
-        stub = QLabel("Solve mode coming in B41 phase 2 part 2.")
-        stub.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        stub.setProperty("role", "emptyState")
-        if self._result_stack.count() > 1:
-            old = self._result_stack.widget(1)
-            self._result_stack.removeWidget(old)
-            old.setParent(None)  # type: ignore[arg-type]
-        self._result_stack.addWidget(stub)
-        self._result_stack.setCurrentIndex(1)
-        self._result_panel = None
 
     def _run_enter_value_calculation(self) -> None:
         self._clear_errors()
@@ -1212,6 +1209,195 @@ class _CalculatorTab(QWidget):
         main_win = self.parent()
         if main_win is not None and hasattr(main_win, "statusBar"):
             main_win.statusBar().showMessage(msg)
+
+    def _run_solve_calculation(self) -> None:
+        self._clear_errors()
+        self._reset_result_area()
+
+        issuer = self._issuer_combo.currentData()
+        if not isinstance(issuer, Issuer):
+            self._set_field_error(
+                None, self._issuer_err_lbl, self._issuer_err_wrap, "Select an issuer."
+            )
+            return
+
+        product = self._product_combo.currentData()
+        purchase_date = self._qdate_to_date(self._purchase_date_edit.date())
+        maturity_date = self._qdate_to_date(self._maturity_date_edit.date())
+
+        if maturity_date <= purchase_date:
+            self._set_field_error(
+                None, self._maturity_err_lbl, self._maturity_err_wrap,
+                "Maturity date must be after purchase date.",
+            )
+            return
+
+        try:
+            rate = self._rate_editor.get_rate()
+        except ValueError as exc:
+            self._set_field_error(
+                None, self._value_err_lbl, self._value_err_wrap, f"Rate: {exc}"
+            )
+            return
+
+        existing = InvestmentRepository(self._session_factory).list_all()
+        result = back_solve.max_principal_under_fgc(
+            issuer_name=issuer.name,
+            product=product,
+            rate=rate,
+            purchase_date=purchase_date,
+            maturity_date=maturity_date,
+            existing_holdings=existing,
+            assumed_cdi=_ASSUMED_CDI,
+            assumed_ipca=_ASSUMED_IPCA,
+        )
+
+        pu = result.peak_utilization
+        peak_exposure = pu * FGC_PER_CONGLOMERATE_LIMIT.amount
+
+        if pu >= Decimal("1"):
+            status_text = "OVER"
+            fgc_status_str = "over"
+            status_hint = "FGC cap exceeded at peak — reduce tenor or switch issuer."
+        elif pu >= Decimal("0.99"):  # AT CAP: calculator-specific display threshold
+            status_text = "AT CAP"
+            fgc_status_str = "under"
+            status_hint = ""
+        elif peak_exposure >= FGC_APPROACHING_THRESHOLD.amount:
+            status_text = "APPROACHING"
+            fgc_status_str = "approaching"
+            status_hint = "Close to the R$ 250k FGC limit."
+        else:
+            status_text = "UNDER"
+            fgc_status_str = "under"
+            status_hint = ""
+
+        bdays = business_days_between(purchase_date, maturity_date)
+        years_252 = Decimal(bdays) / Decimal("252")
+        if result.max_principal > Decimal("0"):
+            # Gross effective rate: FGC works on gross; Solve mode is FGC-aware.
+            # This will differ from the net effective rate shown in Enter-value mode.
+            effective_aa = (
+                result.projected_at_maturity / result.max_principal
+            ) ** (Decimal("1") / years_252) - Decimal("1")
+        else:
+            effective_aa = Decimal("0")
+
+        tenor_days = (maturity_date - purchase_date).days
+
+        panel = self._build_solve_result_card(
+            issuer=issuer,
+            product=product,
+            rate=rate,
+            result=result,
+            status_text=status_text,
+            fgc_status_str=fgc_status_str,
+            status_hint=status_hint,
+            effective_aa=effective_aa,
+            tenor_days=tenor_days,
+            peak_exposure=peak_exposure,
+            maturity_date=maturity_date,
+        )
+        self._show_result_card(panel)
+
+        if result.max_principal == Decimal("0"):
+            msg = f"Existing {issuer.name} holdings already at the FGC cap."
+        else:
+            peak_str = result.peak_date.strftime("%d/%m/%Y")
+            msg = f"Solved for max principal under FGC · cap binds {peak_str}"
+        main_win = self.parent()
+        if main_win is not None and hasattr(main_win, "statusBar"):
+            main_win.statusBar().showMessage(msg)
+
+    def _build_solve_result_card(
+        self,
+        *,
+        issuer: Issuer,
+        product: ProductType,
+        rate: Rate,
+        result: back_solve.BackSolveResult,
+        status_text: str,
+        fgc_status_str: str,
+        status_hint: str,
+        effective_aa: Decimal,
+        tenor_days: int,
+        peak_exposure: Decimal,
+        maturity_date: date,
+    ) -> Panel:
+        meta = (
+            f"{issuer.name} · {rules_for(product).display_name}"
+            f" · {_format_rate_short(rate)}"
+        )
+        body = QWidget()
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(10, 8, 10, 12)
+        bl.setSpacing(8)
+
+        def _row(k: str, v_widget: QWidget, hint: str = "") -> None:
+            h = QHBoxLayout()
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(8)
+            k_lbl = QLabel(k)
+            k_lbl.setMinimumWidth(180)
+            k_lbl.setStyleSheet(f"color: {COLORS.INK_2};")
+            h.addWidget(k_lbl)
+            h.addWidget(v_widget)
+            if hint:
+                hint_lbl = QLabel(hint)
+                hint_lbl.setWordWrap(True)
+                hint_lbl.setStyleSheet(f"color: {COLORS.INK_3}; font-size: 10px;")
+                h.addWidget(hint_lbl, 1)
+            else:
+                h.addStretch(1)
+            bl.addLayout(h)
+
+        # Line 1 — Maximum principal (solved; FGC-capped)
+        self._res_principal_lbl = QLabel(Money(result.max_principal).to_display())
+        self._res_principal_lbl.setProperty("calcResultBig", "true")
+        if result.max_principal == Decimal("0"):
+            _row(
+                "Maximum principal (FGC-capped)",
+                self._res_principal_lbl,
+                "Existing holdings already at or above the FGC cap."
+                " No headroom for a new position.",
+            )
+        else:
+            _row("Maximum principal (FGC-capped)", self._res_principal_lbl)
+
+        # Line 2 — Projected at maturity (gross; FGC cap is assessed on gross)
+        mat_str = maturity_date.strftime("%d/%m/%Y")
+        self._res_projected_lbl = QLabel(Money(result.projected_at_maturity).to_display())
+        _row(f"Projected at maturity ({mat_str})", self._res_projected_lbl, "Gross, pre-tax.")
+
+        # Line 3 — FGC peak utilization
+        peak_date_str = result.peak_date.strftime("%d/%m/%Y")
+        peak_text = (
+            f"{Money(peak_exposure).to_display()} / {FGC_PER_CONGLOMERATE_LIMIT.to_display()}"
+            f" at {peak_date_str}"
+        )
+        self._res_fgc_util_lbl = QLabel(peak_text)
+        _row("FGC peak utilization", self._res_fgc_util_lbl)
+
+        # Line 4 — Status pill
+        self._res_status_pill = QLabel(status_text)
+        self._res_status_pill.setProperty("fgcStatus", fgc_status_str)
+        _row("Status", self._res_status_pill, status_hint)
+
+        # Line 5 — Effective rate (gross a.a.; differs from net rate in Enter-value).
+        # Omitted when max_principal == 0 (rate is meaningless with zero principal).
+        if result.max_principal > Decimal("0"):
+            eff_pct = _format_brazilian_percent(effective_aa * Decimal("100"))
+            self._res_effective_rate_lbl = QLabel(eff_pct)
+            _row("Effective rate (a.a., gross)", self._res_effective_rate_lbl)
+
+        # Line 6 — Tenor
+        self._res_tenor_lbl = QLabel(f"{tenor_days} days")
+        _row("Tenor", self._res_tenor_lbl)
+
+        bl.addStretch()
+        panel = Panel(title="Back-solve result", meta=meta)
+        panel.set_content(body)
+        return panel
 
     def _build_result_card(
         self,

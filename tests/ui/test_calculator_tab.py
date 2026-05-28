@@ -26,6 +26,7 @@ from justfixed.domain.issuer import Issuer, IssuerKind
 from justfixed.domain.money import Money
 from justfixed.domain.product import ProductType
 from justfixed.domain.rates import Prefixed, _format_brazilian_percent
+from justfixed.engine import back_solve as _back_solve
 from justfixed.engine.calendar import business_days_between
 from justfixed.engine.projection import project
 from justfixed.persistence.database import Base, make_engine, make_session_factory
@@ -403,24 +404,128 @@ class TestResetClearsResult:
         assert tab._result_panel is None
 
 
-# ── Test F: Solve mode stub ────────────────────────────────────────────────────
+# ── Test F: Solve mode result card ────────────────────────────────────────────
 
-class TestSolveModeStub:
-    """F: Calculate in Solve mode shows the stub message; back_solve is not called."""
+class TestSolveMode:
+    """F: Calculate in Solve mode shows a real back-solve result card."""
 
-    def test_solve_stub_shown(self, qapp) -> None:
-        from PySide6.QtWidgets import QLabel as _QLabel
+    def _run(self, qapp, existing: list[Investment] | None = None):
         factory = _make_real_factory()
-        _save_issuer(factory)
+        issuer = _save_issuer(factory)
+        if existing:
+            for inv in existing:
+                InvestmentRepository(factory).save(inv)
         tab = _CalculatorTab(factory)
         _set_form(tab)
         tab._radio_solve.setChecked(True)
         tab._mode_group.idClicked.emit(1)
+        tab._on_calculate_clicked()
+        return tab, issuer
 
+    def _expected(self, issuer: Issuer) -> _back_solve.BackSolveResult:
+        return _back_solve.max_principal_under_fgc(
+            issuer_name=issuer.name,
+            product=ProductType.CDB,
+            rate=Prefixed.from_percent("14"),
+            purchase_date=_PURCHASE,
+            maturity_date=_MATURITY,
+            existing_holdings=[],
+            assumed_cdi=_ASSUMED_CDI,
+            assumed_ipca=_ASSUMED_IPCA,
+        )
+
+    def test_solve_shows_result_panel(self, qapp) -> None:
+        tab, _ = self._run(qapp)
+        assert tab._result_stack.currentIndex() == 1
+        assert tab._result_panel is not None
+
+    def test_max_principal_line(self, qapp) -> None:
+        tab, issuer = self._run(qapp)
+        result = self._expected(issuer)
+        assert tab._res_principal_lbl is not None
+        assert tab._res_principal_lbl.text() == Money(result.max_principal).to_display()
+
+    def test_projected_gross_line(self, qapp) -> None:
+        tab, issuer = self._run(qapp)
+        result = self._expected(issuer)
+        assert tab._res_projected_lbl is not None
+        assert tab._res_projected_lbl.text() == Money(result.projected_at_maturity).to_display()
+
+    def test_status_at_cap_no_holdings(self, qapp) -> None:
+        # Solve mode maximizes principal up to the FGC cap, so peak_utilization
+        # is always ≥ 0.99 → AT CAP when no existing holdings consume the limit.
+        tab, _ = self._run(qapp)
+        assert tab._res_status_pill is not None
+        assert tab._res_status_pill.text() == "AT CAP"
+        assert tab._res_status_pill.property("fgcStatus") == "under"
+
+    def test_effective_rate_is_gross(self, qapp) -> None:
+        tab, issuer = self._run(qapp)
+        result = self._expected(issuer)
+        bdays = business_days_between(_PURCHASE, _MATURITY)
+        years_252 = Decimal(bdays) / Decimal("252")
+        eff = (result.projected_at_maturity / result.max_principal) ** (
+            Decimal("1") / years_252
+        ) - Decimal("1")
+        expected = _format_brazilian_percent(eff * Decimal("100"))
+        assert tab._res_effective_rate_lbl is not None
+        assert tab._res_effective_rate_lbl.text() == expected
+
+    def test_solve_max_principal_zero_when_existing_at_cap(self, qapp) -> None:
+        # Existing holding fills the full FGC cap at the same issuer, overlapping
+        # the mock window. back_solve returns max_principal == 0.
+        factory = _make_real_factory()
+        issuer = _save_issuer(factory)
+        existing = Investment.create(
+            product=ProductType.CDB,
+            issuer=issuer,
+            principal=Money.from_reais("250000"),
+            rate=Prefixed.from_percent("5"),
+            purchase_date=date(2023, 6, 1),
+            maturity_date=date(2026, 6, 1),  # overlaps _PURCHASE.._MATURITY
+        )
+        InvestmentRepository(factory).save(existing)
+
+        tab = _CalculatorTab(factory)
+        _set_form(tab)
+        tab._radio_solve.setChecked(True)
+        tab._mode_group.idClicked.emit(1)
         tab._on_calculate_clicked()
 
-        assert tab._result_stack.currentIndex() == 1
-        stub = tab._result_stack.widget(1)
-        assert isinstance(stub, _QLabel)
-        assert "Solve mode" in stub.text()
-        assert tab._result_panel is None  # no Panel set — stub is a plain QLabel
+        assert tab._res_principal_lbl is not None
+        assert tab._res_principal_lbl.text() == "R$ 0,00"
+        assert tab._res_status_pill is not None
+        assert tab._res_status_pill.text() == "OVER"
+        # Effective rate line is omitted when principal is zero.
+        assert tab._res_effective_rate_lbl is None
+
+
+# ── Test G: Treasury disables Solve radio ─────────────────────────────────────
+
+class TestSolveTreasuryDisable:
+    """G: Selecting a Treasury issuer disables the Solve radio button."""
+
+    def test_treasury_disables_solve_radio(self, qapp) -> None:
+        factory = _make_real_factory()
+        _save_issuer(factory, "Tesouro Nacional", "Tesouro Nacional", IssuerKind.TREASURY)
+        tab = _CalculatorTab(factory)
+        assert not tab._radio_solve.isEnabled()
+
+    def test_non_treasury_enables_solve_radio(self, qapp) -> None:
+        factory = _make_real_factory()
+        _save_issuer(factory)  # COMMERCIAL_BANK
+        tab = _CalculatorTab(factory)
+        assert tab._radio_solve.isEnabled()
+
+    def test_switching_to_treasury_disables_solve(self, qapp) -> None:
+        factory = _make_real_factory()
+        _save_issuer(factory, "Banco Inter", "Banco Inter S.A.", IssuerKind.COMMERCIAL_BANK)
+        _save_issuer(factory, "Tesouro Nacional", "Tesouro Nacional", IssuerKind.TREASURY)
+        tab = _CalculatorTab(factory)
+        # Find Treasury index
+        treasury_idx = next(
+            i for i in range(tab._issuer_combo.count())
+            if tab._issuer_combo.itemText(i) == "Tesouro Nacional"
+        )
+        tab._issuer_combo.setCurrentIndex(treasury_idx)
+        assert not tab._radio_solve.isEnabled()
