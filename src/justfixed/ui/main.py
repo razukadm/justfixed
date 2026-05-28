@@ -2637,6 +2637,8 @@ class MainWindow(QMainWindow):
             return
         visible_ids = {inv.id for inv in self.visible_investments(apply_filter=False)}
         projections = [p for p in self.projection_cache if p.investment.id in visible_ids]
+        if self.active_mock is not None:
+            projections = projections + [self.active_mock.projection]
         if not projections:
             empty = QLabel("No investments to display.")
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)

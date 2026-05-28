@@ -1389,3 +1389,84 @@ class TestActiveMock:
         MainWindow.clear_active_mock(self_mock)
 
         self_mock._refresh_conglomerates.assert_called_once()
+
+
+# ── B41 phase 2.4b-i: mock splice into _refresh_conglomerates ─────────────────
+
+class TestRefreshConglomeratesMockSplice:
+    """Tests a-c from the 2.4b-i spec."""
+
+    def _make_self(self, proj, *, inv_id, active_mock=None):
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._cong_layout = MagicMock()
+        self_mock._cong_section_widgets = {}
+        fake_inv = MagicMock()
+        fake_inv.id = inv_id
+        self_mock.projection_cache = [proj]
+        self_mock.visible_investments.return_value = [fake_inv]
+        self_mock.active_mock = active_mock
+        return self_mock
+
+    def test_no_mock_passes_only_cache_projections(self) -> None:
+        # a: active_mock=None — build_conglomerate_report_from_projections
+        # receives exactly the filtered cache projections, nothing more.
+        inv_id = uuid.uuid4()
+        fake_proj = MagicMock()
+        fake_proj.investment.id = inv_id
+
+        self_mock = self._make_self(fake_proj, inv_id=inv_id, active_mock=None)
+        fake_report = MagicMock()
+        fake_report.sections = []
+
+        with patch("justfixed.ui.main.build_conglomerate_report_from_projections",
+                   return_value=fake_report) as mock_build:
+            MainWindow._refresh_conglomerates(self_mock)
+
+        mock_build.assert_called_once()
+        passed = mock_build.call_args.args[0]
+        assert passed == [fake_proj]
+
+    def test_with_mock_appends_mock_projection(self) -> None:
+        # b: active_mock set — mock's projection is appended after cache projections.
+        inv_id = uuid.uuid4()
+        fake_proj = MagicMock()
+        fake_proj.investment.id = inv_id
+
+        mock_proj = MagicMock()
+        active_mock = _ActiveMock(synth_investment=MagicMock(), projection=mock_proj)
+
+        self_mock = self._make_self(fake_proj, inv_id=inv_id, active_mock=active_mock)
+        fake_report = MagicMock()
+        fake_report.sections = []
+
+        with patch("justfixed.ui.main.build_conglomerate_report_from_projections",
+                   return_value=fake_report) as mock_build:
+            MainWindow._refresh_conglomerates(self_mock)
+
+        mock_build.assert_called_once()
+        passed = mock_build.call_args.args[0]
+        assert fake_proj in passed
+        assert mock_proj in passed
+        assert passed[-1] is mock_proj  # mock appended last
+
+    def test_investments_tab_fgc_report_excludes_mock(self) -> None:
+        # c: refresh_table builds the FGC concentration report from
+        # projection_cache only — active_mock.projection is NOT included.
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._repo = MagicMock()
+        self_mock._table = MagicMock()
+        self_mock._stack = MagicMock()
+        fake_proj = MagicMock()
+        self_mock.projection_cache = [fake_proj]
+        self_mock.visible_investments.return_value = []
+        self_mock.active_mock = MagicMock()  # mock IS set
+
+        fake_fgc_report = MagicMock()
+        fake_fgc_report.conglomerates = []
+
+        with patch("justfixed.ui.main.fgc_concentration_report_from_projections",
+                   return_value=fake_fgc_report) as mock_fgc:
+            MainWindow.refresh_table(self_mock)
+
+        # FGC report built from projection_cache only — no mock injected
+        mock_fgc.assert_called_once_with(self_mock.projection_cache)
