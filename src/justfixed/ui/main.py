@@ -1137,6 +1137,9 @@ class _CalculatorTab(QWidget):
         self._value_edit.setEnabled(True)
         self._clear_errors()
         self._reset_result_area()
+        main_win = self.parent()
+        if main_win is not None and hasattr(main_win, "clear_active_mock"):
+            main_win.clear_active_mock()
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
@@ -1380,6 +1383,8 @@ class _CalculatorTab(QWidget):
         main_win = self.parent()
         if main_win is not None and hasattr(main_win, "statusBar"):
             main_win.statusBar().showMessage(msg)
+        if main_win is not None and hasattr(main_win, "set_active_mock"):
+            main_win.set_active_mock(synth_inv, projection)
 
     def _run_solve_calculation(self) -> None:
         self._clear_errors()
@@ -1487,6 +1492,24 @@ class _CalculatorTab(QWidget):
         main_win = self.parent()
         if main_win is not None and hasattr(main_win, "statusBar"):
             main_win.statusBar().showMessage(msg)
+        is_treasury = issuer.kind == IssuerKind.TREASURY
+        if result.max_principal > Decimal("0") and not is_treasury:
+            solve_synth = Investment.create(
+                product=product,
+                issuer=issuer,
+                principal=Money(result.max_principal),
+                rate=rate,
+                purchase_date=purchase_date,
+                maturity_date=maturity_date,
+            )
+            solve_projection = project(
+                solve_synth,
+                as_of=maturity_date,
+                assumed_cdi=_ASSUMED_CDI,
+                assumed_ipca=_ASSUMED_IPCA,
+            )
+            if main_win is not None and hasattr(main_win, "set_active_mock"):
+                main_win.set_active_mock(solve_synth, solve_projection)
 
     def _build_solve_result_card(
         self,
@@ -2199,6 +2222,23 @@ class ConglomerateEditDelegate(QStyledItemDelegate):
         editor.setGeometry(option.rect)
 
 
+# ── Active mock state ─────────────────────────────────────────────────────────
+
+@dataclasses.dataclass(frozen=True)
+class _ActiveMock:
+    """The current hypothetical investment displayed cross-tab.
+
+    Held on MainWindow for the session; cleared on Reset or close.
+    Identification of the mock's row in a ConglomerateSection.rows list is by
+    natural-key match: (issuer_name, maturity_date, principal) uniquely
+    identifies the mock within a section because no real investment shares
+    those three values with a transient form entry.
+    """
+
+    synth_investment: Investment
+    projection: ProjectionResult
+
+
 # ── Main window ───────────────────────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
@@ -2254,6 +2294,10 @@ class MainWindow(QMainWindow):
         self._cong_section_widgets: dict[str, tuple] = {}  # cname → (plus_label, detail_container)
         self._highlight_timer: QTimer | None = None  # keeps highlight timer alive for cancellation
         self._worker: QThread | None = None  # keeps worker alive during run
+        # active_mock is visible in the Conglomerates tab ONLY. The Investments
+        # tab, the FGC concentration report, and projection_cache must never
+        # read or be affected by this field.
+        self.active_mock: _ActiveMock | None = None
 
         self._build_ui()
         self.refresh_table()
@@ -2602,6 +2646,21 @@ class MainWindow(QMainWindow):
         self._cong_layout.addWidget(self._make_summary_header())
         for idx, section in enumerate(report.sections):
             self._cong_layout.addWidget(self._make_section_widget(section, idx))
+
+    def set_active_mock(self, synth_inv: Investment, projection: ProjectionResult) -> None:
+        """Set the current hypothetical mock. Auto-expands its conglomerate and refreshes."""
+        self.active_mock = _ActiveMock(
+            synth_investment=synth_inv,
+            projection=projection,
+        )
+        # Expand before refresh so the rebuild sees the expanded state.
+        self._expanded_conglomerates.add(synth_inv.issuer.conglomerate)
+        self._refresh_conglomerates()
+
+    def clear_active_mock(self) -> None:
+        """Discard the mock. Conglomerates tab re-renders without it."""
+        self.active_mock = None
+        self._refresh_conglomerates()
 
     def _on_about_clicked(self) -> None:
         QMessageBox.about(

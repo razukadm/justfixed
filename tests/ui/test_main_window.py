@@ -25,7 +25,7 @@ from justfixed.domain.money import Money
 from justfixed.domain.rates import Prefixed, PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA
 from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fgc import ExposureStatus
-from justfixed.ui.main import _AddInvestmentPanel, ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow, compute_totals, _format_type, _format_rate, _is_matured
+from justfixed.ui.main import _ActiveMock, _AddInvestmentPanel, ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow, compute_totals, _format_type, _format_rate, _is_matured
 
 
 class TestIsMatured:
@@ -1319,3 +1319,73 @@ class TestInvestmentDeleted:
 
         self_mock.refresh_table.assert_called_once()
         assert self_mock.projection_cache is None
+
+
+# ── B41 phase 2.4a: active_mock state on MainWindow ───────────────────────────
+
+class TestActiveMock:
+    """Tests a-c: set_active_mock and clear_active_mock on MainWindow."""
+
+    def _make_self(self) -> MagicMock:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._expanded_conglomerates = set()
+        return self_mock
+
+    def test_set_active_mock_stores_synth_and_projection(self) -> None:
+        # a — set_active_mock sets self.active_mock with correct fields
+        self_mock = self._make_self()
+        synth_inv = MagicMock()
+        synth_inv.issuer.conglomerate = "Test Cong"
+        projection = MagicMock()
+
+        MainWindow.set_active_mock(self_mock, synth_inv, projection)
+
+        assert self_mock.active_mock is not None
+        assert isinstance(self_mock.active_mock, _ActiveMock)
+        assert self_mock.active_mock.synth_investment is synth_inv
+        assert self_mock.active_mock.projection is projection
+
+    def test_set_active_mock_triggers_refresh(self) -> None:
+        # a — set_active_mock calls _refresh_conglomerates
+        self_mock = self._make_self()
+        synth_inv = MagicMock()
+        synth_inv.issuer.conglomerate = "Test Cong"
+
+        MainWindow.set_active_mock(self_mock, synth_inv, MagicMock())
+
+        self_mock._refresh_conglomerates.assert_called_once()
+
+    def test_set_active_mock_expands_conglomerate_before_refresh(self) -> None:
+        # b — conglomerate in _expanded_conglomerates BEFORE refresh fires
+        self_mock = self._make_self()
+        synth_inv = MagicMock()
+        synth_inv.issuer.conglomerate = "Test Cong"
+
+        expanded_at_refresh: list[bool] = []
+
+        def _capture_refresh():
+            expanded_at_refresh.append("Test Cong" in self_mock._expanded_conglomerates)
+
+        self_mock._refresh_conglomerates.side_effect = _capture_refresh
+
+        MainWindow.set_active_mock(self_mock, synth_inv, MagicMock())
+
+        assert expanded_at_refresh == [True]  # expanded before the refresh call
+
+    def test_clear_active_mock_sets_none(self) -> None:
+        # c — clear_active_mock nulls the attribute
+        self_mock = self._make_self()
+        self_mock.active_mock = MagicMock()
+
+        MainWindow.clear_active_mock(self_mock)
+
+        assert self_mock.active_mock is None
+
+    def test_clear_active_mock_triggers_refresh(self) -> None:
+        # c — clear_active_mock calls _refresh_conglomerates
+        self_mock = self._make_self()
+        self_mock.active_mock = MagicMock()
+
+        MainWindow.clear_active_mock(self_mock)
+
+        self_mock._refresh_conglomerates.assert_called_once()

@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from PySide6.QtCore import QDate
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget
 
 from justfixed.domain.investment import Investment
 from justfixed.domain.issuer import Issuer, IssuerKind
@@ -31,7 +31,7 @@ from justfixed.engine.calendar import business_days_between
 from justfixed.engine.projection import project
 from justfixed.persistence.database import Base, make_engine, make_session_factory
 from justfixed.persistence.repositories import InvestmentRepository, IssuerRepository
-from justfixed.ui.main import _CalculatorTab
+from justfixed.ui.main import _ActiveMock, _CalculatorTab
 
 
 @pytest.fixture(scope="session")
@@ -656,3 +656,91 @@ class TestDrawdownTesouroExcluded:
         assert tab._drawdown_rows is not None
         assert len(tab._drawdown_rows) == 1
         assert tab._drawdown_rows[0].property("rowKind") == "mock"
+
+
+# ── B41 phase 2.4a: Calculator → MainWindow set/clear_active_mock wiring ──────
+
+class _FakeMainWindow(QWidget):
+    """Minimal QWidget parent stub for Calculator cross-tab wiring tests.
+
+    Implements the set/clear_active_mock interface that the Calculator
+    calls via parent(). statusBar() stub silences the showMessage call.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.active_mock = None
+        self._set_calls = 0
+        self._clear_calls = 0
+
+    def set_active_mock(self, synth_inv, projection):
+        self.active_mock = _ActiveMock(
+            synth_investment=synth_inv,
+            projection=projection,
+        )
+        self._set_calls += 1
+
+    def clear_active_mock(self):
+        self.active_mock = None
+        self._clear_calls += 1
+
+    def statusBar(self):
+        sb = MagicMock()
+        return sb
+
+
+class TestCrossTabMockWiring:
+    """d/e/f: Calculator wires set/clear_active_mock to the parent window."""
+
+    def _make_tab_and_win(self) -> tuple[_CalculatorTab, _FakeMainWindow]:
+        factory = _make_real_factory()
+        _save_issuer(factory)
+        fake_win = _FakeMainWindow()
+        tab = _CalculatorTab(factory, fake_win)
+        return tab, fake_win
+
+    def test_enter_value_success_calls_set_active_mock(self, qapp) -> None:
+        # d: successful Enter-value calculation wires into set_active_mock
+        tab, fake_win = self._make_tab_and_win()
+        set_calls_before = fake_win._set_calls
+        _set_form(tab)
+        tab._on_calculate_clicked()
+        assert fake_win._set_calls == set_calls_before + 1
+        assert fake_win.active_mock is not None
+        assert fake_win.active_mock.synth_investment is not None
+        assert fake_win.active_mock.projection is not None
+
+    def test_reset_calls_clear_active_mock(self, qapp) -> None:
+        # e: reset() calls clear_active_mock (after setting it via calculate)
+        tab, fake_win = self._make_tab_and_win()
+        _set_form(tab)
+        tab._on_calculate_clicked()
+        assert fake_win.active_mock is not None
+        clear_calls_before = fake_win._clear_calls
+        tab.reset()
+        assert fake_win._clear_calls == clear_calls_before + 1
+        assert fake_win.active_mock is None
+
+    def test_solve_max_principal_zero_no_set_active_mock(self, qapp) -> None:
+        # f: degenerate case — existing holdings fill the cap, max_principal==0,
+        # set_active_mock must NOT be called
+        factory = _make_real_factory()
+        issuer = _save_issuer(factory)
+        existing = Investment.create(
+            product=ProductType.CDB,
+            issuer=issuer,
+            principal=Money.from_reais("250000"),
+            rate=Prefixed.from_percent("5"),
+            purchase_date=date(2023, 6, 1),
+            maturity_date=date(2026, 6, 1),
+        )
+        InvestmentRepository(factory).save(existing)
+        fake_win = _FakeMainWindow()
+        tab = _CalculatorTab(factory, fake_win)
+        _set_form(tab)
+        tab._radio_solve.setChecked(True)
+        tab._mode_group.idClicked.emit(1)
+        set_calls_before = fake_win._set_calls
+        tab._on_calculate_clicked()
+        assert fake_win._set_calls == set_calls_before  # no new call
+        assert fake_win.active_mock is None
