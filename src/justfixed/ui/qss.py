@@ -145,6 +145,18 @@ QPushButton[role="secondary"]:disabled {{
     color: {c.INK_3};
 }}
 
+/* ── Calculator: field error border ─────────────────────────────────── */
+QLineEdit[hasError="true"] {{
+    border: 1px solid {c.DANGER};
+}}
+
+/* ── Calculator: big result value (principal line) ───────────────────── */
+QLabel[calcResultBig="true"] {{
+    font-size: 14pt;
+    font-weight: bold;
+    color: {c.INK};
+}}
+
 /* ── Status bar ─────────────────────────────────────────────────────── */
 QStatusBar {{
     background-color: {c.STATUS_BAR_BG};

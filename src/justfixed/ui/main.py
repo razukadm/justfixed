@@ -83,7 +83,12 @@ from justfixed.engine.conglomerate_report import (
     build_conglomerate_report,
     build_conglomerate_report_from_projections,
 )
-from justfixed.engine.fgc import ExposureStatus, fgc_concentration_report_from_projections
+from justfixed.engine.calendar import business_days_between
+from justfixed.engine.fgc import (
+    ExposureStatus,
+    fgc_concentration_report,
+    fgc_concentration_report_from_projections,
+)
 from justfixed.engine.projection import ProjectionResult, project
 from justfixed.exports.calendar import export_maturity_calendar
 from justfixed.importers.detection import Broker, load_statement
@@ -164,6 +169,19 @@ def _format_type(rate: Rate) -> str:
         case PostFixedCDIPlusSpread(): return "Pós+"
         case PostFixedIPCA():          return "IPCA+"
     return "?"
+
+
+def _format_rate_short(rate: Rate) -> str:
+    """Short display string for a rate used in the Calculator result card header."""
+    if isinstance(rate, Prefixed):
+        return f"Pré {_format_brazilian_percent(rate.annual_percent)} a.a."
+    if isinstance(rate, PostFixedCDI):
+        return f"Pós {_format_brazilian_percent(rate.cdi_percent_value)} do CDI"
+    if isinstance(rate, PostFixedIPCA):
+        return f"IPCA + {_format_brazilian_percent(rate.spread_percent)} a.a."
+    if isinstance(rate, PostFixedCDIPlusSpread):
+        return f"CDI + {_format_brazilian_percent(rate.spread_percent)} a.a."
+    return rate.to_display()
 
 
 def _format_rate(rate: Rate, cdi_curve: Curve | None, maturity_date: date) -> str:
@@ -813,11 +831,10 @@ class InvestmentDetailPanel(QWidget):
 # ── Calculator tab ────────────────────────────────────────────────────────────
 
 class _CalculatorTab(QWidget):
-    """Calculator tab: form + placeholder result area.
+    """Calculator tab: mock an investment, project forward, check FGC exposure.
 
-    COMMIT 1: form shell only. Calculate is disabled; result area is a
-    placeholder label. Principal mode radio toggles the Value field's
-    enabled state. Reset restores all fields to defaults.
+    Enter-value mode: projects the entered principal and shows resulting FGC
+    status. Solve mode: stub — wired in B41 phase 2 part 2.
     """
 
     def __init__(self, session_factory, parent=None) -> None:
@@ -840,7 +857,9 @@ class _CalculatorTab(QWidget):
         # Issuer
         self._issuer_combo = QComboBox()
         self._issuer_combo.currentIndexChanged.connect(self._on_issuer_changed)
+        self._issuer_combo.currentIndexChanged.connect(self._update_calc_btn_state)
         self._add_form_row("Issuer", self._issuer_combo)
+        self._issuer_err_lbl, self._issuer_err_wrap = self._add_inline_err()
 
         # Conglomerate (read-only, auto-populated)
         self._cong_edit = QLineEdit()
@@ -867,6 +886,7 @@ class _CalculatorTab(QWidget):
         self._maturity_date_edit = QDateEdit()
         self._maturity_date_edit.setDisplayFormat("dd/MM/yyyy")
         self._add_form_row("Maturity date", self._maturity_date_edit)
+        self._maturity_err_lbl, self._maturity_err_wrap = self._add_inline_err()
 
         # Principal mode radios
         self._radio_enter = QRadioButton("Enter value")
@@ -889,6 +909,7 @@ class _CalculatorTab(QWidget):
         self._value_edit = QLineEdit()
         self._value_edit.setPlaceholderText("e.g. 10.000,00")
         self._add_form_row("Value", self._value_edit)
+        self._value_err_lbl, self._value_err_wrap = self._add_inline_err()
 
         form_layout.addStretch()
 
@@ -899,6 +920,7 @@ class _CalculatorTab(QWidget):
         self._reset_btn.clicked.connect(self.reset)
         self._calc_btn = QPushButton("Calculate")
         self._calc_btn.setEnabled(False)
+        self._calc_btn.clicked.connect(self._on_calculate_clicked)
         btn_row.addWidget(self._reset_btn)
         btn_row.addStretch()
         btn_row.addWidget(self._calc_btn)
@@ -906,11 +928,23 @@ class _CalculatorTab(QWidget):
 
         outer.addWidget(form_container)
 
-        # ── Right: placeholder ────────────────────────────────────────────────
+        # ── Right: stacked widget (placeholder / result card) ─────────────────
         self._placeholder = QLabel("Run a calculation to see results.")
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._placeholder.setProperty("role", "emptyState")
-        outer.addWidget(self._placeholder, stretch=1)
+        self._result_stack = QStackedWidget()
+        self._result_stack.addWidget(self._placeholder)  # index 0: placeholder
+        self._result_panel: Panel | None = None
+
+        # Result labels — valid only after a successful Enter-value calculation.
+        self._res_principal_lbl: QLabel | None = None
+        self._res_projected_lbl: QLabel | None = None
+        self._res_fgc_util_lbl: QLabel | None = None
+        self._res_status_pill: QLabel | None = None
+        self._res_effective_rate_lbl: QLabel | None = None
+        self._res_tenor_lbl: QLabel | None = None
+
+        outer.addWidget(self._result_stack, stretch=1)
 
         # Seed defaults
         self.reset()
@@ -918,7 +952,7 @@ class _CalculatorTab(QWidget):
     # ── Public ────────────────────────────────────────────────────────────────
 
     def reset(self) -> None:
-        """Restore all fields to their defaults and repopulate issuer combo."""
+        """Restore all fields to defaults, repopulate issuer combo, clear result."""
         self._populate_issuer_combo()
         self._rate_editor.set_rate(PostFixedCDI.from_percent("100"))
         self._product_combo.setCurrentIndex(0)
@@ -929,6 +963,8 @@ class _CalculatorTab(QWidget):
         self._radio_enter.setChecked(True)
         self._value_edit.setText("")
         self._value_edit.setEnabled(True)
+        self._clear_errors()
+        self._reset_result_area()
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
@@ -943,6 +979,20 @@ class _CalculatorTab(QWidget):
         row.addWidget(widget, stretch=1)
         self._body_layout.addLayout(row)
 
+    def _add_inline_err(self) -> tuple[QLabel, QWidget]:
+        """Add a hidden inline error label indented to align with the field column."""
+        lbl = QLabel()
+        lbl.setProperty("role", "error")
+        lbl.setWordWrap(True)
+        wrapper = QWidget()
+        wrow = QHBoxLayout(wrapper)
+        wrow.setContentsMargins(104, 0, 0, 2)
+        wrow.setSpacing(0)
+        wrow.addWidget(lbl)
+        wrapper.hide()
+        self._body_layout.addWidget(wrapper)
+        return lbl, wrapper
+
     def _populate_issuer_combo(self) -> None:
         self._issuer_combo.blockSignals(True)
         self._issuer_combo.clear()
@@ -952,6 +1002,7 @@ class _CalculatorTab(QWidget):
         self._issuer_combo.blockSignals(False)
         self._issuer_combo.setCurrentIndex(0)
         self._on_issuer_changed()
+        self._update_calc_btn_state()
 
     def _on_issuer_changed(self) -> None:
         issuer = self._issuer_combo.currentData()
@@ -962,6 +1013,309 @@ class _CalculatorTab(QWidget):
 
     def _on_mode_changed(self, button_id: int) -> None:
         self._value_edit.setEnabled(button_id == 0)  # 0 = "Enter value"
+
+    def _update_calc_btn_state(self) -> None:
+        self._calc_btn.setEnabled(self._issuer_combo.count() > 0)
+
+    def _clear_errors(self) -> None:
+        for wrap in (self._issuer_err_wrap, self._maturity_err_wrap, self._value_err_wrap):
+            wrap.hide()
+        self._value_edit.setProperty("hasError", "false")
+        self._value_edit.style().unpolish(self._value_edit)
+        self._value_edit.style().polish(self._value_edit)
+
+    def _set_field_error(
+        self,
+        field: QWidget | None,
+        err_lbl: QLabel,
+        err_wrap: QWidget,
+        msg: str,
+    ) -> None:
+        err_lbl.setText(msg)
+        err_wrap.show()
+        if field is not None:
+            field.setProperty("hasError", "true")
+            field.style().unpolish(field)
+            field.style().polish(field)
+
+    def _reset_result_area(self) -> None:
+        """Return the right pane to the placeholder state."""
+        if self._result_stack.count() > 1:
+            old = self._result_stack.widget(1)
+            self._result_stack.removeWidget(old)
+            old.setParent(None)  # type: ignore[arg-type]
+        self._result_stack.setCurrentIndex(0)
+        self._result_panel = None
+
+    def _on_calculate_clicked(self) -> None:
+        if self._radio_solve.isChecked():
+            self._show_solve_stub()
+        else:
+            self._run_enter_value_calculation()
+
+    def _show_solve_stub(self) -> None:
+        stub = QLabel("Solve mode coming in B41 phase 2 part 2.")
+        stub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        stub.setProperty("role", "emptyState")
+        if self._result_stack.count() > 1:
+            old = self._result_stack.widget(1)
+            self._result_stack.removeWidget(old)
+            old.setParent(None)  # type: ignore[arg-type]
+        self._result_stack.addWidget(stub)
+        self._result_stack.setCurrentIndex(1)
+        self._result_panel = None
+
+    def _run_enter_value_calculation(self) -> None:
+        self._clear_errors()
+        self._reset_result_area()  # prevent stale result from persisting on error
+        ok = True
+
+        issuer = self._issuer_combo.currentData()
+        if not isinstance(issuer, Issuer):
+            self._set_field_error(
+                None, self._issuer_err_lbl, self._issuer_err_wrap, "Select an issuer."
+            )
+            ok = False
+
+        product = self._product_combo.currentData()
+
+        purchase_date = self._qdate_to_date(self._purchase_date_edit.date())
+        maturity_date = self._qdate_to_date(self._maturity_date_edit.date())
+        if maturity_date <= purchase_date:
+            self._set_field_error(
+                None, self._maturity_err_lbl, self._maturity_err_wrap,
+                "Maturity date must be after purchase date.",
+            )
+            ok = False
+
+        principal: Money | None = None
+        try:
+            principal = parse_brazilian_money(self._value_edit.text().strip())
+            if principal.amount <= Decimal("0"):
+                raise ValueError("must be positive")
+        except Exception:
+            self._set_field_error(
+                self._value_edit, self._value_err_lbl, self._value_err_wrap,
+                "Enter a positive amount (e.g. 50.000,00).",
+            )
+            ok = False
+
+        if not ok:
+            return
+
+        try:
+            rate = self._rate_editor.get_rate()
+        except ValueError as exc:
+            self._set_field_error(
+                None, self._value_err_lbl, self._value_err_wrap, f"Rate: {exc}"
+            )
+            return
+
+        try:
+            synth_inv = Investment.create(
+                product=product,
+                issuer=issuer,
+                principal=principal,
+                rate=rate,
+                purchase_date=purchase_date,
+                maturity_date=maturity_date,
+            )
+        except ValueError as exc:
+            self._set_field_error(
+                None, self._value_err_lbl, self._value_err_wrap, str(exc)
+            )
+            return
+
+        projection = project(
+            synth_inv,
+            as_of=maturity_date,
+            assumed_cdi=_ASSUMED_CDI,
+            assumed_ipca=_ASSUMED_IPCA,
+        )
+
+        is_treasury = issuer.kind == IssuerKind.TREASURY
+        if is_treasury:
+            fgc_status_str = "not_fgc"
+            status_text = "N/A — Tesouro"
+            status_hint = ""
+            cong_total: Money | None = None
+        else:
+            existing = InvestmentRepository(self._session_factory).list_all()
+            report = fgc_concentration_report(
+                existing + [synth_inv],
+                as_of=maturity_date,
+                assumed_cdi=_ASSUMED_CDI,
+                assumed_ipca=_ASSUMED_IPCA,
+            )
+            cong_exposure = next(
+                (c for c in report.conglomerates
+                 if c.conglomerate_name == issuer.conglomerate),
+                None,
+            )
+            if cong_exposure is None:
+                cong_total = Money.from_reais("0")
+                exposure_status = ExposureStatus.UNDER
+            else:
+                cong_total = cong_exposure.current_exposure
+                exposure_status = cong_exposure.current_status
+
+            fgc_status_str = exposure_status.value
+            if exposure_status == ExposureStatus.OVER:
+                status_text = "OVER"
+                status_hint = "Reduce principal or pick a different issuer to stay under R$ 250k."
+            elif exposure_status == ExposureStatus.APPROACHING:
+                status_text = "APPROACHING"
+                status_hint = "Close to the R$ 250k FGC limit."
+            else:
+                status_text = "UNDER"
+                status_hint = ""
+
+        # Effective rate derived from projection output rather than restating
+        # rate-composition logic. If projection.py's math is ever refined, this
+        # number updates automatically. Net annualized: consistent with every
+        # other "Projected" figure in JustFixed (table, totals strip).
+        net_am = projection.net_at_maturity.amount
+        princ_am = synth_inv.principal.amount
+        bdays = business_days_between(purchase_date, maturity_date)
+        years_252 = Decimal(bdays) / Decimal("252")
+        effective_aa = (net_am / princ_am) ** (Decimal("1") / years_252) - Decimal("1")
+
+        tenor_days = (maturity_date - purchase_date).days
+
+        panel = self._build_result_card(
+            issuer=issuer,
+            product=product,
+            rate=rate,
+            principal=principal,
+            projection=projection,
+            cong_total=cong_total,
+            fgc_status_str=fgc_status_str,
+            status_text=status_text,
+            status_hint=status_hint,
+            effective_aa=effective_aa,
+            tenor_days=tenor_days,
+            maturity_date=maturity_date,
+            is_treasury=is_treasury,
+        )
+        self._show_result_card(panel)
+
+        if is_treasury:
+            msg = (
+                f"Projected as of {maturity_date.strftime('%d/%m/%Y')}"
+                f" · {issuer.name} · Tesouro (no FGC)"
+            )
+        else:
+            msg = (
+                f"Projected as of {maturity_date.strftime('%d/%m/%Y')}"
+                f" · {issuer.name} · FGC {status_text}"
+            )
+        main_win = self.parent()
+        if main_win is not None and hasattr(main_win, "statusBar"):
+            main_win.statusBar().showMessage(msg)
+
+    def _build_result_card(
+        self,
+        *,
+        issuer: Issuer,
+        product: ProductType,
+        rate: Rate,
+        principal: Money,
+        projection: ProjectionResult,
+        cong_total: Money | None,
+        fgc_status_str: str,
+        status_text: str,
+        status_hint: str,
+        effective_aa: Decimal,
+        tenor_days: int,
+        maturity_date: date,
+        is_treasury: bool,
+    ) -> Panel:
+        meta = (
+            f"{issuer.name} · {rules_for(product).display_name}"
+            f" · {_format_rate_short(rate)}"
+        )
+        body = QWidget()
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(10, 8, 10, 12)
+        bl.setSpacing(8)
+
+        def _row(k: str, v_widget: QWidget, hint: str = "") -> None:
+            h = QHBoxLayout()
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(8)
+            k_lbl = QLabel(k)
+            k_lbl.setMinimumWidth(180)
+            k_lbl.setStyleSheet(f"color: {COLORS.INK_2};")
+            h.addWidget(k_lbl)
+            h.addWidget(v_widget)
+            if hint:
+                hint_lbl = QLabel(hint)
+                hint_lbl.setWordWrap(True)
+                hint_lbl.setStyleSheet(f"color: {COLORS.INK_3}; font-size: 10px;")
+                h.addWidget(hint_lbl, 1)
+            else:
+                h.addStretch(1)
+            bl.addLayout(h)
+
+        # Line 1 — Maximum principal (visually prominent)
+        self._res_principal_lbl = QLabel(principal.to_display())
+        self._res_principal_lbl.setProperty("calcResultBig", "true")
+        _row(
+            "Maximum principal",
+            self._res_principal_lbl,
+            "As entered. Switch to Solve mode to find the maximum.",
+        )
+
+        # Line 2 — Projected at maturity
+        # Convention note: mockup shows gross; JustFixed uses net everywhere
+        # (Investments table "Projected value", totals strip). Net is used here
+        # for internal consistency. Flip to gross if user expectation changes —
+        # should change everywhere at once, not just here.
+        mat_str = maturity_date.strftime("%d/%m/%Y")
+        self._res_projected_lbl = QLabel(projection.net_at_maturity.to_display())
+        _row(f"Projected at maturity ({mat_str})", self._res_projected_lbl, "Net of IR tax.")
+
+        # Line 3 — FGC peak utilization
+        if is_treasury:
+            util_text = "N/A"
+            util_hint = "Tesouro investments are not FGC-covered."
+        else:
+            util_text = f"{cong_total.to_display()} / R$ 250.000,00"  # type: ignore[union-attr]
+            util_hint = "At maturity. Running-balance check arrives in Solve mode."
+        self._res_fgc_util_lbl = QLabel(util_text)
+        _row("FGC peak utilization", self._res_fgc_util_lbl, util_hint)
+
+        # Line 4 — Status pill
+        self._res_status_pill = QLabel(status_text)
+        self._res_status_pill.setProperty("fgcStatus", fgc_status_str)
+        _row("Status", self._res_status_pill, status_hint)
+
+        # Line 5 — Effective rate (net annualized)
+        eff_pct = _format_brazilian_percent(effective_aa * Decimal("100"))
+        self._res_effective_rate_lbl = QLabel(eff_pct)
+        _row("Effective rate (a.a.)", self._res_effective_rate_lbl)
+
+        # Line 6 — Tenor (calendar days — user thinks in calendar days)
+        self._res_tenor_lbl = QLabel(f"{tenor_days} days")
+        _row("Tenor", self._res_tenor_lbl)
+
+        bl.addStretch()
+        panel = Panel(title="Calculation result", meta=meta)
+        panel.set_content(body)
+        return panel
+
+    def _show_result_card(self, panel: Panel) -> None:
+        if self._result_stack.count() > 1:
+            old = self._result_stack.widget(1)
+            self._result_stack.removeWidget(old)
+            old.setParent(None)  # type: ignore[arg-type]
+        self._result_stack.addWidget(panel)
+        self._result_stack.setCurrentIndex(1)
+        self._result_panel = panel
+
+    @staticmethod
+    def _qdate_to_date(qd: QDate) -> date:
+        return date(qd.year(), qd.month(), qd.day())
 
 
 # ── Add-investment form ───────────────────────────────────────────────────────

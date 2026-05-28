@@ -1,23 +1,35 @@
-"""Tests for _CalculatorTab widget (B41 phase 2 part 1, COMMIT 1).
+"""Tests for _CalculatorTab widget (B41 phase 2).
 
-Uses a session-scoped QApplication. IssuerRepository is patched at
-justfixed.ui.main so no real database is required.
+Two test patterns:
 
-Pattern: _make_tab() patches IssuerRepository during construction (which
-calls reset()) and returns a fully-initialised widget.
+* Mocked-repo pattern (_make_tab): patches IssuerRepository so no real
+  database is needed. Used for structural/default/reset tests.
+
+* Real-DB pattern (_make_real_factory + _CalculatorTab(factory)): uses an
+  in-memory SQLite database. Used for Calculate wiring tests (A–F) where
+  InvestmentRepository must return real holdings.
 """
 
 from __future__ import annotations
 
 import sys
 from datetime import date
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
 from PySide6.QtCore import QDate
 from PySide6.QtWidgets import QApplication
 
+from justfixed.domain.investment import Investment
 from justfixed.domain.issuer import Issuer, IssuerKind
+from justfixed.domain.money import Money
+from justfixed.domain.product import ProductType
+from justfixed.domain.rates import Prefixed, _format_brazilian_percent
+from justfixed.engine.calendar import business_days_between
+from justfixed.engine.projection import project
+from justfixed.persistence.database import Base, make_engine, make_session_factory
+from justfixed.persistence.repositories import InvestmentRepository, IssuerRepository
 from justfixed.ui.main import _CalculatorTab
 
 
@@ -170,3 +182,245 @@ class TestReset:
         _call_reset(tab, issuers=[issuer])
         names = [tab._issuer_combo.itemText(i) for i in range(tab._issuer_combo.count())]
         assert "Novo Banco" in names
+
+
+# ── Real-DB helpers ────────────────────────────────────────────────────────────
+
+_ASSUMED_CDI  = Decimal("0.144")
+_ASSUMED_IPCA = Decimal("0.0414")
+
+_PURCHASE = date(2024, 1, 2)
+_MATURITY = date(2025, 1, 2)   # 366 calendar days (2024 is a leap year), 253 bdays
+
+
+def _make_real_factory():
+    """Fresh in-memory SQLite database with all tables created."""
+    engine = make_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    return make_session_factory(engine)
+
+
+def _save_issuer(factory, name="Test Issuer", conglomerate="Test Cong",
+                 kind=IssuerKind.COMMERCIAL_BANK) -> Issuer:
+    issuer = Issuer.create(name, conglomerate, kind)
+    IssuerRepository(factory).save(issuer)
+    return issuer
+
+
+def _set_form(tab, *, issuer_idx=0, product_type=ProductType.CDB,
+              rate=None, purchase=_PURCHASE, maturity=_MATURITY,
+              value="50.000,00") -> None:
+    """Populate all Calculator form fields for a deterministic Calculate run."""
+    if rate is None:
+        rate = Prefixed.from_percent("14")
+    tab._issuer_combo.setCurrentIndex(issuer_idx)
+    for i in range(tab._product_combo.count()):
+        if tab._product_combo.itemData(i) == product_type:
+            tab._product_combo.setCurrentIndex(i)
+            break
+    tab._rate_editor.set_rate(rate)
+    tab._purchase_date_edit.setDate(QDate(purchase.year, purchase.month, purchase.day))
+    tab._maturity_date_edit.setDate(QDate(maturity.year, maturity.month, maturity.day))
+    tab._value_edit.setText(value)
+
+
+# ── Test A: valid Enter-value input, all six result lines ──────────────────────
+
+class TestCalculateResultLines:
+    """A: valid Enter-value run with no existing holdings. Tests each line."""
+
+    def _run(self, qapp):
+        factory = _make_real_factory()
+        _save_issuer(factory)
+        tab = _CalculatorTab(factory)
+        _set_form(tab)
+        tab._on_calculate_clicked()
+        return tab
+
+    def test_principal_line(self, qapp) -> None:
+        tab = self._run(qapp)
+        assert tab._res_principal_lbl is not None
+        assert tab._res_principal_lbl.text() == "R$ 50.000,00"
+
+    def test_projected_line(self, qapp) -> None:
+        tab = self._run(qapp)
+        assert tab._res_projected_lbl is not None
+        assert tab._res_projected_lbl.text() == "R$ 55.799,46"
+
+    def test_fgc_utilization_line(self, qapp) -> None:
+        tab = self._run(qapp)
+        assert tab._res_fgc_util_lbl is not None
+        assert tab._res_fgc_util_lbl.text() == "R$ 57.029,65 / R$ 250.000,00"
+
+    def test_status_under(self, qapp) -> None:
+        tab = self._run(qapp)
+        assert tab._res_status_pill is not None
+        assert tab._res_status_pill.text() == "UNDER"
+        assert tab._res_status_pill.property("fgcStatus") == "under"
+
+    def test_effective_rate(self, qapp) -> None:
+        tab = self._run(qapp)
+        assert tab._res_effective_rate_lbl is not None
+        # Derive expected value from the projection, same formula as implementation.
+        issuer = Issuer.create("Test Issuer", "Test Cong", IssuerKind.COMMERCIAL_BANK)
+        inv = Investment.create(
+            product=ProductType.CDB, issuer=issuer,
+            principal=Money.from_reais("50000"),
+            rate=Prefixed.from_percent("14"),
+            purchase_date=_PURCHASE, maturity_date=_MATURITY,
+        )
+        proj = project(inv, as_of=_MATURITY,
+                       assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA)
+        bdays = business_days_between(_PURCHASE, _MATURITY)
+        years_252 = Decimal(bdays) / Decimal("252")
+        eff = (proj.net_at_maturity.amount / Decimal("50000")) ** (
+            Decimal("1") / years_252
+        ) - Decimal("1")
+        expected = _format_brazilian_percent(eff * Decimal("100"))
+        assert tab._res_effective_rate_lbl.text() == expected
+
+    def test_tenor_line(self, qapp) -> None:
+        tab = self._run(qapp)
+        assert tab._res_tenor_lbl is not None
+        assert tab._res_tenor_lbl.text() == "366 days"
+
+    def test_result_card_shown(self, qapp) -> None:
+        tab = self._run(qapp)
+        assert tab._result_stack.currentIndex() == 1
+        assert tab._result_panel is not None
+
+
+# ── Test B: FGC OVER scenario ──────────────────────────────────────────────────
+
+class TestCalculateFGCOver:
+    """B: existing holdings push the conglomerate over the FGC cap."""
+
+    def test_status_over(self, qapp) -> None:
+        factory = _make_real_factory()
+        issuer = _save_issuer(factory)
+
+        # Existing holding: large enough to push total over R$250k alongside the mock
+        existing = Investment.create(
+            product=ProductType.CDB, issuer=issuer,
+            principal=Money.from_reais("200000"),
+            rate=Prefixed.from_percent("5"),
+            purchase_date=date(2023, 1, 2), maturity_date=date(2026, 1, 2),
+        )
+        InvestmentRepository(factory).save(existing)
+
+        tab = _CalculatorTab(factory)
+        _set_form(tab)
+        tab._on_calculate_clicked()
+
+        assert tab._res_status_pill is not None
+        assert tab._res_status_pill.text() == "OVER"
+        assert tab._res_status_pill.property("fgcStatus") == "over"
+
+
+# ── Test C: Tesouro issuer ─────────────────────────────────────────────────────
+
+class TestCalculateTesouro:
+    """C: Treasury issuer — FGC shows N/A."""
+
+    def test_status_not_fgc(self, qapp) -> None:
+        factory = _make_real_factory()
+        issuer = _save_issuer(
+            factory, "Tesouro Nacional", "Tesouro Nacional", IssuerKind.TREASURY
+        )
+
+        tab = _CalculatorTab(factory)
+        # TESOURO_PREFIXADO is not shown in the FGC-only product combo by default;
+        # add it here so the Investment.create() call can succeed with a TREASURY issuer.
+        tab._product_combo.addItem("Tesouro Prefixado", ProductType.TESOURO_PREFIXADO)
+        _set_form(tab, product_type=ProductType.TESOURO_PREFIXADO)
+        tab._on_calculate_clicked()
+
+        assert tab._res_status_pill is not None
+        assert tab._res_status_pill.text() == "N/A — Tesouro"
+        assert tab._res_status_pill.property("fgcStatus") == "not_fgc"
+        assert tab._res_fgc_util_lbl is not None
+        assert tab._res_fgc_util_lbl.text() == "N/A"
+
+
+# ── Test D: validation failures ────────────────────────────────────────────────
+
+class TestValidationFailures:
+    """D: each validation rule has its own inline error; result card stays cleared."""
+
+    def _tab_with_issuer(self, qapp):
+        factory = _make_real_factory()
+        _save_issuer(factory)
+        return _CalculatorTab(factory)
+
+    def test_empty_principal_shows_error(self, qapp) -> None:
+        tab = self._tab_with_issuer(qapp)
+        _set_form(tab, value="")
+        tab._on_calculate_clicked()
+        # isVisible() requires a realized window; isHidden() checks the widget's own flag.
+        assert not tab._value_err_wrap.isHidden()
+        assert tab._result_stack.currentIndex() == 0  # placeholder preserved
+
+    def test_negative_principal_shows_error(self, qapp) -> None:
+        tab = self._tab_with_issuer(qapp)
+        _set_form(tab, value="-1,00")
+        tab._on_calculate_clicked()
+        assert not tab._value_err_wrap.isHidden()
+        assert tab._result_stack.currentIndex() == 0
+
+    def test_maturity_equals_purchase_shows_error(self, qapp) -> None:
+        tab = self._tab_with_issuer(qapp)
+        _set_form(tab, purchase=date(2024, 6, 1), maturity=date(2024, 6, 1))
+        tab._on_calculate_clicked()
+        assert not tab._maturity_err_wrap.isHidden()
+        assert tab._result_stack.currentIndex() == 0
+
+    def test_maturity_before_purchase_shows_error(self, qapp) -> None:
+        tab = self._tab_with_issuer(qapp)
+        _set_form(tab, purchase=date(2024, 6, 2), maturity=date(2024, 6, 1))
+        tab._on_calculate_clicked()
+        assert not tab._maturity_err_wrap.isHidden()
+        assert tab._result_stack.currentIndex() == 0
+
+
+# ── Test E: reset clears result card ──────────────────────────────────────────
+
+class TestResetClearsResult:
+    """E: reset after a successful calculation restores the placeholder."""
+
+    def test_reset_restores_placeholder(self, qapp) -> None:
+        factory = _make_real_factory()
+        _save_issuer(factory)
+        tab = _CalculatorTab(factory)
+        _set_form(tab)
+        tab._on_calculate_clicked()
+        assert tab._result_stack.currentIndex() == 1  # result card visible
+
+        with patch("justfixed.ui.main.IssuerRepository") as MockRepo:
+            MockRepo.return_value.list_all.return_value = []
+            tab.reset()
+
+        assert tab._result_stack.currentIndex() == 0  # placeholder restored
+        assert tab._result_panel is None
+
+
+# ── Test F: Solve mode stub ────────────────────────────────────────────────────
+
+class TestSolveModeStub:
+    """F: Calculate in Solve mode shows the stub message; back_solve is not called."""
+
+    def test_solve_stub_shown(self, qapp) -> None:
+        from PySide6.QtWidgets import QLabel as _QLabel
+        factory = _make_real_factory()
+        _save_issuer(factory)
+        tab = _CalculatorTab(factory)
+        _set_form(tab)
+        tab._radio_solve.setChecked(True)
+        tab._mode_group.idClicked.emit(1)
+
+        tab._on_calculate_clicked()
+
+        assert tab._result_stack.currentIndex() == 1
+        stub = tab._result_stack.widget(1)
+        assert isinstance(stub, _QLabel)
+        assert "Solve mode" in stub.text()
+        assert tab._result_panel is None  # no Panel set — stub is a plain QLabel
