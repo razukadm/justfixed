@@ -17,6 +17,7 @@ from PySide6.QtGui import QAction, QColor, QFont, QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QCompleter,
@@ -30,6 +31,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QRadioButton,
     QScrollArea,
     QSplitter,
     QStackedLayout,
@@ -46,6 +48,7 @@ from PySide6.QtWidgets import (
 from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
 from justfixed.ui.qss import make_stylesheet
 from justfixed.ui.theme import COLORS, FONTS
+from justfixed.ui.widgets.panel import Panel
 from justfixed.ui.curve_inspector import (
     CurveInspectorWindow,
     SERIES_CDI,
@@ -807,6 +810,160 @@ class InvestmentDetailPanel(QWidget):
             self._error_label.show()
 
 
+# ── Calculator tab ────────────────────────────────────────────────────────────
+
+class _CalculatorTab(QWidget):
+    """Calculator tab: form + placeholder result area.
+
+    COMMIT 1: form shell only. Calculate is disabled; result area is a
+    placeholder label. Principal mode radio toggles the Value field's
+    enabled state. Reset restores all fields to defaults.
+    """
+
+    def __init__(self, session_factory, parent=None) -> None:
+        super().__init__(parent)
+        self._session_factory = session_factory
+
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setSpacing(8)
+
+        # ── Left: form panel (fixed ~360px) ───────────────────────────────────
+        form_container = QWidget()
+        form_container.setFixedWidth(360)
+        form_layout = QVBoxLayout(form_container)
+        form_layout.setContentsMargins(0, 0, 0, 0)
+        form_layout.setSpacing(2)
+
+        self._body_layout = form_layout
+
+        # Issuer
+        self._issuer_combo = QComboBox()
+        self._issuer_combo.currentIndexChanged.connect(self._on_issuer_changed)
+        self._add_form_row("Issuer", self._issuer_combo)
+
+        # Conglomerate (read-only, auto-populated)
+        self._cong_edit = QLineEdit()
+        self._cong_edit.setEnabled(False)
+        self._add_form_row("Conglomerate", self._cong_edit)
+
+        # Product — FGC-covered only
+        self._product_combo = QComboBox()
+        for pt in ProductType:
+            if rules_for(pt).fgc_covered:
+                self._product_combo.addItem(rules_for(pt).display_name, pt)
+        self._add_form_row("Product", self._product_combo)
+
+        # Rate
+        self._rate_editor = _RateEditor()
+        self._add_form_row("Rate", self._rate_editor)
+
+        # Purchase date
+        self._purchase_date_edit = QDateEdit()
+        self._purchase_date_edit.setDisplayFormat("dd/MM/yyyy")
+        self._add_form_row("Purchase date", self._purchase_date_edit)
+
+        # Maturity date
+        self._maturity_date_edit = QDateEdit()
+        self._maturity_date_edit.setDisplayFormat("dd/MM/yyyy")
+        self._add_form_row("Maturity date", self._maturity_date_edit)
+
+        # Principal mode radios
+        self._radio_enter = QRadioButton("Enter value")
+        self._radio_solve = QRadioButton("Solve for max")
+        self._radio_enter.setChecked(True)
+        self._mode_group = QButtonGroup(self)
+        self._mode_group.addButton(self._radio_enter, 0)
+        self._mode_group.addButton(self._radio_solve, 1)
+        self._mode_group.idClicked.connect(self._on_mode_changed)
+        mode_widget = QWidget()
+        mode_row = QHBoxLayout(mode_widget)
+        mode_row.setContentsMargins(0, 0, 0, 0)
+        mode_row.setSpacing(12)
+        mode_row.addWidget(self._radio_enter)
+        mode_row.addWidget(self._radio_solve)
+        mode_row.addStretch()
+        self._add_form_row("Principal", mode_widget)
+
+        # Value field
+        self._value_edit = QLineEdit()
+        self._value_edit.setPlaceholderText("e.g. 10.000,00")
+        self._add_form_row("Value", self._value_edit)
+
+        form_layout.addStretch()
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 4, 0, 0)
+        self._reset_btn = QPushButton("Reset")
+        self._reset_btn.clicked.connect(self.reset)
+        self._calc_btn = QPushButton("Calculate")
+        self._calc_btn.setEnabled(False)
+        btn_row.addWidget(self._reset_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(self._calc_btn)
+        form_layout.addLayout(btn_row)
+
+        outer.addWidget(form_container)
+
+        # ── Right: placeholder ────────────────────────────────────────────────
+        self._placeholder = QLabel("Run a calculation to see results.")
+        self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._placeholder.setProperty("role", "emptyState")
+        outer.addWidget(self._placeholder, stretch=1)
+
+        # Seed defaults
+        self.reset()
+
+    # ── Public ────────────────────────────────────────────────────────────────
+
+    def reset(self) -> None:
+        """Restore all fields to their defaults and repopulate issuer combo."""
+        self._populate_issuer_combo()
+        self._rate_editor.set_rate(PostFixedCDI.from_percent("100"))
+        self._product_combo.setCurrentIndex(0)
+        today = date.today()
+        self._purchase_date_edit.setDate(QDate(today.year, today.month, today.day))
+        mat = today.replace(year=today.year + 1)
+        self._maturity_date_edit.setDate(QDate(mat.year, mat.month, mat.day))
+        self._radio_enter.setChecked(True)
+        self._value_edit.setText("")
+        self._value_edit.setEnabled(True)
+
+    # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _add_form_row(self, label_text: str, widget: QWidget) -> None:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 2, 0, 2)
+        lbl = QLabel(label_text + ":")
+        lbl.setProperty("role", "fieldLabel")
+        lbl.setFixedWidth(100)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        row.addWidget(lbl)
+        row.addWidget(widget, stretch=1)
+        self._body_layout.addLayout(row)
+
+    def _populate_issuer_combo(self) -> None:
+        self._issuer_combo.blockSignals(True)
+        self._issuer_combo.clear()
+        issuers = IssuerRepository(self._session_factory).list_all()
+        for issuer in sorted(issuers, key=lambda i: i.name):
+            self._issuer_combo.addItem(issuer.name, issuer)
+        self._issuer_combo.blockSignals(False)
+        self._issuer_combo.setCurrentIndex(0)
+        self._on_issuer_changed()
+
+    def _on_issuer_changed(self) -> None:
+        issuer = self._issuer_combo.currentData()
+        if isinstance(issuer, Issuer):
+            self._cong_edit.setText(issuer.conglomerate)
+        else:
+            self._cong_edit.setText("")
+
+    def _on_mode_changed(self, button_id: int) -> None:
+        self._value_edit.setEnabled(button_id == 0)  # 0 = "Enter value"
+
+
 # ── Add-investment form ───────────────────────────────────────────────────────
 
 _NEW_ISSUER_SENTINEL = "__new_issuer__"
@@ -1411,6 +1568,10 @@ class MainWindow(QMainWindow):
         self._ts_label = QLabel("")
         status_bar.addPermanentWidget(self._ts_label)
         self.setStatusBar(status_bar)
+
+        # Calculator tab — between Investments and Dev
+        self._calculator_tab = _CalculatorTab(self._session_factory, self)
+        self._tabs.addTab(self._calculator_tab, "Calculator")
 
         # Menu bar — File (Clear DB when JUSTFIXED_DEV set) + View
         menu_bar = self.menuBar()
