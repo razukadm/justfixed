@@ -14,7 +14,7 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Persistence | Complete | 87 |
 | Engine | Complete | 181 |
 | Importers | Complete — XP, BTG, and BB pipelines all three layers done | 253 |
-| UI (PySide6) | B′, B′ companion, B24, B9a, B27, B34, B41, C′ partial, and Curve Inspector complete (manual-entry and delete shipped; projection detail pending) | 212 |
+| UI (PySide6) | B′, B′ companion, B24, B9a, B27, B34, B41, B44, C′, and Curve Inspector complete | 212 |
 | Exports (calendar / ICS) | Complete | 9 |
 | Tools (admin scripts) | Complete | 51 |
 | Build info | Complete | 3 |
@@ -409,13 +409,13 @@ B34 per-investment delete shipped via `InvestmentDetailPanel._on_delete_clicked`
 
 UI tests live in `tests/ui/` and use a "real method, MagicMock self" pattern: actual `MainWindow` or `ConglomerateEditDelegate` methods are called with a `MagicMock(spec=...)` stand-in for `self`, avoiding Qt window instantiation entirely. Layout and interaction verification remains a human "build, run, look at it" loop.
 
-See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′, and C′ partial shipped; C′ remaining: per-investment projection detail view — accrual breakdown, IR tax, net at maturity).
+See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′, and C′ all shipped).
 
 ---
 
 ## Test discipline
 
-**1133 tests, ~7 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**1144 tests, ~7 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 

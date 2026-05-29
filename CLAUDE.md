@@ -9,12 +9,11 @@ this file is the working-style and conventions summary.
 JustFixed is a Windows desktop portfolio tracker for Brazilian fixed-income investments
 (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, single-user. Engine,
 persistence, exports, and the XP, BTG, and BB importers are complete; the UI (PySide6)
-covers B24, B9a, B27, B34, C′ partial, and the Curve Inspector (read-only viewer,
+covers B24, B9a, B27, B34, B41, B44, C′, and the Curve Inspector (read-only viewer,
 conglomerate curation, filter dropdowns, Conglomerates accordion tab, live curve fetch,
-seed DB loader, dev view, Curve Inspector, manual entry, per-investment delete).
-Projection detail view (accrual breakdown / IR tax / net-at-maturity in the detail
-panel) remains. The README covers the user-facing intent; ARCHITECTURE.md covers the
-internal shape.
+seed DB loader, dev view, Curve Inspector, manual entry, per-investment delete,
+projection detail view). The README covers the user-facing intent; ARCHITECTURE.md
+covers the internal shape.
 
 ## Architectural shape
 
@@ -26,7 +25,7 @@ Strict layer ordering, no upward dependencies:
 - `importers/` — three layers: parser (file → strings), mapper (strings → typed),
   loader (typed → persisted). Three complete pipelines: XP (XLSX), BTG (XLSX), BB (fixed-width .txt).
 - `exports/` — calendar.py: iCalendar (.ics) export. Depends on domain + engine, not persistence.
-- `ui/` — PySide6 single-window app. Milestones A′, B′, B24, B9a, B27, B34, C′ partial, and Curve Inspector shipped (read-only viewer, conglomerate curation, Conglomerates accordion tab, dev view with curve/seed status, Curve Inspector, manual entry, per-investment delete). See docs/UI_DESIGN.md.
+- `ui/` — PySide6 single-window app. Milestones A′, B′, B24, B9a, B27, B34, B41, B44, C′, and Curve Inspector shipped (read-only viewer, conglomerate curation, Conglomerates accordion tab, dev view with curve/seed status, Curve Inspector, manual entry, per-investment delete, projection detail view). See docs/UI_DESIGN.md.
 
 Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 

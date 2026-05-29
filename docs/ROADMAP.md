@@ -952,32 +952,19 @@ alongside B38.
 
 ---
 
-### B44. C′ projection detail view — accrual breakdown, IR tax, net-at-maturity
+### B44. C′ projection detail view — accrual breakdown, IR tax, net-at-maturity — SHIPPED
 
-**Source:** C′ design; the open gap first recorded in the 2026-05-20
-session-status section after C′ commits 1–6 landed.
+**Shipped:** 2026-05-28. Single commit: "B44: projection detail section
+in InvestmentDetailPanel; closes C′".
 
-**What it is:** The investment detail panel (`InvestmentDetailPanel`)
-currently shows the static investment fields (issuer, product, rate, dates,
-principal). The remaining C′ scope is adding a computed projection section
-below those fields: accrual-to-date, IR tax bracket and amount, and
-net-at-maturity. `ProjectionResult` already exposes all these values;
-this is purely a UI wiring and layout task.
-
-**Why not yet built:** C′ commits 1–6 covered manual entry; the projection
-display was flagged as the remaining gap but not scheduled in the original
-C′ plan. Promoted here from the session-status note so it has a trackable
-entry.
-
-**Dependencies:** Requires a projection to be cached for the selected
-investment. The panel should show placeholder text ("Project first") when
-no projection is available. `_ASSUMED_CDI` / `_ASSUMED_IPCA` are the
-assumption source until B10 lands.
-
-**Effort:** ~1 session. Engine and data are already in place; this is
-reading from `ProjectionResult` and laying out the fields.
-
-**Trigger to revisit:** Now — this is the most immediate open UI feature.
+**What shipped:** Projection Panel added to `InvestmentDetailPanel`,
+below the investment-fields scroll area. Five rows: current value,
+gross at maturity, gain, IR tax (rate + amount), net at maturity.
+Placeholder ("No projection yet…") when no cache entry exists for
+the selected investment; real-time refresh via
+`refresh_projection()` called from `show_investment`, `clear`, and
+`MainWindow._on_project_done`. Closes C′. See `docs/UI_DESIGN.md` —
+"Projection detail (B44)" for the full design record.
 
 ---
 
@@ -1172,9 +1159,7 @@ rows. Pill shows `N active · M matured` when matured rows are visible.
 
 ### Open items
 
-B41 (Calculator tab) shipped 2026-05-28. B41a (promote mock to real
-investment) and B41b (Solve-Tesouro hardening) are new deferred items
-spun off from B41. B44 (C′ projection detail view — accrual breakdown,
-IR tax, net-at-maturity in the detail panel) is the most immediate
-remaining UI feature. B32, B33, and the GuaranteeFund milestone remain
-open.
+B41 (Calculator tab) and B44 (C′ projection detail view) both shipped
+2026-05-28; C′ is now complete. B41a (promote mock to real investment)
+and B41b (Solve-Tesouro hardening) are deferred items spun off from
+B41. B32, B33, and the GuaranteeFund milestone remain open.

@@ -632,6 +632,40 @@ create) the "Tesouro Nacional" section with NOT_FGC status on every
 row, because `build_conglomerate_report_from_projections` groups by
 conglomerate without filtering Treasury investments.
 
+### Projection detail — InvestmentDetailPanel (B44)
+
+**Shipped** 2026-05-28. Single commit. Closes C′.
+
+The `InvestmentDetailPanel` now includes a "Projection" Panel widget
+below the investment-fields scroll area. It shows five rows drawn from
+`ProjectionResult`:
+
+1. **Current value** — `projection.current_value` (accrual to as_of)
+2. **Gross at maturity** — `projection.gross_at_maturity`
+3. **Gain** — `tax_breakdown.gain`
+4. **IR tax** — rate formatted via `_format_brazilian_percent(rate × 100)`
+   combined with `tax_breakdown.tax_amount`, e.g. `"22,50% — R$ 1.125,00"`
+5. **Net at maturity** — `projection.net_at_maturity`
+
+All money values use `Money.to_display()` in mono font. The Panel's meta
+line reads `"as of dd/MM/yyyy"` from `projection.as_of`.
+
+**Placeholder state.** When `MainWindow.projection_cache` is `None` or
+contains no entry for the selected investment's id, the Panel shows a
+centered "No projection yet. Click 'Project as of today' to compute."
+label (`role="emptyState"`). The placeholder switches to the live rows
+automatically as soon as a matching projection appears.
+
+**Real-time refresh.** `InvestmentDetailPanel.refresh_projection()` is
+called from three places: `show_investment()` (on every selection
+change), `clear()` (resets to placeholder), and
+`MainWindow._on_project_done()` (immediately after the projection
+worker finishes, updating the panel if it has a current investment).
+
+**Visual sibling.** The five-row layout mirrors the Calculator result
+card (B41 phase 2.2) — same Panel widget, same `_row()` pattern, same
+mono font for money values.
+
 ## What this document is not
 
 This is a scope and structure spec. It is intentionally silent on:

@@ -50,6 +50,7 @@ class TestProjectionCachePopulation:
         self_mock = MagicMock(spec=MainWindow)
         self_mock.projection_cache = None
         self_mock._ts_label = MagicMock()
+        self_mock._detail_panel = MagicMock()
         fake_results = []
 
         MainWindow._on_project_done(self_mock, fake_results)

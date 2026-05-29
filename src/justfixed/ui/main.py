@@ -886,6 +886,8 @@ class InvestmentDetailPanel(QWidget):
         scroll.setWidget(body)
         layout.addWidget(scroll, stretch=1)
 
+        layout.addWidget(self._build_projection_section())
+
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setFrameShadow(QFrame.Shadow.Sunken)
@@ -913,6 +915,7 @@ class InvestmentDetailPanel(QWidget):
                 self._source_banner.show()
             else:
                 self._source_banner.hide()
+            self.refresh_projection()
             return
 
         # Genuine row switch: full rebuild, discarding any in-progress edit.
@@ -948,6 +951,7 @@ class InvestmentDetailPanel(QWidget):
         f["maturity_date"].set_value(inv.maturity_date, _fmt_date(inv.maturity_date), editable="maturity_date" in editable_keys)
         f["coupon_frequency"].set_value(inv.coupon_frequency, inv.coupon_frequency.to_display(), editable="coupon_frequency" in editable_keys)
         f["description"].set_value(inv.description or "", inv.description or "—", editable="description" in editable_keys)
+        self.refresh_projection()
 
     def clear(self) -> None:
         self._current_inv = None
@@ -957,6 +961,88 @@ class InvestmentDetailPanel(QWidget):
         self._delete_btn.setEnabled(False)
         for field in self._field_values.values():
             field.set_value(None, "", editable=False)
+        self.refresh_projection()
+
+    # ── Projection section ────────────────────────────────────────────────────
+
+    def _build_projection_section(self) -> Panel:
+        """Build the projection Panel widget; stored refs allow refresh_projection() to update it."""
+        self._proj_stack = QStackedWidget()
+
+        placeholder = QLabel("No projection yet. Click ‘Project as of today’ to compute.")
+        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        placeholder.setProperty("role", "emptyState")
+        placeholder.setWordWrap(True)
+        self._proj_stack.addWidget(placeholder)   # index 0
+
+        body = QWidget()
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(10, 8, 10, 12)
+        bl.setSpacing(8)
+
+        def _row(label_text: str, v_widget: QWidget) -> None:
+            h = QHBoxLayout()
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(8)
+            k_lbl = QLabel(label_text)
+            k_lbl.setMinimumWidth(160)
+            k_lbl.setStyleSheet(f"color: {COLORS.INK_2};")
+            h.addWidget(k_lbl)
+            h.addWidget(v_widget)
+            h.addStretch(1)
+            bl.addLayout(h)
+
+        def _mono_lbl() -> QLabel:
+            lbl = QLabel()
+            lbl.setFont(QFont(FONTS.MONO_FAMILY, FONTS.MONO_SIZE))
+            return lbl
+
+        self._proj_current_lbl   = _mono_lbl()
+        self._proj_gross_lbl     = _mono_lbl()
+        self._proj_gain_lbl      = _mono_lbl()
+        self._proj_tax_lbl       = _mono_lbl()
+        self._proj_net_lbl       = _mono_lbl()
+
+        _row("Current value",     self._proj_current_lbl)
+        _row("Gross at maturity", self._proj_gross_lbl)
+        _row("Gain",              self._proj_gain_lbl)
+        _row("IR tax",            self._proj_tax_lbl)
+        _row("Net at maturity",   self._proj_net_lbl)
+
+        bl.addStretch()
+        self._proj_stack.addWidget(body)          # index 1
+
+        self._proj_panel = Panel(title="Projection")
+        self._proj_panel.set_content(self._proj_stack)
+        return self._proj_panel
+
+    def refresh_projection(self) -> None:
+        """Update the projection section from main_window.projection_cache.
+
+        Shows the five-row body if a cached projection exists for the current
+        investment; falls back to the placeholder otherwise.
+        """
+        cache = self._main_window.projection_cache
+        if self._current_inv is None or not cache:
+            self._proj_stack.setCurrentIndex(0)
+            self._proj_panel.set_meta(None)
+            return
+        proj = next(
+            (p for p in cache if p.investment.id == self._current_inv.id), None
+        )
+        if proj is None:
+            self._proj_stack.setCurrentIndex(0)
+            self._proj_panel.set_meta(None)
+            return
+        tb = proj.tax_breakdown
+        tax_pct = _format_brazilian_percent(tb.tax_rate * Decimal("100"))
+        self._proj_current_lbl.setText(proj.current_value.to_display())
+        self._proj_gross_lbl.setText(proj.gross_at_maturity.to_display())
+        self._proj_gain_lbl.setText(tb.gain.to_display())
+        self._proj_tax_lbl.setText(f"{tax_pct} — {tb.tax_amount.to_display()}")
+        self._proj_net_lbl.setText(proj.net_at_maturity.to_display())
+        self._proj_panel.set_meta(f"as of {proj.as_of.strftime('%d/%m/%Y')}")
+        self._proj_stack.setCurrentIndex(1)
 
     # ── Delete ────────────────────────────────────────────────────────────────
 
@@ -3271,6 +3357,7 @@ class MainWindow(QMainWindow):
         )
         self.projection_cache = results
         self.refresh_table()
+        self._detail_panel.refresh_projection()
 
     def _on_project_error(self, message: str) -> None:
         self._set_busy(False)

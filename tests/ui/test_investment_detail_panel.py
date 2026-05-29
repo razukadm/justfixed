@@ -21,7 +21,9 @@ from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.issuer import Issuer, IssuerKind
 from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType
-from justfixed.domain.rates import PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA, Prefixed
+from justfixed.domain.rates import PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA, Prefixed, _format_brazilian_percent
+from justfixed.engine.projection import ProjectionResult
+from justfixed.engine.tax import TaxResult
 from justfixed.ui.main import InvestmentDetailPanel, _EditableField, _RateEditor
 
 
@@ -643,3 +645,143 @@ class TestInvestmentDetailPanelRate:
 
         MockRepo.return_value.save.assert_not_called()
         assert not panel._error_label.isHidden()
+
+
+# ── B44: projection detail section ───────────────────────────────────────────
+
+_PURCHASE = date(2025, 1, 2)
+_MATURITY = date(2026, 1, 2)
+
+
+def _real_inv(name: str = "Test Bank") -> Investment:
+    """Real Investment domain object (no DB needed)."""
+    issuer = Issuer.create(name, "Test Cong", IssuerKind.COMMERCIAL_BANK)
+    return Investment.create(
+        product=ProductType.CDB,
+        issuer=issuer,
+        principal=Money.from_reais("50000"),
+        rate=Prefixed.from_percent("12"),
+        purchase_date=_PURCHASE,
+        maturity_date=_MATURITY,
+    )
+
+
+def _make_proj(inv: Investment) -> ProjectionResult:
+    """Deterministic ProjectionResult with hand-set values."""
+    return ProjectionResult(
+        investment=inv,
+        as_of=_MATURITY,
+        current_value=Money.from_reais("51000"),
+        cash_flows=[],
+        gross_at_maturity=Money.from_reais("55000"),
+        tax_breakdown=TaxResult(
+            gross=Money.from_reais("55000"),
+            gain=Money.from_reais("5000"),
+            tax_rate=Decimal("0.225"),
+            tax_amount=Money.from_reais("1125"),
+            net=Money.from_reais("53875"),
+        ),
+        net_at_maturity=Money.from_reais("53875"),
+    )
+
+
+def _panel_with_cache(projection_cache) -> InvestmentDetailPanel:
+    main_win = MagicMock()
+    main_win.projection_cache = projection_cache
+    return InvestmentDetailPanel(MagicMock(), main_win)
+
+
+class TestProjectionSectionPlaceholder:
+    """a, c, e: placeholder state."""
+
+    def test_placeholder_shown_when_no_cache(self, qapp) -> None:
+        # a: no projection cached → placeholder (stack index 0)
+        panel = _panel_with_cache(None)
+        inv = _real_inv()
+        panel.show_investment(inv)
+        assert panel._proj_stack.currentIndex() == 0
+
+    def test_placeholder_shown_when_investment_not_in_cache(self, qapp) -> None:
+        # c: cache exists but doesn't contain this investment
+        other_inv = _real_inv("Other Bank")
+        panel = _panel_with_cache([_make_proj(other_inv)])
+        inv = _real_inv("Test Bank")
+        panel.show_investment(inv)
+        assert panel._proj_stack.currentIndex() == 0
+
+    def test_clear_resets_to_placeholder(self, qapp) -> None:
+        # e: populated → clear() → placeholder
+        inv = _real_inv()
+        panel = _panel_with_cache([_make_proj(inv)])
+        panel.show_investment(inv)
+        assert panel._proj_stack.currentIndex() == 1  # populated first
+        panel.clear()
+        assert panel._proj_stack.currentIndex() == 0
+
+
+class TestProjectionSectionValues:
+    """b, f: correct values displayed when cache entry exists."""
+
+    def _shown(self, qapp) -> tuple[InvestmentDetailPanel, Investment]:
+        inv = _real_inv()
+        panel = _panel_with_cache([_make_proj(inv)])
+        panel.show_investment(inv)
+        assert panel._proj_stack.currentIndex() == 1
+        return panel, inv
+
+    def test_current_value(self, qapp) -> None:
+        panel, _ = self._shown(qapp)
+        assert panel._proj_current_lbl.text() == Money.from_reais("51000").to_display()
+
+    def test_gross_at_maturity(self, qapp) -> None:
+        panel, _ = self._shown(qapp)
+        assert panel._proj_gross_lbl.text() == Money.from_reais("55000").to_display()
+
+    def test_gain(self, qapp) -> None:
+        panel, _ = self._shown(qapp)
+        assert panel._proj_gain_lbl.text() == Money.from_reais("5000").to_display()
+
+    def test_net_at_maturity(self, qapp) -> None:
+        panel, _ = self._shown(qapp)
+        assert panel._proj_net_lbl.text() == Money.from_reais("53875").to_display()
+
+    def test_ir_tax_format(self, qapp) -> None:
+        # f: tax_rate=0.225 → "22,50% — R$ 1.125,00"
+        panel, _ = self._shown(qapp)
+        expected_pct = _format_brazilian_percent(Decimal("0.225") * Decimal("100"))
+        expected_amt = Money.from_reais("1125").to_display()
+        assert panel._proj_tax_lbl.text() == f"{expected_pct} — {expected_amt}"
+
+    def test_panel_meta_shows_as_of_date(self, qapp) -> None:
+        panel, _ = self._shown(qapp)
+        assert "02/01/2026" in panel._proj_panel._meta_lbl.text()
+
+
+class TestProjectionSectionRefresh:
+    """d: refresh_projection() re-reads the cache."""
+
+    def test_refresh_after_cache_update(self, qapp) -> None:
+        # d: panel shows investment with no cache → placeholder;
+        # cache is then populated and refresh_projection() called
+        # (simulating what _on_project_done does).
+        inv = _real_inv()
+        main_win = MagicMock()
+        main_win.projection_cache = None
+        panel = InvestmentDetailPanel(MagicMock(), main_win)
+        panel.show_investment(inv)
+        assert panel._proj_stack.currentIndex() == 0  # placeholder
+
+        main_win.projection_cache = [_make_proj(inv)]
+        panel.refresh_projection()
+
+        assert panel._proj_stack.currentIndex() == 1
+        assert panel._proj_current_lbl.text() == Money.from_reais("51000").to_display()
+
+    def test_on_project_done_calls_refresh_projection(self) -> None:
+        # d (MainWindow side): _on_project_done calls detail_panel.refresh_projection
+        from justfixed.ui.main import MainWindow
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._ts_label = MagicMock()
+        self_mock._detail_panel = MagicMock()
+        MainWindow._on_project_done(self_mock, [])
+        self_mock._detail_panel.refresh_projection.assert_called_once()
