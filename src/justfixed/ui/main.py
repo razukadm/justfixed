@@ -384,7 +384,7 @@ def _make_drawdown_header() -> QWidget:
         ("Product",          100, 0),
         ("Principal",        110, 0),
         ("Projected",        110, 0),
-        ("Projected Balance", 120, 0),
+        ("Projected Balance", 200, 0),
     ]:
         lbl = QLabel(text)
         if width:
@@ -461,7 +461,7 @@ def _make_drawdown_row(
     if is_peak and not is_mock:
         bal_text += " · cap binds"
     bal_lbl = QLabel(bal_text)
-    bal_lbl.setFixedWidth(150)
+    bal_lbl.setFixedWidth(200)
     bal_lbl.setFont(_MONO_FONT)
     h.addWidget(bal_lbl)
 

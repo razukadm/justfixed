@@ -607,7 +607,7 @@ Disabled for Treasury issuers — they are not FGC-covered.
 same-issuer, non-Treasury, window-overlapping holdings alongside the
 hypothetical mock investment. Rows are sorted by maturity date.
 The header row labels the last column "Projected Balance".
-The mock row renders with `[rowKind="mock"]` (light-green background,
+The mock row renders with `[rowKind="mock"]` (soft amber background,
 sketch-orange left border): issuer name first, then the `badge="mock"`
 label immediately to its right.
 The cap-binds row is the **last** non-mock row whose maturity equals
@@ -629,7 +629,7 @@ set `MainWindow.active_mock`; Reset clears it via `clear_active_mock`.
 On every Conglomerates rebuild (`_refresh_conglomerates`) the mock's
 projection is spliced into the report, and the mock's conglomerate
 section auto-expands so the row is immediately visible. The mock row
-renders with `rowKind="mock"` (light-green background, sketch-orange
+renders with `rowKind="mock"` (soft amber background, sketch-orange
 left border) and a MOCK badge (`badge="mock"`) appended after the
 issuer name. The Investments tab,
 FGC totals, and `projection_cache` are unaffected — the mock is
