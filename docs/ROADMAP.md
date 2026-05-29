@@ -788,7 +788,10 @@ Prefixed), `bca0834` (phase 1.5: back-solve all four rate types),
 Enter-value mode), `48cb989` (phase 2.3a: Solve mode), `5f93747`
 (phase 2.3b: drawdown preview), `45edbe4` (phase 2.4a: active_mock
 state), `5edc924` (phase 2.4b-i: splice into Conglomerates report),
-`65e50d3` (phase 2.4b-ii: mock-row visual treatment cross-tab).
+`65e50d3` (phase 2.4b-ii: mock-row visual treatment cross-tab). Polish
+followup: `a36b6f3` (Drawdown preview — Projected Balance header,
+peak/mock colors → red/green, MOCK badge right of issuer, fix
+duplicate peak rows on shared-maturity dates).
 
 **What shipped:** A Calculator tab that models a hypothetical
 investment without saving it to the portfolio. Enter-value mode

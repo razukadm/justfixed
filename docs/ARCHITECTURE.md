@@ -12,14 +12,14 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 |---|---|---|
 | Domain | Complete | 202 |
 | Persistence | Complete | 87 |
-| Engine | Complete | 181 |
+| Engine | Complete | 192 |
 | Importers | Complete — XP, BTG, and BB pipelines all three layers done | 253 |
-| UI (PySide6) | B′, B′ companion, B24, B9a, B27, B34, B41, B44, C′, and Curve Inspector complete | 212 |
+| UI (PySide6) | B′, B′ companion, B24, B9a, B27, B34, B41, B44, C′, and Curve Inspector complete | 349 |
 | Exports (calendar / ICS) | Complete | 9 |
 | Tools (admin scripts) | Complete | 51 |
 | Build info | Complete | 3 |
 
-998 tests pass in ~5 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+1146 tests pass in ~8 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -415,7 +415,7 @@ See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′
 
 ## Test discipline
 
-**1144 tests, ~7 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**1146 tests, ~8 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
@@ -507,7 +507,31 @@ The project uses what's in `pyproject.toml` and nothing else. Don't add a new de
 
 In rough order:
 
-1. **UI — C′ projection detail view** — per-investment accrual breakdown, IR tax, and net-at-maturity in the detail panel. Manual entry (C′ commits 1–6, commit `08a2ead`) and per-investment delete (B34, commit `a0e333e`) have shipped; the projection detail view is the remaining C′ gap. ~1-2 sessions.
+1. **B32 — Shared Brazilian-number parsing utility** — extract the private
+   `_parse_brazilian_percent_to_fraction` shared between XP and BTG mappers
+   into a common `importers/_parsing_utils.py`. The third-importer trigger
+   (BB, shipped) has fired; this is ready to pick up.
+
+2. **B33 — Unified issuer-kind classifier** — consolidate `xp_loader`'s
+   `_DEVELOPMENT_BANK_NAMES` frozenset and `btg_loader`'s `_ISSUER_KIND_CATALOG`
+   dict into a single `importers/_kind_catalog.py`; move `LoadResult` to a
+   shared `importers/loader_types.py` so no loader imports a sibling's internals.
+   BB trigger has fired; ready to pick up alongside B32.
+
+3. **GuaranteeFund milestone** — model FGC and FGCoop as first-class entities
+   with per-institution limits and (for FGCoop) a global ceiling, so exposure
+   calculations can track the two funds separately. Requires regulatory
+   verification of the FGCoop global-ceiling rule before encoding.
+
+4. **B41a — Promote mock to real investment** — action on the Calculator result
+   card that creates the mock as a real Investment via the Add-investment flow,
+   pre-populated from the form. Deferred from B41; depends on `_AddInvestmentPanel`
+   accepting external pre-fill.
+
+5. **B41b — Calculator Solve-Tesouro hardening** — add a validation gate for the
+   Solve-with-Treasury path that is currently reachable programmatically but
+   silently skipped. Deferred from B41; belt-and-suspenders, no user-visible
+   behavior change today.
 
 Phase 2 (post-MVP):
 - DI-curve mark-to-market

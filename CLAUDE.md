@@ -9,11 +9,9 @@ this file is the working-style and conventions summary.
 JustFixed is a Windows desktop portfolio tracker for Brazilian fixed-income investments
 (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, single-user. Engine,
 persistence, exports, and the XP, BTG, and BB importers are complete; the UI (PySide6)
-covers B24, B9a, B27, B34, B41, B44, C′, and the Curve Inspector (read-only viewer,
-conglomerate curation, filter dropdowns, Conglomerates accordion tab, live curve fetch,
-seed DB loader, dev view, Curve Inspector, manual entry, per-investment delete,
-projection detail view). The README covers the user-facing intent; ARCHITECTURE.md
-covers the internal shape.
+covers milestones A′, B′, B24, B9a, B27, B34, B41, B44, C′, and the Curve Inspector —
+all shipped. The README covers the user-facing intent; ARCHITECTURE.md covers the
+internal shape.
 
 ## Architectural shape
 
@@ -37,7 +35,7 @@ Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 - **Domain types validate in `__post_init__`.** Corrupt data fails to load with a
   clear `ValueError`. The domain is the gatekeeper for invariants.
 - **Tests are the spec.** If behavior changes, the test changes first. Currently
-  998 tests, ~5 second runtime, no skips. Tests pass on every commit.
+  1146 tests, ~8 second runtime, no skips. Tests pass on every commit.
 - **Hand-compute financial test expected values.** Show all decimals; don't approximate.
   Approximation has been a real source of bugs.
 - **Repositories are the only public access to persistence.** Engine, UI, and importers
@@ -125,7 +123,7 @@ the importer, one entry is added with a focused test, ship.
 - **Verify each edit landed.** After any non-trivial paste, check the file with
   `Get-Content <path> -Tail 5` (in PowerShell) or equivalent. Indentation errors on
   multi-line pastes have been a real source of grief.
-- **Run pytest after every change.** The full suite runs in ~2 seconds; there's no
+- **Run pytest after every change.** The full suite runs in ~8 seconds; there's no
   excuse to skip it.
 - **One commit per focused change with passing tests.** Commit messages describe what
   changed, not vague "updates" or "fixes." If two unrelated things land, two commits.
@@ -135,6 +133,18 @@ the importer, one entry is added with a focused test, ship.
   conversation about "what is this method's contract?" prevents 30 minutes of
   refactoring later. claude.ai is good for this; Claude Code is good for executing
   the plan once made.
+- **Fresh Claude Code session when context grows long.** When Claude Code surfaces a
+  "/clear to save N tokens" warning mid-task, finish the current commit and start
+  the next slice in a new Claude Code session. A fresh context re-reads relevant code
+  rather than working from increasingly stale session memory; quality of edits improves.
+- **Review diffs, not summaries.** Claude Code's task-completion summary can read clean
+  while the actual diff contains errors (false docs claims, inaccurate descriptions,
+  off-by-one semantics). claude.ai's review gate runs against the diff, not the summary.
+  The user pastes `git diff` output, not Claude Code's own writeup.
+- **PowerShell blocks contain only commands.** Don't put prose-style inline comments
+  after commands in a PowerShell block — the shell parses them as arguments. If
+  guidance is needed alongside commands, either put prose above/below the block or use
+  `#` comments inside the block.
 
 **Doc-update timing.** Feature-specific docs (the doc most directly
 describing this feature's surface — e.g. `BUILD.md` for the installer,
