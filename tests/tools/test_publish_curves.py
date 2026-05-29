@@ -47,6 +47,38 @@ Vertices;ETTJ IPCA;ETTJ PREF;Inflacao Implicita
 
 """
 
+# Regression fixture for the Brazilian thousands-separator bug.
+#
+# Real ANBIMA CSVs write vertex counts >= 1000 with a dot thousands separator
+# (e.g. "1.008", "1.260", "6.804").  int("1.008") raises ValueError, which
+# the surrounding except silently swallowed — truncating both curves at row 7.
+#
+# Structure mirrors the real CurvaZero_ file:
+#   • 3 sub-1000 rows: both IPCA and PREF non-blank        → 3 PRE, 3 IPCA
+#   • 3 4-digit rows (1.008 / 1.260 / 1.512): both non-blank → 3 PRE, 3 IPCA
+#   • 2 4-digit rows (6.300 / 6.804): PREF blank, IPCA non-blank → 0 PRE, 2 IPCA
+#   Total expected: PRE=6, IPCA=8
+_ANBIMA_THOUSANDS_CSV = """\
+Parametros;IPCA;PRE
+20260528;x;y
+
+ETTJ Inflacao Implicita (IPCA)
+Vertices;ETTJ IPCA;ETTJ PREF;Inflacao Implicita
+126;8,8087;13,9547;4,7294
+252;8,0434;13,7936;5,3221
+882;7,9768;13,9609;5,5420
+1.008;7,9653;14,0152;5,6035
+1.260;7,9091;14,0989;5,7361
+1.512;7,8309;14,1515;5,8615
+6.300;7,0842;;
+6.804;7,0611;;
+
+Vertices;Taxa (%a.a.)
+252;14,20
+"""
+_ANBIMA_THOUSANDS_PRE_COUNT = 6
+_ANBIMA_THOUSANDS_IPCA_COUNT = 8
+
 # Two traded DI1 rows as extracted by pdfplumber from BDI_00 page 1095
 _BDI_PAGE_TEXT = """\
 Boletim Diario do Mercado
@@ -135,6 +167,59 @@ class TestParseAnbima:
         csv_file.write_text("no header here\n", encoding="latin-1")
         with pytest.raises(SystemExit):
             parse_anbima(csv_file, _AS_OF)
+
+
+# ── parse_anbima: thousands-separator regression ──────────────────────────────
+
+class TestParseAnbimaThousandsSeparator:
+    """Regression guard for the Brazilian thousands-separator truncation bug.
+
+    ANBIMA writes vertex counts >= 1000 as "1.008", "1.260", "6.804" etc.
+    The original int() call raised ValueError on these, silently skipping every
+    row from 1,008 bd onward via the surrounding except/continue — truncating
+    both curves at exactly 7 vertices in production data.
+
+    The fixture also exercises the PREF-blanks-out / IPCA-continues split:
+    the last two rows have a non-blank IPCA cell but an empty PREF cell; the
+    parser must add those rows to ipca_vertices and skip pre_vertices for them.
+    """
+
+    def test_high_bday_rows_present_in_pre(self, tmp_path: Path) -> None:
+        csv_file = tmp_path / "ettj_thousands.csv"
+        csv_file.write_text(_ANBIMA_THOUSANDS_CSV, encoding="latin-1")
+        pre, _ = parse_anbima(csv_file, _AS_OF)
+        pre_bdays = {v.business_days for v in pre}
+        assert 1008 in pre_bdays, "1.008-bd vertex must survive thousands-separator parsing"
+        assert 1260 in pre_bdays, "1.260-bd vertex must survive thousands-separator parsing"
+        assert 1512 in pre_bdays, "1.512-bd vertex must survive thousands-separator parsing"
+
+    def test_high_bday_rows_present_in_ipca(self, tmp_path: Path) -> None:
+        csv_file = tmp_path / "ettj_thousands.csv"
+        csv_file.write_text(_ANBIMA_THOUSANDS_CSV, encoding="latin-1")
+        _, ipca = parse_anbima(csv_file, _AS_OF)
+        ipca_bdays = {v.business_days for v in ipca}
+        assert 6300 in ipca_bdays, "6.300-bd vertex must survive thousands-separator parsing"
+        assert 6804 in ipca_bdays, "6.804-bd vertex must survive thousands-separator parsing"
+
+    def test_pre_count_equals_non_blank_pref_rows(self, tmp_path: Path) -> None:
+        csv_file = tmp_path / "ettj_thousands.csv"
+        csv_file.write_text(_ANBIMA_THOUSANDS_CSV, encoding="latin-1")
+        pre, _ = parse_anbima(csv_file, _AS_OF)
+        assert len(pre) == _ANBIMA_THOUSANDS_PRE_COUNT
+
+    def test_ipca_count_equals_non_blank_ipca_rows(self, tmp_path: Path) -> None:
+        csv_file = tmp_path / "ettj_thousands.csv"
+        csv_file.write_text(_ANBIMA_THOUSANDS_CSV, encoding="latin-1")
+        _, ipca = parse_anbima(csv_file, _AS_OF)
+        assert len(ipca) == _ANBIMA_THOUSANDS_IPCA_COUNT
+
+    def test_blank_pref_rows_excluded_from_pre(self, tmp_path: Path) -> None:
+        csv_file = tmp_path / "ettj_thousands.csv"
+        csv_file.write_text(_ANBIMA_THOUSANDS_CSV, encoding="latin-1")
+        pre, _ = parse_anbima(csv_file, _AS_OF)
+        pre_bdays = {v.business_days for v in pre}
+        assert 6300 not in pre_bdays, "blank PREF cell must not produce a PRE vertex"
+        assert 6804 not in pre_bdays, "blank PREF cell must not produce a PRE vertex"
 
 
 # ── _di1_vertices_from_text (internal helper for parse_b3) ───────────────────

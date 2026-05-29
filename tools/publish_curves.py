@@ -114,20 +114,25 @@ def parse_anbima(csv_path: Path, as_of: date) -> tuple[list[Vertex], list[Vertex
         if len(parts) <= max(idx_bdays, idx_ipca, idx_pre):
             continue
         try:
-            bdays = int(parts[idx_bdays])
-            pre_pct = _br_to_decimal(parts[idx_pre])
+            # ANBIMA uses Brazilian thousands separator in the Vertices column
+            # for counts >= 1000 (e.g. "1.008"), so strip "." before int().
+            bdays = int(parts[idx_bdays].replace(".", ""))
             ipca_pct = _br_to_decimal(parts[idx_ipca])
         except (ValueError, IndexError):
             continue
 
-        pre_rate = pre_pct / Decimal("100")
         ipca_rate = ipca_pct / Decimal("100")
-
-        _check_rate(pre_rate, f"ANBIMA PRE vertex {bdays}bd")
         _check_rate(ipca_rate, f"ANBIMA IPCA real vertex {bdays}bd")
-
-        pre_vertices.append(Vertex(business_days=bdays, rate=pre_rate))
         ipca_vertices.append(Vertex(business_days=bdays, rate=ipca_rate))
+
+        # PREF blanks out for maturities beyond ~10 years while IPCA continues.
+        # An empty cell raises decimal.InvalidOperation (not ValueError), so we
+        # gate on the cell being non-empty rather than relying on the except path.
+        pre_cell = parts[idx_pre]
+        if pre_cell:
+            pre_rate = _br_to_decimal(pre_cell) / Decimal("100")
+            _check_rate(pre_rate, f"ANBIMA PRE vertex {bdays}bd")
+            pre_vertices.append(Vertex(business_days=bdays, rate=pre_rate))
 
     for label, verts in (("PRE", pre_vertices), ("IPCA real", ipca_vertices)):
         for i in range(len(verts) - 1):
