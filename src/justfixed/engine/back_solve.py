@@ -99,7 +99,7 @@ def _effective_rate(rate: Rate) -> Decimal:
 
 
 def max_principal_under_fgc(
-    issuer_name: str,
+    issuer: Issuer,
     product: ProductType,
     rate: Rate,
     purchase_date: date,
@@ -109,7 +109,7 @@ def max_principal_under_fgc(
     assumed_ipca: Decimal,
     cap: Decimal = FGC_CAP,
 ) -> BackSolveResult:
-    """Compute the maximum principal that keeps issuer FGC exposure <= cap.
+    """Compute the maximum principal that keeps conglomerate FGC exposure <= cap.
 
     At each sample date d in [purchase_date, maturity_date], the constraint is:
         existing_total(d) + P * growth(d) <= cap
@@ -122,26 +122,28 @@ def max_principal_under_fgc(
     of the boundary endpoints — evaluating at sample dates is sufficient.
 
     Args:
-        issuer_name: Name of the issuer for the proposed investment.
+        issuer: The proposed investment's Issuer (.name, .conglomerate, .kind
+            are all read). existing_holdings are filtered by conglomerate so
+            all same-conglomerate exposure counts toward the cap.
         product: Product type for the proposed investment.
         rate: Rate for the proposed investment. Any of the four supported types.
         purchase_date: Start date of the proposed investment.
         maturity_date: End date of the proposed investment.
         existing_holdings: All portfolio holdings. Non-overlapping, non-matching
-            issuer, and Treasury holdings are filtered out internally.
+            conglomerate, and Treasury holdings are filtered out internally.
         assumed_cdi: Annualized CDI fraction for projecting mock and post-fixed
             existing holdings.
         assumed_ipca: Annualized IPCA fraction for projecting mock and IPCA
             existing holdings.
-        cap: FGC cap per issuer. Defaults to R$ 250,000.
+        cap: FGC cap per conglomerate. Defaults to R$ 250,000.
 
     Returns:
         BackSolveResult with max_principal rounded DOWN to the nearest cent.
     """
-    # Filter to same-issuer, non-Treasury, window-overlapping holdings.
+    # Filter to same-conglomerate, non-Treasury, window-overlapping holdings.
     relevant = [
         inv for inv in existing_holdings
-        if inv.issuer.name == issuer_name
+        if inv.issuer.conglomerate == issuer.conglomerate
         and inv.issuer.kind != IssuerKind.TREASURY
         and inv.purchase_date < maturity_date
         and inv.maturity_date > purchase_date
@@ -163,7 +165,7 @@ def max_principal_under_fgc(
 
     for d in sample_dates:
         growth = _mock_growth_factor(
-            rate, product, issuer_name, purchase_date, d, maturity_date,
+            rate, product, issuer.name, purchase_date, d, maturity_date,
             assumed_cdi, assumed_ipca,
         )
 
@@ -189,7 +191,7 @@ def max_principal_under_fgc(
 
     # Projected gross value of mock at its maturity.
     growth_at_maturity = _mock_growth_factor(
-        rate, product, issuer_name, purchase_date, maturity_date, maturity_date,
+        rate, product, issuer.name, purchase_date, maturity_date, maturity_date,
         assumed_cdi, assumed_ipca,
     )
     projected_at_maturity = (max_principal * growth_at_maturity).quantize(
@@ -198,7 +200,7 @@ def max_principal_under_fgc(
 
     # Peak utilization at the binding date.
     growth_at_peak = _mock_growth_factor(
-        rate, product, issuer_name, purchase_date, min_bound_date, maturity_date,
+        rate, product, issuer.name, purchase_date, min_bound_date, maturity_date,
         assumed_cdi, assumed_ipca,
     )
     peak_utilized = min_bound_existing + max_principal * growth_at_peak

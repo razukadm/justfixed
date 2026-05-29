@@ -1530,7 +1530,7 @@ class _CalculatorTab(QWidget):
 
         existing = InvestmentRepository(self._session_factory).list_all()
         result = back_solve.max_principal_under_fgc(
-            issuer_name=issuer.name,
+            issuer=issuer,
             product=product,
             rate=rate,
             purchase_date=purchase_date,
@@ -1597,7 +1597,7 @@ class _CalculatorTab(QWidget):
         self._show_solve_panels(solve_panel, drawdown_panel)
 
         if result.max_principal == Decimal("0"):
-            msg = f"Existing {issuer.name} holdings already at the FGC cap."
+            msg = f"Existing {issuer.conglomerate} holdings already at the FGC cap."
         else:
             peak_str = result.peak_date.strftime("%d/%m/%Y")
             msg = f"Solved for max principal under FGC · cap binds {peak_str}"
@@ -1726,7 +1726,7 @@ class _CalculatorTab(QWidget):
         # Same filter as back_solve.max_principal_under_fgc uses internally.
         relevant = [
             inv for inv in existing_holdings
-            if inv.issuer.name == issuer.name
+            if inv.issuer.conglomerate == issuer.conglomerate
             and inv.issuer.kind != IssuerKind.TREASURY
             and inv.purchase_date < maturity_date
             and inv.maturity_date > purchase_date
@@ -1808,7 +1808,7 @@ class _CalculatorTab(QWidget):
 
         vbox.addStretch()
         panel = Panel(
-            title=f"Drawdown preview — {issuer.name} sequential",
+            title=f"Drawdown preview — {issuer.conglomerate} sequential",
             meta="mock highlighted",
         )
         panel.set_content(body)

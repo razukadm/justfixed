@@ -604,7 +604,7 @@ Disabled for Treasury issuers — they are not FGC-covered.
 
 **Drawdown preview (Solve mode only).** Below the result card, a
 "Drawdown preview" panel shows the sequence of maturities for
-same-issuer, non-Treasury, window-overlapping holdings alongside the
+same-conglomerate, non-Treasury, window-overlapping holdings alongside the
 hypothetical mock investment. Rows are sorted by maturity date.
 The header row labels the last column "Projected Balance".
 The mock row renders with `[rowKind="mock"]` (soft amber background,

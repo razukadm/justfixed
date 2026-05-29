@@ -6,7 +6,7 @@ Eight test cases (A–H) covering the full contract:
   B — binding at an interior date: existing holding matures mid-window
   C — pre-window holding excluded: matured before mock starts → filtered
   D — Treasury holding excluded: non-FGC issuer → filtered
-  E — different-issuer holding excluded: name mismatch → filtered
+  E — different-conglomerate holding excluded: conglomerate mismatch → filtered
   F — over-cap at start: existing_total >= cap → max_principal = 0
   G — rate-type guards: non-Prefixed rates raise NotImplementedError
   H — rounding: ROUND_DOWN, not ROUND_HALF_UP
@@ -98,7 +98,7 @@ def test_a_empty_holdings() -> None:
     expected_max = (Decimal("250000.00") / g).quantize(_CENT, rounding=ROUND_DOWN)
 
     result = max_principal_under_fgc(
-        issuer_name=issuer_name,
+        issuer=_bank(issuer_name),
         product=ProductType.CDB,
         rate=rate,
         purchase_date=T0,
@@ -145,7 +145,7 @@ def test_b_binding_at_interior_date() -> None:
     )
 
     result = max_principal_under_fgc(
-        issuer_name=issuer_name,
+        issuer=bank,
         product=ProductType.CDB,
         rate=rate,
         purchase_date=T0,
@@ -179,7 +179,7 @@ def test_c_pre_window_holding_excluded() -> None:
     expected_max = (Decimal("250000.00") / g).quantize(_CENT, rounding=ROUND_DOWN)
 
     result = max_principal_under_fgc(
-        issuer_name=issuer_name,
+        issuer=bank,
         product=ProductType.CDB,
         rate=rate,
         purchase_date=T0,
@@ -224,7 +224,7 @@ def test_d_treasury_excluded() -> None:
     expected_max = (Decimal("250000.00") / g).quantize(_CENT, rounding=ROUND_DOWN)
 
     result = max_principal_under_fgc(
-        issuer_name=issuer_name,
+        issuer=_bank(issuer_name),
         product=ProductType.CDB,
         rate=rate,
         purchase_date=T0,
@@ -239,8 +239,8 @@ def test_d_treasury_excluded() -> None:
 
 # ── Test E: Different-issuer holding excluded ─────────────────────────────────
 
-def test_e_different_issuer_excluded() -> None:
-    """A holding with a different issuer name is not counted toward the cap."""
+def test_e_different_conglomerate_excluded() -> None:
+    """A holding in a different conglomerate is not counted toward the cap."""
     rate = Prefixed.from_percent("10")
     T0 = date(2024, 1, 2)
     T1 = date(2025, 1, 2)
@@ -253,7 +253,7 @@ def test_e_different_issuer_excluded() -> None:
     expected_max = (Decimal("250000.00") / g).quantize(_CENT, rounding=ROUND_DOWN)
 
     result = max_principal_under_fgc(
-        issuer_name="Banco Epsilon",
+        issuer=_bank("Banco Epsilon"),
         product=ProductType.CDB,
         rate=rate,
         purchase_date=T0,
@@ -286,7 +286,7 @@ def test_f_over_cap_at_start() -> None:
     at_cap = _cdb(bank, "250000", T0, T1)
 
     result = max_principal_under_fgc(
-        issuer_name=issuer_name,
+        issuer=bank,
         product=ProductType.CDB,
         rate=rate,
         purchase_date=T0,
@@ -326,7 +326,7 @@ def test_g_post_fixed_cdi_empty_holdings() -> None:
     )
 
     result = max_principal_under_fgc(
-        issuer_name="Banco Theta",
+        issuer=_bank("Banco Theta"),
         product=ProductType.CDB,
         rate=rate,
         purchase_date=T0,
@@ -357,7 +357,7 @@ def test_g_post_fixed_ipca_empty_holdings() -> None:
     )
 
     result = max_principal_under_fgc(
-        issuer_name="Banco Iota",
+        issuer=_bank("Banco Iota"),
         product=ProductType.CDB,
         rate=rate,
         purchase_date=T0,
@@ -388,7 +388,7 @@ def test_g_post_fixed_cdi_plus_spread_empty_holdings() -> None:
     )
 
     result = max_principal_under_fgc(
-        issuer_name="Banco Kappa",
+        issuer=_bank("Banco Kappa"),
         product=ProductType.CDB,
         rate=rate,
         purchase_date=T0,
@@ -447,7 +447,7 @@ def test_g2_cross_product_binding_at_interior_date() -> None:
     )
 
     result = max_principal_under_fgc(
-        issuer_name=issuer_name,
+        issuer=bank,
         product=ProductType.CDB,
         rate=mock_rate,
         purchase_date=T0,
@@ -481,7 +481,7 @@ def test_h_rounding_direction() -> None:
     T1 = date(2025, 1, 2)
 
     result = max_principal_under_fgc(
-        issuer_name="Banco Eta",
+        issuer=_bank("Banco Eta"),
         product=ProductType.CDB,
         rate=rate,
         purchase_date=T0,
@@ -500,3 +500,93 @@ def test_h_rounding_direction() -> None:
     # Invariant 2: could not round up even one cent without breaching.
     one_cent_more = result.max_principal + Decimal("0.01")
     assert one_cent_more * g > cap
+
+
+# ── Test I: Multi-issuer conglomerate — the actual bug ────────────────────────
+
+def _conglom_bank(name: str, conglomerate: str) -> Issuer:
+    return Issuer.create(name, conglomerate, IssuerKind.COMMERCIAL_BANK)
+
+
+def test_i_over_cap_from_other_issuer_same_conglomerate() -> None:
+    """Existing holding in Bank A fills the FGC cap; Bank B (same conglomerate)
+    must return max_principal = 0.
+
+    This is the core bug: before the fix, the filter used issuer NAME so Bank A's
+    holding was invisible to a Bank B query, and max_principal was non-zero.
+    """
+    bank_a = _conglom_bank("Bank A", "Big Bank Group")
+    bank_b = _conglom_bank("Bank B", "Big Bank Group")
+    rate = Prefixed.from_percent("10")
+    T0 = date(2024, 1, 2)
+    T1 = date(2025, 1, 2)
+
+    at_cap = Investment.create(
+        product=ProductType.CDB,
+        issuer=bank_a,
+        principal=Money.from_reais("250000"),
+        rate=rate,
+        purchase_date=T0,
+        maturity_date=T1,
+    )
+
+    result = max_principal_under_fgc(
+        issuer=bank_b,
+        product=ProductType.CDB,
+        rate=rate,
+        purchase_date=T0,
+        maturity_date=T1,
+        existing_holdings=[at_cap],
+        assumed_cdi=ASSUMED_CDI,
+        assumed_ipca=ASSUMED_IPCA,
+    )
+
+    assert result.max_principal == Decimal("0.00")
+    assert result.projected_at_maturity == Decimal("0.00")
+
+
+def test_i_partial_headroom_from_other_issuer_same_conglomerate() -> None:
+    """Existing holding in Bank A consumes part of the cap; Bank B (same
+    conglomerate) gets the remaining headroom, not the full cap.
+
+    Sanity check: max_principal is positive but strictly less than the
+    empty-holdings answer (250k / growth).
+    """
+    bank_a = _conglom_bank("Bank A", "Big Bank Group")
+    bank_b = _conglom_bank("Bank B", "Big Bank Group")
+    rate = Prefixed.from_percent("10")
+    T0 = date(2024, 1, 2)
+    T1 = date(2025, 1, 2)
+
+    partial = Investment.create(
+        product=ProductType.CDB,
+        issuer=bank_a,
+        principal=Money.from_reais("50000"),
+        rate=rate,
+        purchase_date=T0,
+        maturity_date=T1,
+    )
+
+    result = max_principal_under_fgc(
+        issuer=bank_b,
+        product=ProductType.CDB,
+        rate=rate,
+        purchase_date=T0,
+        maturity_date=T1,
+        existing_holdings=[partial],
+        assumed_cdi=ASSUMED_CDI,
+        assumed_ipca=ASSUMED_IPCA,
+    )
+
+    # Expected: binding at T1. existing_T1 = 50000 * g; bound = (250k - 50k*g) / g
+    r = rate.annual_rate
+    g = _growth(r, T0, T1)
+    expected_max = (Decimal("250000.00") / g - Decimal("50000.00")).quantize(
+        _CENT, rounding=ROUND_DOWN
+    )
+
+    assert result.max_principal == expected_max
+    assert result.max_principal > Decimal("0")
+    # Must be less than the empty-holdings answer (conglomerate headroom is reduced).
+    empty_max = (Decimal("250000.00") / g).quantize(_CENT, rounding=ROUND_DOWN)
+    assert result.max_principal < empty_max

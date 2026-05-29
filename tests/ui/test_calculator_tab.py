@@ -424,7 +424,7 @@ class TestSolveMode:
 
     def _expected(self, issuer: Issuer) -> _back_solve.BackSolveResult:
         return _back_solve.max_principal_under_fgc(
-            issuer_name=issuer.name,
+            issuer=issuer,
             product=ProductType.CDB,
             rate=Prefixed.from_percent("14"),
             purchase_date=_PURCHASE,
@@ -645,6 +645,38 @@ class TestDrawdownPanel:
         assert tab._drawdown_rows[1].property("rowKind") == "peak"
         assert tab._drawdown_rows[0].property("rowKind") != "peak"
         assert tab._drawdown_rows[0].property("detailRowParity") is not None
+
+    def test_multi_issuer_conglomerate_in_drawdown(self, qapp) -> None:
+        # A holding from a DIFFERENT issuer in the SAME conglomerate must appear
+        # in the drawdown preview (FGC cap is per-conglomerate, not per-issuer).
+        factory = _make_real_factory()
+        issuer_a = _save_issuer(factory, "Bank A", "Big Bank Group")
+        issuer_b = _save_issuer(factory, "Bank B", "Big Bank Group")
+
+        holding = Investment.create(
+            product=ProductType.CDB, issuer=issuer_a,
+            principal=Money.from_reais("5000"),
+            rate=Prefixed.from_percent("10"),
+            purchase_date=date(2024, 1, 1),
+            maturity_date=_MATURITY,
+        )
+        InvestmentRepository(factory).save(holding)
+
+        tab = _CalculatorTab(factory)
+        bank_b_idx = next(
+            i for i in range(tab._issuer_combo.count())
+            if tab._issuer_combo.itemText(i) == "Bank B"
+        )
+        _set_form(tab, issuer_idx=bank_b_idx)
+        tab._radio_solve.setChecked(True)
+        tab._mode_group.idClicked.emit(1)
+        tab._on_calculate_clicked()
+
+        assert tab._drawdown_rows is not None
+        # Bank A holding + mock row for Bank B = 2 rows
+        assert len(tab._drawdown_rows) == 2
+        non_mock = [w for w in tab._drawdown_rows if w.property("rowKind") != "mock"]
+        assert len(non_mock) == 1
 
     def test_drawdown_peak_balance_real_when_principal_zero(self, qapp) -> None:
         # When max_principal == 0 (existing already at cap), the peak-row balance
