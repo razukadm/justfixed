@@ -606,26 +606,32 @@ Disabled for Treasury issuers — they are not FGC-covered.
 "Drawdown preview" panel shows the sequence of maturities for
 same-issuer, non-Treasury, window-overlapping holdings alongside the
 hypothetical mock investment. Rows are sorted by maturity date.
-The mock row is rendered with `[rowKind="mock"]` (amber background,
-sketch-orange left border, `badge="mock"` label) to distinguish it
-from existing holdings. The row at `result.peak_date` is the
-cap-binds row: `[rowKind="peak"]` (faint amber), `▶` indicator, and
-the balance cell shows `R$ 250.000,00 · cap binds`. The balance
-column shows the right-to-left cumulative gross exposure for existing
-rows only; the mock row shows its own `projected_at_maturity`.
+The header row labels the last column "Projected Balance".
+The mock row renders with `[rowKind="mock"]` (light-green background,
+sketch-orange left border): issuer name first, then the `badge="mock"`
+label immediately to its right.
+The cap-binds row is the **last** non-mock row whose maturity equals
+`result.peak_date`; earlier same-date rows render normally.
+The peak row: `[rowKind="peak"]` (light-red background, danger-red
+left border), `▶` indicator, balance cell shows
+`R$ 250.000,00 · cap binds`. The balance column shows the
+right-to-left cumulative gross exposure for existing rows only; the
+mock row shows its own `projected_at_maturity`.
 
 **QSS properties introduced:** `QWidget[rowKind="mock"]`,
 `QWidget[rowKind="peak"]`, `QLabel[badge="mock"]`,
 `QLabel[indicator="peak"]`. Theme tokens: `MOCK_ROW_BG`,
-`MOCK_ROW_EDGE`, `MOCK_INK`, `PEAK_ROW_BG`, `PEAK_INDICATOR`.
+`MOCK_ROW_EDGE`, `MOCK_INK`, `PEAK_ROW_BG`, `PEAK_ROW_EDGE`,
+`PEAK_INDICATOR`.
 
 **Cross-tab mock rendering (B41 phase 2.4b).** Both Calculate modes
 set `MainWindow.active_mock`; Reset clears it via `clear_active_mock`.
 On every Conglomerates rebuild (`_refresh_conglomerates`) the mock's
 projection is spliced into the report, and the mock's conglomerate
 section auto-expands so the row is immediately visible. The mock row
-renders with `rowKind="mock"` (amber background, sketch-orange left
-border) and a MOCK badge (`badge="mock"`) prepended to the issuer cell. The Investments tab,
+renders with `rowKind="mock"` (light-green background, sketch-orange
+left border) and a MOCK badge (`badge="mock"`) appended after the
+issuer name. The Investments tab,
 FGC totals, and `projection_cache` are unaffected — the mock is
 visible in the Conglomerates tab only. Tesouro mocks appear in (or
 create) the "Tesouro Nacional" section with NOT_FGC status on every

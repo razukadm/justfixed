@@ -594,6 +594,58 @@ class TestDrawdownPanel:
         assert len(tab._drawdown_rows) == 1
         assert tab._drawdown_rows[0].property("rowKind") == "mock"
 
+    def test_mock_row_issuer_name_before_badge(self, qapp) -> None:
+        # Fix 2: issuer name is the first child of the issuer cell; MOCK badge follows.
+        factory = _make_real_factory()
+        _save_issuer(factory)
+        tab = self._run_solve(qapp, factory)
+
+        mock_rows = [w for w in tab._drawdown_rows if w.property("rowKind") == "mock"]
+        assert len(mock_rows) == 1
+        mock_row = mock_rows[0]
+
+        # Row layout: ind(0), maturity(1), issuer_cell(2), product(3), principal(4),
+        # projected(5), balance(6).
+        issuer_cell = mock_row.layout().itemAt(2).widget()
+        assert isinstance(issuer_cell, QWidget)
+
+        ic = issuer_cell.layout()
+        name_lbl = ic.itemAt(0).widget()
+        badge_lbl = ic.itemAt(1).widget()
+        assert name_lbl is not None
+        assert badge_lbl is not None
+        assert badge_lbl.property("badge") == "mock"
+        assert name_lbl.property("badge") != "mock"
+
+    def test_single_peak_row_on_shared_maturity(self, qapp) -> None:
+        # Fix 3: two existing holdings maturing on peak_date must produce exactly
+        # one peak row (the last non-mock at that date), not two.
+        factory = _make_real_factory()
+        issuer = _save_issuer(factory)
+        for _ in range(2):
+            holding = Investment.create(
+                product=ProductType.CDB, issuer=issuer,
+                principal=Money.from_reais("5000"),
+                rate=Prefixed.from_percent("5"),
+                purchase_date=date(2024, 1, 1),
+                maturity_date=_MATURITY,
+            )
+            InvestmentRepository(factory).save(holding)
+
+        tab = self._run_solve(qapp, factory)
+
+        assert tab._drawdown_rows is not None
+        assert len(tab._drawdown_rows) == 3  # 2 existing + 1 mock
+
+        peak_rows = [w for w in tab._drawdown_rows if w.property("rowKind") == "peak"]
+        assert len(peak_rows) == 1
+
+        # The peak row must be the second row (idx=1, last non-mock at peak_date).
+        # The first existing row renders with detailRowParity, not peak.
+        assert tab._drawdown_rows[1].property("rowKind") == "peak"
+        assert tab._drawdown_rows[0].property("rowKind") != "peak"
+        assert tab._drawdown_rows[0].property("detailRowParity") is not None
+
     def test_drawdown_peak_balance_real_when_principal_zero(self, qapp) -> None:
         # When max_principal == 0 (existing already at cap), the peak-row balance
         # shows the real running balance — not the cap stamp (R$ 250.000,00).

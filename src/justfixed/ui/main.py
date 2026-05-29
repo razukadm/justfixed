@@ -384,7 +384,7 @@ def _make_drawdown_header() -> QWidget:
         ("Product",          100, 0),
         ("Principal",        110, 0),
         ("Projected",        110, 0),
-        ("Proj. Balance",    120, 0),
+        ("Projected Balance", 120, 0),
     ]:
         lbl = QLabel(text)
         if width:
@@ -437,8 +437,8 @@ def _make_drawdown_row(
         ic.setSpacing(4)
         badge = QLabel("MOCK")
         badge.setProperty("badge", "mock")
-        ic.addWidget(badge)
         ic.addWidget(QLabel(issuer_name))
+        ic.addWidget(badge)
         ic.addStretch()
         h.addWidget(issuer_cell, stretch=1)
     else:
@@ -1765,6 +1765,13 @@ class _CalculatorTab(QWidget):
         ))
         combined.sort(key=lambda r: r[0])
 
+        # Among non-mock rows at peak_date, only the LAST one is the binding
+        # row. Earlier same-date rows render normally with their real balance.
+        last_peak_idx: int | None = None
+        for i, r in enumerate(combined):
+            if r[0] == result.peak_date and not r[-1]:
+                last_peak_idx = i
+
         self._drawdown_rows = []
         body = QWidget()
         vbox = QVBoxLayout(body)
@@ -1774,7 +1781,7 @@ class _CalculatorTab(QWidget):
 
         for idx, row_data in enumerate(combined):
             mat_d, iss_n, prod_t, principal, projected, balance, is_mock = row_data
-            is_peak = (mat_d == result.peak_date)
+            is_peak = (idx == last_peak_idx)
             # Peak-row balance is stamped to the cap because in Solve mode
             # the back-solve fills the cap at the binding date by
             # construction: combined(peak) = existing(peak) + max_principal

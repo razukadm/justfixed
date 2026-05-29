@@ -181,6 +181,7 @@ QLabel[badge="mock"] {{
 /* ── Calculator: drawdown preview — peak (cap-binds) row ────────────── */
 QWidget[rowKind="peak"] {{
     background-color: {c.PEAK_ROW_BG};
+    border-left: 3px solid {c.PEAK_ROW_EDGE};
     border-bottom: 1px solid {c.CONG_ROW_BORDER};
 }}
 QLabel[indicator="peak"] {{

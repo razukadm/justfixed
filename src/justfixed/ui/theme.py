@@ -88,10 +88,11 @@ class Colors:
     # ── Calculator: drawdown preview — mock/peak row colours ──────────────────
     # MOCK_ROW_EDGE is a close stand-in for a future ACCENT_SKETCH token; the
     # exact orange shade will be codified when the sketch palette is finalised.
-    MOCK_ROW_BG: str = "#fff8e7"    # amber bg for hypothetical mock investment row
+    MOCK_ROW_BG: str = "#dcfce7"    # light green (Tailwind green-100) for mock row
     MOCK_ROW_EDGE: str = "#ea580c"  # sketch-orange left border (no named token yet)
     MOCK_INK: str = "#8a3a07"       # text colour for mock badge / mock row labels
-    PEAK_ROW_BG: str = "#fff3e0"    # faint amber for the cap-binds peak row
+    PEAK_ROW_BG: str = "#fee2e2"    # light red (Tailwind red-100) for peak row
+    PEAK_ROW_EDGE: str = "#e74c3c"  # danger-red left border (== DANGER / FGC_OVER)
     PEAK_INDICATOR: str = "#b45309" # ▶ indicator colour on the peak row
 
 
