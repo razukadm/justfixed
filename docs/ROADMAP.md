@@ -770,7 +770,18 @@ This is accepted behaviour, not a planned fix.
 
 **Trigger to revisit:** When the manual daily fetch becomes a chore, or B3 changes the BDI layout and breaks the current parser.
 
-### B40. Real-PDF regression fixture for publish_curves.py
+### B40. Real-PDF regression fixture for publish_curves.py — SHIPPED
+
+**Shipped:** 2026-05-29, commit `c1a49c1`.
+
+**What shipped:** A real captured-pymupdf fixture
+(`tests/tools/fixtures/bdi_di1_page_words.py`) holding the complete 47-row
+DI1 table from the 2026-05-28 BDI page (937 word-tuples, genuine
+`get_text("words")` output). A `TestParseB3RealBdi` regression class in
+`tests/tools/test_publish_curves.py` pins the extracted vertex count to 47
+— so a table-truncation regression fails the test even though the
+pre-existing synthetic fixture would still pass. The synthetic
+`_REAL_DI1_PAGE_WORDS` test was kept intact alongside it.
 
 **Source:** Session 2026-05-21, after the pymupdf swap.
 
@@ -779,6 +790,14 @@ This is accepted behaviour, not a planned fix.
 **Why deferred:** Minor hardening. The synthetic fixture already exercises irregular spacing; this strengthens the guarantee. The pymupdf round's near-misses (zero rows extracted, then an off-by-one) slipped past green unit tests because the fixtures were synthetic — that is the case for doing it.
 
 **Trigger to revisit:** If publish_curves.py parsing breaks again, or before relying heavily on the curve pipeline.
+
+**Real-data format note (for future ANBIMA parser work):** Two real-data
+gotchas surfaced during the `publish_curves.py` fixes that shipped alongside
+B40. (1) ANBIMA writes the Vertices column with a Brazilian thousands
+separator for counts ≥ 1000 (e.g. `1.008`), so the business-day field must
+have `.` stripped before `int()`. (2) Blank value cells in the ANBIMA CSV
+raise `decimal.InvalidOperation` (not `ValueError`), so value parsing must
+gate on a non-empty cell rather than relying on a `ValueError` except-clause.
 
 ### B41. Calculator tab — mock an investment, project, FGC headroom — SHIPPED
 
