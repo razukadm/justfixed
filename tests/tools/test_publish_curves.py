@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tools"))
 from publish_curves import (  # noqa: E402
     _B3_MONTH_CODES,
     _di1_vertices_from_text,
+    _resolve_b3_path,
     build_unified_json,
     contract_to_maturity,
     parse_anbima,
@@ -510,3 +511,25 @@ class TestBuildUnifiedJson:
         curve = _parse_cdi_curve(payload)
         assert curve is not None
         assert len(curve.vertices) == 2
+
+
+# ── _resolve_b3_path ──────────────────────────────────────────────────────────
+
+class TestResolveB3Path:
+    """_resolve_b3_path extracted from main() so the --b3 default logic is testable.
+
+    main() is not unit-testable as written (file I/O, git calls), so the
+    resolution step was pulled into a pure helper.
+    """
+
+    def test_omitted_b3_defaults_to_data_repo_bdi_pdf(self) -> None:
+        result = _resolve_b3_path(None, "/some/data-repo")
+        assert result == Path("/some/data-repo") / "BDI.pdf"
+
+    def test_explicit_b3_overrides_default(self) -> None:
+        result = _resolve_b3_path("/explicit/path/BDI_00.pdf", "/some/data-repo")
+        assert result == Path("/explicit/path/BDI_00.pdf")
+
+    def test_explicit_b3_does_not_use_data_repo(self) -> None:
+        result = _resolve_b3_path("/my/BDI.pdf", "/other/repo")
+        assert result != Path("/other/repo") / "BDI.pdf"

@@ -256,14 +256,22 @@ def build_unified_json(
     }
 
 
+def _resolve_b3_path(b3_arg: str | None, data_repo: str) -> Path:
+    """Return the resolved B3 PDF path: explicit arg wins, else <data-repo>/BDI.pdf."""
+    if b3_arg:
+        return Path(b3_arg)
+    return Path(data_repo) / "BDI.pdf"
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Publish curves/latest.json from ANBIMA ETTJ CSV + B3 BDI_00 PDF."
     )
     parser.add_argument("--anbima", required=True, metavar="PATH",
                         help="Path to local ANBIMA ETTJ CSV file")
-    parser.add_argument("--b3", required=True, metavar="PATH",
-                        help="Path to local B3 BDI_00 PDF file")
+    parser.add_argument("--b3", metavar="PATH",
+                        help="Path to local B3 BDI_00 PDF file "
+                             "(default: BDI.pdf in --data-repo)")
     parser.add_argument("--data-repo", required=True, metavar="PATH",
                         help="Path to local clone of justfixed-data repo")
     parser.add_argument("--as-of", metavar="YYYY-MM-DD",
@@ -281,7 +289,7 @@ def main() -> None:
 
     as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
     anbima_path = Path(args.anbima)
-    b3_path = Path(args.b3)
+    b3_path = _resolve_b3_path(args.b3, args.data_repo)
     data_repo_path = Path(args.data_repo)
 
     for p, label in (
