@@ -81,6 +81,34 @@ Vertices;Taxa (%a.a.)
 _ANBIMA_THOUSANDS_PRE_COUNT = 6
 _ANBIMA_THOUSANDS_IPCA_COUNT = 8
 
+# Regression fixture for the blank-IPCA guard (mirror of the blank-PREF case).
+#
+# The blank-PREF rows in _ANBIMA_THOUSANDS_CSV already test that a blank PREF
+# cell does not crash the parser and that IPCA continues.  This fixture tests
+# the symmetric case: a row where bdays and PREF are valid but the IPCA cell is
+# blank.  Before the fix, _br_to_decimal("") raised decimal.InvalidOperation
+# (not caught by except (ValueError, IndexError)), crashing the parser.
+#
+# Structure:
+#   • 2 rows with both IPCA and PREF non-blank  → 2 PRE, 2 IPCA
+#   • 1 row with PREF non-blank, IPCA blank     → 1 PRE, 0 IPCA  (the guard row)
+#   Total expected: PRE=3, IPCA=2
+_ANBIMA_BLANK_IPCA_CSV = """\
+Parametros;IPCA;PRE
+20260528;x;y
+
+ETTJ Inflacao Implicita (IPCA)
+Vertices;ETTJ IPCA;ETTJ PREF;Inflacao Implicita
+126;8,8087;13,9547;4,7294
+252;8,0434;13,7936;5,3221
+882;;13,9609;
+
+Vertices;Taxa (%a.a.)
+252;14,20
+"""
+_ANBIMA_BLANK_IPCA_PRE_COUNT = 3
+_ANBIMA_BLANK_IPCA_IPCA_COUNT = 2
+
 # Two traded DI1 rows as extracted by pdfplumber from BDI_00 page 1095
 _BDI_PAGE_TEXT = """\
 Boletim Diario do Mercado
@@ -222,6 +250,48 @@ class TestParseAnbimaThousandsSeparator:
         pre_bdays = {v.business_days for v in pre}
         assert 6300 not in pre_bdays, "blank PREF cell must not produce a PRE vertex"
         assert 6804 not in pre_bdays, "blank PREF cell must not produce a PRE vertex"
+
+
+# ── parse_anbima: blank-IPCA guard regression ─────────────────────────────────
+
+class TestParseAnbimaBlankIpca:
+    """Regression guard for the symmetric blank-IPCA crash path.
+
+    Before the fix, the IPCA cell was parsed inside the try block.  A blank
+    IPCA cell called _br_to_decimal("") which raises decimal.InvalidOperation —
+    not a subclass of ValueError — so the except clause didn't catch it and the
+    parser crashed.  The fix moves IPCA outside the try and gates the append on
+    a non-empty cell, mirroring the existing blank-PREF guard.
+    """
+
+    def test_blank_ipca_does_not_raise(self, tmp_path: Path) -> None:
+        csv_file = tmp_path / "ettj_blank_ipca.csv"
+        csv_file.write_text(_ANBIMA_BLANK_IPCA_CSV, encoding="latin-1")
+        # Must not raise — this is the core crash-regression guard.
+        pre, ipca = parse_anbima(csv_file, _AS_OF)
+
+    def test_blank_ipca_row_produces_pre_vertex_but_no_ipca_vertex(
+        self, tmp_path: Path
+    ) -> None:
+        csv_file = tmp_path / "ettj_blank_ipca.csv"
+        csv_file.write_text(_ANBIMA_BLANK_IPCA_CSV, encoding="latin-1")
+        pre, ipca = parse_anbima(csv_file, _AS_OF)
+        pre_bdays = {v.business_days for v in pre}
+        ipca_bdays = {v.business_days for v in ipca}
+        assert 882 in pre_bdays, "blank IPCA cell must still produce a PRE vertex"
+        assert 882 not in ipca_bdays, "blank IPCA cell must not produce an IPCA vertex"
+
+    def test_pre_count_equals_non_blank_pref_rows(self, tmp_path: Path) -> None:
+        csv_file = tmp_path / "ettj_blank_ipca.csv"
+        csv_file.write_text(_ANBIMA_BLANK_IPCA_CSV, encoding="latin-1")
+        pre, _ = parse_anbima(csv_file, _AS_OF)
+        assert len(pre) == _ANBIMA_BLANK_IPCA_PRE_COUNT
+
+    def test_ipca_count_equals_non_blank_ipca_rows(self, tmp_path: Path) -> None:
+        csv_file = tmp_path / "ettj_blank_ipca.csv"
+        csv_file.write_text(_ANBIMA_BLANK_IPCA_CSV, encoding="latin-1")
+        _, ipca = parse_anbima(csv_file, _AS_OF)
+        assert len(ipca) == _ANBIMA_BLANK_IPCA_IPCA_COUNT
 
 
 # ── _di1_vertices_from_text (internal helper for parse_b3) ───────────────────
