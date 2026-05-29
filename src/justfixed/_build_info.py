@@ -4,7 +4,7 @@
 from datetime import date
 
 VERSION     = "0.1.0"
-BUILD_DATE  = date(2026, 5, 23)
+BUILD_DATE  = date(2026, 5, 28)
 EXPIRY_DATE = date(2026, 6, 15)
 
 
