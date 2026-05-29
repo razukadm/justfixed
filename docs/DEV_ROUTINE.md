@@ -42,14 +42,13 @@ Both files must be for the **same trading day**. Save them into
 
 ### 1b. Generate and commit the curve file
 
-Replace the date in both places with the trading day you are publishing.
+Replace the date with the trading day you are publishing.
 
 ```powershell
 cd C:\Projects\JustFixed
 .\.venv\Scripts\Activate.ps1
 .\.venv\Scripts\python.exe tools\publish_curves.py `
   --anbima C:\Projects\justfixed-data\CurvaZero_.csv `
-  --b3 C:\Projects\justfixed-data\BDI.pdf `
   --data-repo C:\Projects\justfixed-data `
   --as-of 2026-05-28 --commit
 ```
@@ -128,7 +127,37 @@ $env:JUSTFIXED_DEV = "1"
 The `$env:JUSTFIXED_DEV` setting applies only to the current PowerShell
 window. Open a new window, or close this one, to launch normally again.
 
-> **Note.** It runs in Developer mode so that the database can be cleared.
+Setting `JUSTFIXED_DEV=1` enables two things: a **Clear Database…** option in the
+File menu, and a **Dev** tab in the main window. No other behavior changes.
+
+---
+
+## 4. Running from source (no build)
+
+Runs the app directly from the working tree — no PyInstaller, no installer, no
+separate install step. Code changes in `src/` take effect immediately on the next
+launch. Unlike the dev-mode command in section 3, this does **not** require an
+installed binary.
+
+`pyproject.toml` declares a console script entry point (`justfixed →
+justfixed.ui.main:main`). With the venv active that script is on the PATH:
+
+```powershell
+cd C:\Projects\JustFixed
+.\.venv\Scripts\Activate.ps1
+justfixed
+```
+
+There is no `src/justfixed/__main__.py`, so `python -m justfixed` is not
+supported. The `justfixed` entry point is the only working invocation.
+
+To also enable dev-mode capabilities (Clear Database + Dev tab) when running
+from source, set the environment variable before launching:
+
+```powershell
+$env:JUSTFIXED_DEV = "1"
+justfixed
+```
 
 ---
 
