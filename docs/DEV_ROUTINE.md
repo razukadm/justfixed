@@ -51,7 +51,7 @@ cd C:\Projects\JustFixed
   --anbima C:\Projects\justfixed-data\CurvaZero_.csv `
   --b3 C:\Projects\justfixed-data\BDI.pdf `
   --data-repo C:\Projects\justfixed-data `
-  --as-of 2026-05-22 --commit
+  --as-of 2026-05-28 --commit
 ```
 
 `--as-of` is the trading day, which becomes the curve's anchor date. `--commit`
