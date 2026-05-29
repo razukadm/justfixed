@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tools"))
 from publish_curves import (  # noqa: E402
     _B3_MONTH_CODES,
     _di1_vertices_from_text,
+    _resolve_anbima_path,
     _resolve_b3_path,
     build_unified_json,
     contract_to_maturity,
@@ -533,3 +534,25 @@ class TestResolveB3Path:
     def test_explicit_b3_does_not_use_data_repo(self) -> None:
         result = _resolve_b3_path("/my/BDI.pdf", "/other/repo")
         assert result != Path("/other/repo") / "BDI.pdf"
+
+
+# ── _resolve_anbima_path ──────────────────────────────────────────────────────
+
+class TestResolveAnbimaPath:
+    """_resolve_anbima_path extracted from main() so the --anbima default logic is testable.
+
+    main() is not unit-testable as written (file I/O, git calls), so the
+    resolution step was pulled into a pure helper.
+    """
+
+    def test_omitted_anbima_defaults_to_data_repo_curvazero(self) -> None:
+        result = _resolve_anbima_path(None, "/some/data-repo")
+        assert result == Path("/some/data-repo") / "CurvaZero_.csv"
+
+    def test_explicit_anbima_overrides_default(self) -> None:
+        result = _resolve_anbima_path("/explicit/path/CurvaZero_.csv", "/some/data-repo")
+        assert result == Path("/explicit/path/CurvaZero_.csv")
+
+    def test_explicit_anbima_does_not_use_data_repo(self) -> None:
+        result = _resolve_anbima_path("/my/CurvaZero_.csv", "/other/repo")
+        assert result != Path("/other/repo") / "CurvaZero_.csv"

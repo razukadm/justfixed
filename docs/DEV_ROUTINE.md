@@ -48,10 +48,11 @@ Replace the date with the trading day you are publishing.
 cd C:\Projects\JustFixed
 .\.venv\Scripts\Activate.ps1
 .\.venv\Scripts\python.exe tools\publish_curves.py `
-  --anbima C:\Projects\justfixed-data\CurvaZero_.csv `
   --data-repo C:\Projects\justfixed-data `
   --as-of 2026-05-28 --commit
 ```
+
+`--anbima` and `--b3` default to `CurvaZero_.csv` and `BDI.pdf` in `--data-repo`; pass either explicitly to override.
 
 `--as-of` is the trading day, which becomes the curve's anchor date. `--commit`
 commits `curves/latest.json` to the `justfixed-data` repo but does **not** push.

@@ -256,6 +256,13 @@ def build_unified_json(
     }
 
 
+def _resolve_anbima_path(anbima_arg: str | None, data_repo: str) -> Path:
+    """Return the resolved ANBIMA CSV path: explicit arg wins, else <data-repo>/CurvaZero_.csv."""
+    if anbima_arg:
+        return Path(anbima_arg)
+    return Path(data_repo) / "CurvaZero_.csv"
+
+
 def _resolve_b3_path(b3_arg: str | None, data_repo: str) -> Path:
     """Return the resolved B3 PDF path: explicit arg wins, else <data-repo>/BDI.pdf."""
     if b3_arg:
@@ -267,8 +274,9 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Publish curves/latest.json from ANBIMA ETTJ CSV + B3 BDI_00 PDF."
     )
-    parser.add_argument("--anbima", required=True, metavar="PATH",
-                        help="Path to local ANBIMA ETTJ CSV file")
+    parser.add_argument("--anbima", metavar="PATH",
+                        help="Path to local ANBIMA ETTJ CSV file "
+                             "(default: CurvaZero_.csv in --data-repo)")
     parser.add_argument("--b3", metavar="PATH",
                         help="Path to local B3 BDI_00 PDF file "
                              "(default: BDI.pdf in --data-repo)")
@@ -288,7 +296,7 @@ def main() -> None:
     args = _parse_args()
 
     as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
-    anbima_path = Path(args.anbima)
+    anbima_path = _resolve_anbima_path(args.anbima, args.data_repo)
     b3_path = _resolve_b3_path(args.b3, args.data_repo)
     data_repo_path = Path(args.data_repo)
 
