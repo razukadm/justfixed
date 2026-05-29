@@ -22,6 +22,7 @@ from publish_curves import (  # noqa: E402
     parse_anbima,
     parse_b3,
 )
+from tests.tools.fixtures.bdi_di1_page_words import PAGE_951_DI1_WORDS  # noqa: E402
 from justfixed.engine.calendar import is_business_day  # noqa: E402
 
 
@@ -529,6 +530,84 @@ class TestParseB3RealShape:
             verts = parse_b3(fake_pdf, _AS_OF)
         nearest = min(verts, key=lambda v: v.business_days)
         assert nearest.rate == Decimal("0.140590")
+
+
+# ── parse_b3: real BDI fixture regression ────────────────────────────────────
+
+# Pinned values captured from the 2026-05-28 BDI.pdf, page 951 (0-based),
+# full DI1 table — all 47 rows, 937 tuples.
+_REAL_BDI_VERTEX_COUNT = 47       # all DI1 settlement contracts on the page
+_REAL_BDI_MIN_BDAYS = 2           # nearest maturity on the page (expires Jun 2026)
+_REAL_BDI_MAX_BDAYS = 3656        # farthest maturity on the page (~Jan 2041)
+_REAL_BDI_FIRST_RATE = Decimal("0.14055")  # DI1F27, first row by y-position on page
+
+_AS_OF_REAL_BDI = date(2026, 5, 28)  # anchor date matching the BDI vintage
+
+
+class TestParseB3RealBdi:
+    """Regression guard using real captured pymupdf output from the 2026-05-28 BDI.
+
+    The synthetic _REAL_DI1_PAGE_WORDS fixture in TestParseB3RealShape uses
+    hand-built tuples that may not match actual pymupdf output shape. This class
+    feeds PAGE_951_DI1_WORDS — genuine get_text("words") output captured from a
+    real BDI PDF — through the same parse_b3 path. A future parser or
+    pymupdf-output-shape regression that breaks real extraction would fail here
+    even if the synthetic tests still pass.
+
+    Fixture: tests/tools/fixtures/bdi_di1_page_words.py
+    Full page: 1982 tuples. Committed: 937 tuples (complete DI1 table, all 47 rows).
+    """
+
+    def test_correct_vertex_count(self, tmp_path: Path) -> None:
+        fake_pdf = tmp_path / "BDI_00.pdf"
+        fake_pdf.write_bytes(b"%PDF-1.4")
+        mock_open = _make_mock_pdf([PAGE_951_DI1_WORDS])
+        with patch("publish_curves.fitz.open", mock_open):
+            verts = parse_b3(fake_pdf, _AS_OF_REAL_BDI)
+        assert len(verts) == _REAL_BDI_VERTEX_COUNT
+
+    def test_vertices_sorted_ascending(self, tmp_path: Path) -> None:
+        fake_pdf = tmp_path / "BDI_00.pdf"
+        fake_pdf.write_bytes(b"%PDF-1.4")
+        mock_open = _make_mock_pdf([PAGE_951_DI1_WORDS])
+        with patch("publish_curves.fitz.open", mock_open):
+            verts = parse_b3(fake_pdf, _AS_OF_REAL_BDI)
+        bdays = [v.business_days for v in verts]
+        assert bdays == sorted(bdays)
+
+    def test_nearest_and_farthest_maturities(self, tmp_path: Path) -> None:
+        fake_pdf = tmp_path / "BDI_00.pdf"
+        fake_pdf.write_bytes(b"%PDF-1.4")
+        mock_open = _make_mock_pdf([PAGE_951_DI1_WORDS])
+        with patch("publish_curves.fitz.open", mock_open):
+            verts = parse_b3(fake_pdf, _AS_OF_REAL_BDI)
+        bdays = {v.business_days for v in verts}
+        assert _REAL_BDI_MIN_BDAYS in bdays, "nearest maturity must be present"
+        assert _REAL_BDI_MAX_BDAYS in bdays, "farthest maturity must be present"
+
+    def test_di1f27_settlement_rate(self, tmp_path: Path) -> None:
+        """DI1F27 is the first DI1 row on page 951; its settlement rate token
+        (index 7 after FINANCIAL) must parse correctly from real column positions.
+        """
+        fake_pdf = tmp_path / "BDI_00.pdf"
+        fake_pdf.write_bytes(b"%PDF-1.4")
+        mock_open = _make_mock_pdf([PAGE_951_DI1_WORDS])
+        with patch("publish_curves.fitz.open", mock_open):
+            verts = parse_b3(fake_pdf, _AS_OF_REAL_BDI)
+        bdays_to_rate = {v.business_days: v.rate for v in verts}
+        # DI1F27 lands at 150 business days from 2026-05-28
+        assert bdays_to_rate[150] == _REAL_BDI_FIRST_RATE
+
+    def test_all_rates_in_valid_range(self, tmp_path: Path) -> None:
+        fake_pdf = tmp_path / "BDI_00.pdf"
+        fake_pdf.write_bytes(b"%PDF-1.4")
+        mock_open = _make_mock_pdf([PAGE_951_DI1_WORDS])
+        with patch("publish_curves.fitz.open", mock_open):
+            verts = parse_b3(fake_pdf, _AS_OF_REAL_BDI)
+        for v in verts:
+            assert Decimal("0.10") < v.rate < Decimal("0.20"), (
+                f"rate {v.rate} at {v.business_days}bd is outside expected real-data range"
+            )
 
 
 # ── build_unified_json ────────────────────────────────────────────────────────
