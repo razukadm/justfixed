@@ -107,10 +107,11 @@ The build takes about 2 minutes and prints the final installer path on success.
 Other flags (`--version`, `--no-clean`) and full details are in
 [`BUILD.md`](BUILD.md).
 
-> **Note.** `build.py` rewrites `src/justfixed/_build_info.py` every run. This
-> is expected. Leave it uncommitted for routine beta builds; commit it only
-> when a build is an intentional release snapshot. See `BUILD.md` for the
-> reasoning.
+> **Note.** `build.py` rewrites `src/justfixed/_build_info.py` every run, but
+> the file is marked `skip-worktree` so re-stamps are invisible in `git status`.
+> Leave it uncommitted for routine beta builds; commit it only when a build is an
+> intentional release snapshot. See [`BUILD.md`](BUILD.md) for the skip-worktree
+> details and the release-commit procedure.
 
 ---
 

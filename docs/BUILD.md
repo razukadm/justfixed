@@ -248,6 +248,46 @@ the next intentional build. If a build is genuinely the "release" snapshot,
 commit `_build_info.py` along with whatever other changes that release
 contains.
 
+### Why `_build_info.py` doesn't show as modified
+
+After a `build.py` run, `git status` reports no changes to `_build_info.py`
+even though the file was rewritten. The file is marked with
+`git update-index --skip-worktree`, which tells git to silently ignore local
+modifications to a tracked file. The re-stamp happens and the file is live in
+the bundle, but the working-tree change never surfaces as uncommitted churn.
+
+**This flag is local and per-clone — it is not stored in the repo.** On a
+fresh clone or a different build machine, run once to arm it:
+
+```powershell
+git update-index --skip-worktree src/justfixed/_build_info.py
+```
+
+**To intentionally commit new build metadata for a release snapshot:**
+
+1. Un-arm: `git update-index --no-skip-worktree src/justfixed/_build_info.py`
+2. Run `build.py` (or edit the file directly) to stamp the release values.
+3. Stage and commit: `git add src/justfixed/_build_info.py && git commit`.
+4. Re-arm: `git update-index --skip-worktree src/justfixed/_build_info.py`
+
+> **Caution.** While un-armed, `git checkout -- src/justfixed/_build_info.py`
+> will overwrite local edits. Make your metadata change (or run `build.py`)
+> *after* un-arming, not before.
+
+**To check whether the flag is currently set:**
+
+```powershell
+# PowerShell
+git ls-files -v | Select-String '^S'
+```
+
+```sh
+# Unix shell
+git ls-files -v | grep '^S'
+```
+
+A line like `S src/justfixed/_build_info.py` confirms the flag is armed.
+
 ### `--no-clean`: when and why
 
 PyInstaller's `build/` directory caches intermediate artifacts. With
