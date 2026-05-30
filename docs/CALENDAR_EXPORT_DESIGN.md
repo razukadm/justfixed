@@ -25,7 +25,9 @@ In scope for v1:
 
 Out of scope (deferred to future versions):
 - Coupon payment events (juros mensais, juros semestrais)
-- Bank-of-custody field in the event description
+- ~~Bank-of-custody field in the event description~~ — SHIPPED (B3):
+  custodian appears as a "Custodiante:" line in the DESCRIPTION when set,
+  omitted entirely when null.
 - Subscription URL / auto-refresh (would require server)
 - Past events (lookback configuration)
 - ICS export of FGC concentration warnings or other portfolio signals
@@ -112,8 +114,9 @@ The VCALENDAR wrapper requires a few standard properties:
 
 ## Test plan
 
-Eight tests in `tests/exports/test_calendar.py`. The test list is the
-spec — implementation that doesn't satisfy these tests is wrong.
+Eleven tests in `tests/exports/test_calendar.py` (9 original + 2 added
+for B3 custodian). The test list is the spec — implementation that
+doesn't satisfy these tests is wrong.
 
 ### Group A — Empty and trivial
 
@@ -135,29 +138,41 @@ spec — implementation that doesn't satisfy these tests is wrong.
    Input: one CDB with maturity 2027-11-15. Parse output, assert
    DTSTART equals 2027-11-15 (as DATE, not DATETIME).
 
+5. **`test_event_description_includes_custodian_when_present`** *(B3)*
+   Input: one CDB with `custodian="XP"`. Assert DESCRIPTION contains
+   "Custodiante: XP" and that "XP" does NOT appear in SUMMARY (custodian
+   is description-only).
+
+6. **`test_event_description_omits_custodian_when_none`** *(B3)*
+   Input: one CDB with `custodian=None`. Assert "Custodiante" does NOT
+   appear anywhere in the DESCRIPTION (line is absent, not blank).
+
 ### Group C — Stability and filtering
 
-5. **`test_event_uid_is_stable_across_exports`**
+7. **`test_event_uid_is_stable_across_exports`**
    Run the export twice on the same investment list. Assert the UIDs
    in the two outputs are identical. (DTSTAMP differs between runs;
    that's expected — only UID stability matters for calendar dedup.)
 
-6. **`test_past_maturities_are_filtered_out`**
+8. **`test_past_maturities_are_filtered_out`**
    Input: one investment with maturity 2024-01-01, as_of=2026-01-01.
    Output parses back to 0 VEVENTs.
 
+9. **`test_maturity_on_as_of_date_is_included`** *(added at implementation)*
+   Boundary case: maturity == as_of is included (still relevant today).
+
 ### Group D — Tax handling and validity
 
-7. **`test_treasury_investment_uses_net_after_tax`**
-   Input: one TESOURO_PREFIXADO with known principal and rate. Compute
-   the expected net_at_maturity by hand (or via scratch script as we
-   did for FGC test 9). Assert the SUMMARY contains the post-IR amount,
-   not the gross.
+10. **`test_treasury_investment_uses_net_after_tax`**
+    Input: one TESOURO_PREFIXADO with known principal and rate. Compute
+    the expected net_at_maturity by hand (or via scratch script as we
+    did for FGC test 9). Assert the SUMMARY contains the post-IR amount,
+    not the gross.
 
-8. **`test_ics_output_is_valid_format`**
-   Input: a small portfolio. Assert that `icalendar.Calendar.from_ical(output)`
-   returns without raising. This is the smoke test that the output is
-   parseable as iCalendar regardless of content.
+11. **`test_ics_output_is_valid_format`**
+    Input: a small portfolio. Assert that `icalendar.Calendar.from_ical(output)`
+    returns without raising. This is the smoke test that the output is
+    parseable as iCalendar regardless of content.
 
 ### Test conventions
 

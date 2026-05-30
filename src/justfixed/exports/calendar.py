@@ -45,12 +45,12 @@ def export_maturity_calendar(
         event.add("DTSTART", inv.maturity_date)
         event.add("DTEND", inv.maturity_date + timedelta(days=1))
         event.add("SUMMARY", f"{inv.issuer.name}: {net.to_display()}")
-        event.add(
-            "DESCRIPTION",
-            f"Emissor: {inv.issuer.name}\n"
-            f"Principal: {inv.principal.to_display()}\n"
-            f"Líquido: {net.to_display()}",
-        )
+        desc_lines = [f"Emissor: {inv.issuer.name}"]
+        if inv.custodian is not None:
+            desc_lines.append(f"Custodiante: {inv.custodian}")
+        desc_lines.append(f"Principal: {inv.principal.to_display()}")
+        desc_lines.append(f"Líquido: {net.to_display()}")
+        event.add("DESCRIPTION", "\n".join(desc_lines))
 
         cal.add_component(event)
 

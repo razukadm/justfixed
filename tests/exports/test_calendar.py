@@ -42,6 +42,7 @@ def _cdb(
     principal: str,
     maturity: date,
     purchase: date = PURCHASE,
+    custodian: str | None = None,
 ) -> Investment:
     return Investment.create(
         product=ProductType.CDB,
@@ -50,6 +51,7 @@ def _cdb(
         rate=Prefixed.from_percent("12"),
         purchase_date=purchase,
         maturity_date=maturity,
+        custodian=custodian,
     )
 
 
@@ -86,6 +88,21 @@ def test_event_summary_includes_issuer_and_payout() -> None:
     summary = str(_events(_parse(output))[0]["SUMMARY"])
     assert "Banco Inter" in summary
     assert "R$" in summary
+
+
+def test_event_description_includes_custodian_when_present() -> None:
+    inv = _cdb(_bank("Banco Inter"), "50000", date(2027, 6, 1), custodian="XP")
+    output = export_maturity_calendar([inv], as_of=AS_OF, assumed_cdi=ASSUMED_CDI)
+    desc = str(_events(_parse(output))[0]["DESCRIPTION"])
+    assert "Custodiante: XP" in desc
+    assert "XP" not in str(_events(_parse(output))[0]["SUMMARY"])
+
+
+def test_event_description_omits_custodian_when_none() -> None:
+    inv = _cdb(_bank("Banco Inter"), "50000", date(2027, 6, 1), custodian=None)
+    output = export_maturity_calendar([inv], as_of=AS_OF, assumed_cdi=ASSUMED_CDI)
+    desc = str(_events(_parse(output))[0]["DESCRIPTION"])
+    assert "Custodiante" not in desc
 
 
 def test_event_date_is_maturity_date() -> None:
