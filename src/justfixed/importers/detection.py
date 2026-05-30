@@ -20,7 +20,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from justfixed.importers.bb_loader import load_bb_statement
 from justfixed.importers.btg_loader import load_btg_statement
-from justfixed.importers.xp_loader import LoadResult, load_xp_statement
+from justfixed.importers.loader_types import LoadResult
+from justfixed.importers.xp_loader import load_xp_statement
 
 
 class Broker(Enum):

@@ -29,9 +29,9 @@ from justfixed.domain.rates import (
     PostFixedIPCA,
     Prefixed,
 )
+from justfixed.importers.loader_types import LoadResult
 from justfixed.importers.xp_loader import (
     UNVERIFIED_CONGLOMERATE_PREFIX,
-    LoadResult,
     _resolve_issuer,
     load_xp_statement,
 )

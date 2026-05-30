@@ -28,7 +28,7 @@ from unittest.mock import patch
 import pytest
 
 from justfixed.importers.bb_loader import load_bb_statement
-from justfixed.importers.xp_loader import LoadResult
+from justfixed.importers.loader_types import LoadResult
 from justfixed.persistence.database import Base, make_engine, make_session_factory
 
 BB_FIXTURE = Path(__file__).parent / "fixtures" / "synthetic_bb_statement.txt"

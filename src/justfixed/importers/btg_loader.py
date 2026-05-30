@@ -24,26 +24,16 @@ from pathlib import Path
 from sqlalchemy.orm import Session, sessionmaker
 
 from justfixed.domain.investment import Investment, InvestmentSource
-from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
+from justfixed.domain.issuer import Issuer, UNVERIFIED_CONGLOMERATE_PREFIX
+from justfixed.importers._kind_catalog import classify_issuer_kind
 from justfixed.importers.btg import read_renda_fixa_rows
 from justfixed.importers.btg_mapper import parse_row
-from justfixed.importers.xp_loader import LoadResult
+from justfixed.importers.loader_types import LoadResult
 from justfixed.persistence.repositories import (
     CurationMemoryRepository,
     InvestmentRepository,
     IssuerRepository,
 )
-
-# Provisional issuer-kind catalog, keyed on the FULL normalized name
-# (Issuer.normalize_name: strip, collapse whitespace, uppercase).
-# normalize_name does NOT shorten — POUPEX's key is the entire
-# institution name, not "POUPEX".
-# PROVISIONAL: this duplicates xp_loader's _DEVELOPMENT_BANK_NAMES
-# pattern. Both should be unified into a shared name->IssuerKind
-# classifier — see ROADMAP B33.
-_ISSUER_KIND_CATALOG: dict[str, IssuerKind] = {
-    "ASSOCIACAO DE POUPANCA E EMPRESTIMO POUPEX": IssuerKind.SAVINGS_LOAN_ASSOCIATION,
-}
 
 
 def load_btg_statement(
@@ -135,8 +125,8 @@ def _resolve_issuer(
 
     Treasury routing is kept for safety even though BTG renda fixa is
     bank/cooperative paper and "Tesouro Nacional" is not expected to appear.
-    All other new issuers are classified via _ISSUER_KIND_CATALOG, defaulting
-    to COMMERCIAL_BANK for names not in the catalog.
+    All other new issuers are classified via classify_issuer_kind (shared
+    catalog in _kind_catalog.py), defaulting to COMMERCIAL_BANK.
 
     Args:
         parsed_name: Issuer name as emitted by btg_mapper.parse_row,
@@ -161,7 +151,7 @@ def _resolve_issuer(
             curated if curated is not None
             else f"{UNVERIFIED_CONGLOMERATE_PREFIX}{parsed_name}"
         )
-        kind = _ISSUER_KIND_CATALOG.get(normalized, IssuerKind.COMMERCIAL_BANK)
+        kind = classify_issuer_kind(normalized)
         new_issuer = Issuer.create(
             name=parsed_name,
             conglomerate=conglomerate,

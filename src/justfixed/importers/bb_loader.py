@@ -30,7 +30,7 @@ from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_
 from justfixed.domain.money import Money
 from justfixed.importers.bb import read_lca_rows
 from justfixed.importers.bb_mapper import parse_row
-from justfixed.importers.xp_loader import LoadResult
+from justfixed.importers.loader_types import LoadResult
 from justfixed.persistence.repositories import (
     CurationMemoryRepository,
     InvestmentRepository,

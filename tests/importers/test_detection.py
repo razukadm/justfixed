@@ -8,7 +8,7 @@ import openpyxl
 import pytest
 
 from justfixed.importers.detection import Broker, detect_broker, load_statement
-from justfixed.importers.xp_loader import LoadResult
+from justfixed.importers.loader_types import LoadResult
 from justfixed.persistence.database import Base, make_engine, make_session_factory
 
 

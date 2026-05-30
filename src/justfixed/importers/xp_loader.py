@@ -18,13 +18,14 @@ public API and may change shape without notice.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
 from justfixed.domain.investment import Investment, InvestmentSource
-from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
+from justfixed.domain.issuer import Issuer, UNVERIFIED_CONGLOMERATE_PREFIX
+from justfixed.importers._kind_catalog import classify_issuer_kind
+from justfixed.importers.loader_types import LoadResult
 from justfixed.importers.xp import read_renda_fixa_rows
 from justfixed.importers.xp_mapper import parse_row
 from justfixed.persistence.repositories import (
@@ -32,33 +33,6 @@ from justfixed.persistence.repositories import (
     InvestmentRepository,
     IssuerRepository,
 )
-
-# Loader hardcoded knowledge: which issuer names map to development banks.
-# Stored as normalized names (Issuer.normalize_name: uppercased, whitespace-
-# collapsed). Add entries as real broker data surfaces development-bank
-# issuers, per the audit-when-it-crashes rule in CLAUDE.md.
-_DEVELOPMENT_BANK_NAMES: frozenset[str] = frozenset({"BDMG"})
-
-
-@dataclass(frozen=True)
-class LoadResult:
-    """Summary of what happened during a load_xp_statement call.
-
-    Useful for the UI to display "Imported 94 positions: 12 new,
-    82 already known" after a run.
-
-    Attributes:
-        inserted: Investments newly inserted into the database.
-        skipped: Investments already present (matched by natural key).
-        issuers_created: Issuers newly inserted into the database.
-        issuers_reused: Issuers already present (matched by normalized name).
-    """
-
-    inserted: int
-    skipped: int
-    issuers_created: int
-    issuers_reused: int
-    skipped_matured: int = 0  # matured positions skipped before persist (BB only)
 
 
 def load_xp_statement(
@@ -152,9 +126,8 @@ def _resolve_issuer(
     which carries the canonical CNPJ and TREASURY kind. Everything else
     is created with conglomerate drawn from curation memory if a curated
     entry exists, falling back to the [unverified] prefix otherwise.
-    Development banks (per _DEVELOPMENT_BANK_NAMES) receive
-    IssuerKind.DEVELOPMENT_BANK; other non-treasury issuers receive
-    IssuerKind.COMMERCIAL_BANK.
+    Issuer kind is determined by classify_issuer_kind (shared catalog
+    in _kind_catalog.py); unknown names default to COMMERCIAL_BANK.
 
     Args:
         parsed_name: Issuer name as emitted by xp_mapper.parse_issuer_name.
@@ -180,18 +153,12 @@ def _resolve_issuer(
             curated if curated is not None
             else f"{UNVERIFIED_CONGLOMERATE_PREFIX}{parsed_name}"
         )
-        if normalized in _DEVELOPMENT_BANK_NAMES:
-            new_issuer = Issuer.create(
-                name=parsed_name,
-                conglomerate=conglomerate,
-                kind=IssuerKind.DEVELOPMENT_BANK,
-            )
-        else:
-            new_issuer = Issuer.create(
-                name=parsed_name,
-                conglomerate=conglomerate,
-                kind=IssuerKind.COMMERCIAL_BANK,
-            )
+        kind = classify_issuer_kind(normalized)
+        new_issuer = Issuer.create(
+            name=parsed_name,
+            conglomerate=conglomerate,
+            kind=kind,
+        )
 
     issuer_repo.save(new_issuer)
     return new_issuer, True
