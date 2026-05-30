@@ -77,6 +77,64 @@ class TestConstruction:
 
 
 # ------------------------------------------------------------------
+# custodian field (B42)
+# ------------------------------------------------------------------
+
+
+class TestCustodian:
+    def test_default_is_none(self) -> None:
+        assert make_cdb().custodian is None
+
+    def test_custodian_set(self) -> None:
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            custodian="XP",
+        )
+        assert inv.custodian == "XP"
+
+    def test_custodian_stripped(self) -> None:
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            custodian="  XP  ",
+        )
+        assert inv.custodian == "XP"
+
+    def test_whitespace_only_becomes_none(self) -> None:
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            custodian="   ",
+        )
+        assert inv.custodian is None
+
+    def test_empty_string_becomes_none(self) -> None:
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            custodian="",
+        )
+        assert inv.custodian is None
+
+
+# ------------------------------------------------------------------
 # Invariant 1: principal must be positive
 # ------------------------------------------------------------------
 

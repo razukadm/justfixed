@@ -66,6 +66,7 @@ class Investment:
     coupon_frequency: CouponFrequency = CouponFrequency.NONE
     description: str = ""
     source: InvestmentSource = InvestmentSource.XP_IMPORT
+    custodian: str | None = None
     id: uuid.UUID = field(default_factory=uuid.uuid4)
 
     def __post_init__(self) -> None:
@@ -132,6 +133,10 @@ class Investment:
         # Normalize description.
         self.description = self.description.strip()
 
+        # Normalize custodian: whitespace-only becomes unset (None).
+        if self.custodian is not None:
+            self.custodian = self.custodian.strip() or None
+
     @classmethod
     def create(
         cls,
@@ -145,6 +150,7 @@ class Investment:
         coupon_frequency: CouponFrequency = CouponFrequency.NONE,
         description: str = "",
         source: InvestmentSource = InvestmentSource.XP_IMPORT,
+        custodian: str | None = None,
     ) -> Self:
         """Create a new Investment with an auto-generated UUID.
 
@@ -162,6 +168,7 @@ class Investment:
             coupon_frequency=coupon_frequency,
             description=description,
             source=source,
+            custodian=custodian,
         )
 
     @property
