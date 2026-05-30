@@ -31,7 +31,7 @@ from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType
 from justfixed.domain.rates import PostFixedCDI, Rate
 from justfixed.importers.btg import BTGRow
-from justfixed.importers.xp_mapper import _parse_brazilian_percent_to_fraction
+from justfixed.importers._parsing_utils import _parse_brazilian_percent_to_fraction
 
 
 # ---------- Date parsing ----------
