@@ -156,6 +156,10 @@ calendar coverage of those payments.
 
 ### B3. Calendar export — bank-of-custody field
 
+**Status:** SHIPPED 2026-05-30, commit `2bb755f`. Custodian appears as a
+"Custodiante:" line in each VEVENT DESCRIPTION, omitted when null. See
+`docs/CALENDAR_EXPORT_DESIGN.md` (B3 marked shipped there).
+
 **Source:** `docs/CALENDAR_EXPORT_DESIGN.md`, "Future enhancements"
 section.
 
@@ -163,9 +167,7 @@ section.
 entity paying back) and custodian (the brokerage holding the
 certificate). The domain doesn't currently model custodian.
 
-**Trigger to revisit:** SATISFIED — B42 (shipped 2026-05-30) added the
-custodian field across domain, persistence, importers, and UI. Calendar
-export can now carry custodian; this is actionable.
+**Implemented by:** B42 (custodian field) → B3 (calendar export wiring).
 
 ### B4. Calendar export — subscription URL / auto-refresh
 
