@@ -163,8 +163,9 @@ section.
 entity paying back) and custodian (the brokerage holding the
 certificate). The domain doesn't currently model custodian.
 
-**Trigger to revisit:** When the domain gains a custodian field
-(itself blocked on a use case requiring it).
+**Trigger to revisit:** SATISFIED — B42 (shipped 2026-05-30) added the
+custodian field across domain, persistence, importers, and UI. Calendar
+export can now carry custodian; this is actionable.
 
 ### B4. Calendar export — subscription URL / auto-refresh
 
@@ -900,6 +901,25 @@ Treasury and non-Treasury after Solve was already selected).
 ---
 
 ### B42. Custodian (bank of custody) as a first-class field
+
+**Status:** SHIPPED 2026-05-30. Four commits:
+`28c9973` (domain field) → `adc22d1` (persistence: column, mappers,
+user_version migration runner + provenance backfill) → `1ddf5aa`
+(importer wiring) → `f0a7c68` (UI: filter dropdown, detail panel,
+manual entry).
+
+**Resolved decisions** (the three "open decisions" below were settled
+at implementation):
+1. Free-form string with autocomplete — no `Custodian` entity (followed
+   the Q1 issuer/conglomerate precedent).
+2. Backfill from import provenance: imported rows backfilled from
+   `source` (xp_import→"XP", btg_import→"BTG Pactual", bb_import→
+   "Banco do Brasil"); manual rows left NULL. No "Unknown" sentinel —
+   NULL renders "—" in the detail panel and "(unset)" in the filter.
+3. No new table column (B27 density limit) — custodian appears in the
+   filter dropdown and detail panel only.
+
+The "Open decisions" section below is retained as the historical record.
 
 **Source:** Session 2026-05-23. This is the use case that B3 ("Calendar
 export — bank-of-custody field") was deferred waiting for — B3's trigger
