@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.issuer import Issuer, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.importers._kind_catalog import classify_issuer_kind
+from justfixed.importers._provenance import custodian_for_source
 from justfixed.importers.btg import read_renda_fixa_rows
 from justfixed.importers.btg_mapper import parse_row
 from justfixed.importers.loader_types import LoadResult
@@ -104,6 +105,7 @@ def load_btg_statement(
             coupon_frequency=parsed.coupon_frequency,
             description=parsed.description,
             source=InvestmentSource.BTG_IMPORT,
+            custodian=custodian_for_source(InvestmentSource.BTG_IMPORT),
         )
         investment_repo.save(investment)
         inserted += 1

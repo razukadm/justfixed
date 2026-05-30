@@ -118,6 +118,13 @@ class TestLoadBtgStatement:
         assert len(investment_repo.list_all()) == 2
         assert len(issuer_repo.list_all()) == 2
 
+    def test_imported_investments_carry_btg_custodian(
+        self, factory, investment_repo
+    ) -> None:
+        load_btg_statement(FIXTURE_PATH, factory)
+        investments = investment_repo.list_all()
+        assert all(inv.custodian == "BTG Pactual" for inv in investments)
+
 
 # ---------- Issuer handling ----------
 

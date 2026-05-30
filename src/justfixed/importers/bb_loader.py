@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
+from justfixed.importers._provenance import custodian_for_source
 from justfixed.importers.bb import read_lca_rows
 from justfixed.importers.bb_mapper import parse_row
 from justfixed.importers.loader_types import LoadResult
@@ -124,6 +125,7 @@ def load_bb_statement(
             purchase_date=parsed.data_aplicacao,
             maturity_date=parsed.data_vencimento,
             source=InvestmentSource.BB_IMPORT,
+            custodian=custodian_for_source(InvestmentSource.BB_IMPORT),
         )
         investment_repo.save(investment)
         inserted += 1

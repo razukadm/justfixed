@@ -30,6 +30,7 @@ import pytest
 from justfixed.importers.bb_loader import load_bb_statement
 from justfixed.importers.loader_types import LoadResult
 from justfixed.persistence.database import Base, make_engine, make_session_factory
+from justfixed.persistence.repositories import InvestmentRepository
 
 BB_FIXTURE = Path(__file__).parent / "fixtures" / "synthetic_bb_statement.txt"
 
@@ -41,6 +42,11 @@ def factory():
     Base.metadata.create_all(engine)
     yield make_session_factory(engine)
     engine.dispose()
+
+
+@pytest.fixture
+def investment_repo(factory):
+    return InvestmentRepository(factory)
 
 
 # ── First-load counts ──────────────────────────────────────────────────────────
@@ -69,6 +75,13 @@ class TestFirstLoad:
     def test_returns_load_result(self, factory):
         result = load_bb_statement(BB_FIXTURE, factory)
         assert isinstance(result, LoadResult)
+
+    def test_imported_investments_carry_bb_custodian(
+        self, factory, investment_repo
+    ) -> None:
+        load_bb_statement(BB_FIXTURE, factory)
+        investments = investment_repo.list_all()
+        assert all(inv.custodian == "Banco do Brasil" for inv in investments)
 
 
 # ── Idempotency ────────────────────────────────────────────────────────────────

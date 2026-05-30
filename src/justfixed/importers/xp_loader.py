@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.issuer import Issuer, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.importers._kind_catalog import classify_issuer_kind
+from justfixed.importers._provenance import custodian_for_source
 from justfixed.importers.loader_types import LoadResult
 from justfixed.importers.xp import read_renda_fixa_rows
 from justfixed.importers.xp_mapper import parse_row
@@ -104,6 +105,7 @@ def load_xp_statement(
             maturity_date=parsed.maturity_date,
             coupon_frequency=parsed.coupon_frequency,
             source=InvestmentSource.XP_IMPORT,
+            custodian=custodian_for_source(InvestmentSource.XP_IMPORT),
         )
         investment_repo.save(investment)
         inserted += 1
