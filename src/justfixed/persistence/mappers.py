@@ -30,6 +30,19 @@ from justfixed.domain.rates import (
 from justfixed.persistence.models import InvestmentRow, IssuerRow
 
 
+# Canonical mapping from import provenance to custodian display string.
+# Used by the B42 backfill migration (migrations.py). Manual entries have
+# no broker provenance, so they map to None (NULL custodian).
+# Keep these strings in sync with _BROKER_DISPLAY in ui/main.py — that
+# dict drives the import toast and uses the same three display names.
+CUSTODIAN_BY_SOURCE: dict[str, str | None] = {
+    "xp_import":  "XP",
+    "btg_import": "BTG Pactual",
+    "bb_import":  "Banco do Brasil",
+    "manual":     None,
+}
+
+
 # ---------- Issuer ----------
 
 
@@ -127,6 +140,7 @@ def investment_to_row(inv: Investment) -> InvestmentRow:
         coupon_frequency=inv.coupon_frequency.value,
         description=inv.description,
         source=inv.source.value,
+        custodian=inv.custodian,
     )
 
 
@@ -154,4 +168,5 @@ def investment_from_row(row: InvestmentRow, issuer: Issuer) -> Investment:
         coupon_frequency=CouponFrequency(row.coupon_frequency),
         description=row.description,
         source=InvestmentSource(row.source),
+        custodian=row.custodian,
     )

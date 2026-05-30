@@ -316,3 +316,35 @@ class TestInvestmentFromRow:
         assert row.source == "manual"
         restored = investment_from_row(row, issuer)
         assert restored.source == InvestmentSource.MANUAL
+
+    def test_custodian_set_round_trips(self) -> None:
+        issuer = commercial_bank()
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=issuer,
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            custodian="XP",
+        )
+        row = investment_to_row(inv)
+        assert row.custodian == "XP"
+        restored = investment_from_row(row, issuer)
+        assert restored.custodian == "XP"
+
+    def test_custodian_none_round_trips(self) -> None:
+        issuer = commercial_bank()
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=issuer,
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            custodian=None,
+        )
+        row = investment_to_row(inv)
+        assert row.custodian is None
+        restored = investment_from_row(row, issuer)
+        assert restored.custodian is None

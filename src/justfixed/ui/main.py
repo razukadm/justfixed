@@ -103,6 +103,7 @@ from justfixed.persistence.database import (
     make_engine,
     make_session_factory,
 )
+from justfixed.persistence.migrations import run_migrations
 from justfixed.persistence.repositories import (
     CurationMemoryRepository,
     InvestmentRepository,
@@ -2374,6 +2375,7 @@ class MainWindow(QMainWindow):
         try:
             engine = make_engine(default_database_url())
             Base.metadata.create_all(engine)
+            run_migrations(engine)
             self._session_factory = make_session_factory(engine)
             self._repo = InvestmentRepository(self._session_factory)
         except Exception as exc:
@@ -3139,6 +3141,7 @@ class MainWindow(QMainWindow):
         self._worker.error.connect(self._on_import_error)
         self._worker.start()
 
+    # Keep these display strings in sync with CUSTODIAN_BY_SOURCE in mappers.py.
     _BROKER_DISPLAY = {
         Broker.XP:  "XP",
         Broker.BTG: "BTG Pactual",
