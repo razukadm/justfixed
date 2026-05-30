@@ -652,7 +652,17 @@ scaffolding.
 
 **Trigger to revisit:** Any time. Independent of other roadmap items.
 
-### B32. Extract shared Brazilian-number parsing into a common importer utility
+### B32. Extract shared Brazilian-number parsing into a common importer utility — SHIPPED
+
+**Shipped:** 2026-05-29, commit `4ba3f5b`.
+
+**What shipped:** `_PERCENT_RE` and `_parse_brazilian_percent_to_fraction` moved
+verbatim from `xp_mapper.py` into a new shared module
+`src/justfixed/importers/_parsing_utils.py`. `btg_mapper`'s cross-sibling
+private import now points there; direct unit tests added in
+`tests/importers/test_parsing_utils.py`. BB was confirmed out of scope —
+`bb_mapper` parses a bare decimal (no `%`) via its own `_parse_taxa_magnitude`
+and was not folded in.
 
 **Source:** btg_mapper.py layer-2 review, 2026-05-20.
 
@@ -672,7 +682,22 @@ BB importer (commits `2544a43`, `251c120`, `45e4f58`) is the third broker.
 The trigger has fired; this item is ready to pick up. The secondary
 trigger (xp_mapper internals change and break the import) also still applies.
 
-### B33. Unified issuer-kind classifier across broker importers
+### B33. Unified issuer-kind classifier across broker importers — SHIPPED
+
+**Shipped:** 2026-05-29, commit `a958e68`.
+
+**What shipped:** Two halves. (1) `LoadResult` relocated from `xp_loader` to a
+new shared `src/justfixed/importers/loader_types.py`; all four import sites
+repointed (`xp_loader`, `btg_loader`, `bb_loader`, `detection`). (2) The two
+non-conflicting per-loader classification tables (`xp_loader._DEVELOPMENT_BANK_NAMES`
+and `btg_loader._ISSUER_KIND_CATALOG`) merged losslessly into a new shared
+`src/justfixed/importers/_kind_catalog.py` with a `classify_issuer_kind` helper
+that defaults to `COMMERCIAL_BANK`; both loaders repointed. Direct tests in
+`tests/importers/test_kind_catalog.py`. BB does not use a catalog (it hardcodes
+`COMMERCIAL_BANK` for its single known issuer), so the classifier unification was
+XP+BTG only; BB participates solely via the relocated `LoadResult`. The
+"broader scope note" below — that `LoadResult` should move to a common module —
+is now satisfied.
 
 **Source:** btg_loader.py layer-3 review, 2026-05-20.
 
