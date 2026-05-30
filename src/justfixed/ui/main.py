@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QRadioButton,
     QScrollArea,
@@ -3342,7 +3343,7 @@ class MainWindow(QMainWindow):
         self._dev_pre_label.setText(_summary(self._pre_curve, fetch_source))
         self._dev_ipca_label.setText(_summary(self._ipca_curve, fetch_source))
 
-    def _build_dev_tab(self) -> QWidget:
+    def _build_dev_tab(self) -> QScrollArea:
         tab = QWidget()
         root = QVBoxLayout(tab)
         root.setContentsMargins(12, 12, 12, 12)
@@ -3360,7 +3361,50 @@ class MainWindow(QMainWindow):
             f.setFrameShadow(QFrame.Shadow.Sunken)
             return f
 
-        # --- Curves ---
+        def _step_label(text: str) -> QLabel:
+            lbl = QLabel(text)
+            lbl.setStyleSheet("font-weight: bold; margin-top: 4px;")
+            return lbl
+
+        def _cmd_block(cmd_text: str) -> QFrame:
+            """Monospace read-only display + Copy button. No subprocess; clipboard only."""
+            outer = QFrame()
+            v = QVBoxLayout(outer)
+            v.setContentsMargins(0, 2, 0, 2)
+            v.setSpacing(2)
+
+            hdr = QHBoxLayout()
+            hdr.addStretch()
+            copy_btn = QPushButton("Copy")
+            copy_btn.setProperty("role", "secondary")
+            hdr.addWidget(copy_btn)
+            v.addLayout(hdr)
+
+            display = QPlainTextEdit(cmd_text)
+            display.setReadOnly(True)
+            display.setFont(QFont(FONTS.MONO_FAMILY, FONTS.MONO_SIZE))
+            display.setStyleSheet(
+                f"QPlainTextEdit {{"
+                f" background: {COLORS.CODE_BLOCK_BG};"
+                f" color: {COLORS.PANEL};"
+                f" border: 1px solid {COLORS.RULE};"
+                f" border-radius: 4px;"
+                f" padding: 6px;"
+                f"}}"
+            )
+            display.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+            display.setFixedHeight(cmd_text.count("\n") * 22 + 36)
+            v.addWidget(display)
+
+            def _copy(*, _text: str = cmd_text, _btn: QPushButton = copy_btn) -> None:
+                QApplication.clipboard().setText(_text)
+                _btn.setText("Copied!")
+                QTimer.singleShot(1500, lambda: _btn.setText("Copy"))
+
+            copy_btn.clicked.connect(_copy)
+            return outer
+
+        # ── Active curves ────────────────────────────────────────────────────────
         root.addWidget(_title("Active curves"))
         root.addWidget(QLabel(f"Source URL: {CURVES_URL}"))
         root.addSpacing(4)
@@ -3377,7 +3421,7 @@ class MainWindow(QMainWindow):
 
         root.addWidget(_sep())
 
-        # --- Seed ---
+        # ── Seed status ──────────────────────────────────────────────────────────
         root.addWidget(_title("Seed status"))
         if self._seed_loaded_count > 0:
             seed_text = f"Loaded this session: yes ({self._seed_loaded_count} issuers)"
@@ -3387,7 +3431,7 @@ class MainWindow(QMainWindow):
 
         root.addWidget(_sep())
 
-        # --- Admin tools ---
+        # ── Admin tools ──────────────────────────────────────────────────────────
         root.addWidget(_title("Admin tools"))
         root.addWidget(QLabel("Data repo: https://github.com/razukadm/justfixed-data"))
         root.addWidget(QLabel("Publish script: tools/publish_curves.py"))
@@ -3398,8 +3442,119 @@ class MainWindow(QMainWindow):
         load_btn.clicked.connect(self._on_load_curve_from_file_clicked)
         root.addWidget(load_btn)
 
+        root.addWidget(_sep())
+
+        # ── Publishing curves runbook (B35) ──────────────────────────────────────
+        root.addWidget(_title("Publishing curves"))
+        root.addSpacing(4)
+
+        # Step 1a — Download sources
+        root.addWidget(_step_label("1a. Download sources"))
+
+        b3_url = (
+            "https://www.b3.com.br/pt_br/market-data-e-indices/servicos-de-dados/"
+            "market-data/consultas/boletim-diario/boletim-diario-do-mercado/"
+        )
+        b3_lbl = QLabel(
+            "B3 BDI (CDI source) — BDI_00_YYYYMMDD.pdf"
+            f'<br><a href="{b3_url}" style="color: {COLORS.LINK};">'
+            "b3.com.br boletim-diário</a>"
+        )
+        b3_lbl.setOpenExternalLinks(True)
+        root.addWidget(b3_lbl)
+
+        anbima_url = "https://www.anbima.com.br/informacoes/est-termo/CZ.asp"
+        anbima_lbl = QLabel(
+            "ANBIMA ETTJ (IPCA + prefixed source) — CurvaZero_.csv"
+            f'<br><a href="{anbima_url}" style="color: {COLORS.LINK};">'
+            "anbima.com.br ETTJ</a>"
+        )
+        anbima_lbl.setOpenExternalLinks(True)
+        root.addWidget(anbima_lbl)
+
+        warn_frame = QFrame()
+        warn_frame.setStyleSheet(
+            f"QFrame {{"
+            f" background: {COLORS.SOURCE_BANNER_BG};"
+            f" border-left: 3px solid {COLORS.WARN};"
+            f" border-radius: 2px;"
+            f"}}"
+        )
+        warn_inner = QVBoxLayout(warn_frame)
+        warn_inner.setContentsMargins(10, 6, 10, 6)
+        warn_msg = QLabel(
+            "<b>Same-day check.</b> The ANBIMA CSV carries its reference date near the top "
+            "(the <i>Parametros</i> block). Confirm it matches the date in the BDI filename. "
+            "Publishing a CSV from one day with a BDI from another produces a curve file "
+            "whose CDI and IPCA sections silently disagree."
+        )
+        warn_msg.setWordWrap(True)
+        warn_msg.setStyleSheet(f"color: {COLORS.SOURCE_BANNER_FG};")
+        warn_inner.addWidget(warn_msg)
+        root.addWidget(warn_frame)
+
+        # Step 1b — Generate and commit
+        root.addWidget(_step_label("1b. Generate and commit"))
+        _CMD_1B = (
+            "cd C:\\Projects\\JustFixed\n"
+            ".\\.venv\\Scripts\\Activate.ps1\n"
+            ".\\.venv\\Scripts\\python.exe tools\\publish_curves.py `\n"
+            "  --data-repo C:\\Projects\\justfixed-data `\n"
+            "  --as-of 2026-05-28 --commit"
+        )
+        root.addWidget(_cmd_block(_CMD_1B))
+        note_1b = QLabel(
+            "<tt>--as-of</tt> is the trading day (becomes the curve anchor). "
+            "<tt>--commit</tt> commits <tt>curves/latest.json</tt> but does <b>not</b> push. "
+            '"no DI1 settlement rows found" means the BDI is corrupt.'
+        )
+        note_1b.setWordWrap(True)
+        root.addWidget(note_1b)
+
+        # Step 1c — Review before publishing
+        root.addWidget(_step_label("1c. Review before publishing"))
+        _CMD_1C = (
+            "git -C C:\\Projects\\justfixed-data show --stat HEAD\n"
+            "git -C C:\\Projects\\justfixed-data show HEAD:curves/latest.json | `\n"
+            "  .\\.venv\\Scripts\\python.exe -c "
+            '"import sys,json; d=json.load(sys.stdin); '
+            "print('as_of', d['as_of']); "
+            "print('cdi', len(d['cdi']['vertices']), "
+            "'pre', len(d['pre']['vertices']), "
+            "'ipca_real', len(d['ipca_real']['vertices']))\""
+        )
+        root.addWidget(_cmd_block(_CMD_1C))
+        note_1c = QLabel(
+            "<tt>show --stat</tt> lists <b>only</b> <tt>curves/latest.json</tt> — nothing else. "
+            "<tt>as_of</tt> matches the trading day. "
+            "<tt>cdi</tt> has ~45–48 vertices; <tt>pre</tt> and <tt>ipca_real</tt> have 7 each. "
+            "If anything looks off, stop — do not push."
+        )
+        note_1c.setWordWrap(True)
+        root.addWidget(note_1c)
+
+        # Step 1d — Push
+        root.addWidget(_step_label("1d. Push"))
+        _CMD_1D = (
+            "git -C C:\\Projects\\justfixed-data push\n"
+            "git -C C:\\Projects\\justfixed-data status -sb"
+        )
+        root.addWidget(_cmd_block(_CMD_1D))
+        note_1d = QLabel(
+            "<tt>status -sb</tt> should show <tt>main...origin/main</tt> with no "
+            "“ahead” — local and remote now match."
+        )
+        note_1d.setWordWrap(True)
+        root.addWidget(note_1d)
+
         root.addStretch()
-        return tab
+
+        # ── Section A: wrap content in a QScrollArea ─────────────────────────────
+        scroll = QScrollArea()
+        scroll.setWidget(tab)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        return scroll
 
     def _on_load_curve_from_file_clicked(self) -> None:
         dirs = QStandardPaths.standardLocations(

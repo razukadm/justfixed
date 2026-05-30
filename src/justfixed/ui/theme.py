@@ -82,6 +82,9 @@ class Colors:
     # Border uses existing RULE token (#d9d6cf). Only the hover tint is new.
     SECONDARY_HOVER: str = "#eefbf3"
 
+    # ── Dev-tab command blocks ──────────────────────────────────────────────────
+    CODE_BLOCK_BG: str = "#1e1e1e"   # dark background for monospace command blocks
+
     # ── Investments table ──────────────────────────────────────────────────────
     HIGHLIGHT_ROW: str = "#FFF8DC"
 

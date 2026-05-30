@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton
 
 from justfixed.domain.issuer import IssuerKind
 from justfixed.importers.detection import Broker
@@ -25,6 +25,8 @@ from justfixed.domain.money import Money
 from justfixed.domain.rates import Prefixed, PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA
 from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fgc import ExposureStatus
+from PySide6.QtWidgets import QPlainTextEdit, QScrollArea
+
 from justfixed.ui.main import (
     _ActiveMock, _AddInvestmentPanel, _CUSTODIAN_UNSET,
     ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow,
@@ -1605,3 +1607,92 @@ class TestRefreshConglomeratesMockSplice:
 
         # FGC report built from projection_cache only — no mock injected
         mock_fgc.assert_called_once_with(self_mock.projection_cache)
+
+
+# ── Dev tab runbook (B35) ─────────────────────────────────────────────────────
+
+class TestDevTabRunbook:
+    """Verify the Publishing-curves runbook in the Dev tab.
+
+    Uses the real _build_dev_tab method with a bare MagicMock so the
+    QWidget tree is actually constructed.  Requires a QApplication (qapp
+    fixture from above).
+    """
+
+    @pytest.fixture
+    def dev_tab(self, qapp):
+        self_mock = MagicMock()
+        self_mock._seed_loaded_count = 0
+        return MainWindow._build_dev_tab(self_mock)
+
+    def test_returns_scroll_area(self, dev_tab) -> None:
+        assert isinstance(dev_tab, QScrollArea)
+
+    def test_scroll_area_widget_resizable(self, dev_tab) -> None:
+        assert dev_tab.widgetResizable() is True
+
+    def test_scroll_area_no_frame(self, dev_tab) -> None:
+        from PySide6.QtWidgets import QFrame
+        assert dev_tab.frameShape() == QFrame.Shape.NoFrame
+
+    def test_runbook_title_present(self, dev_tab) -> None:
+        labels = dev_tab.findChildren(QLabel)
+        assert any(lbl.text() == "Publishing curves" for lbl in labels)
+
+    def test_three_copy_buttons(self, dev_tab) -> None:
+        buttons = dev_tab.findChildren(QPushButton)
+        copy_btns = [b for b in buttons if b.text() == "Copy"]
+        assert len(copy_btns) == 3
+
+    def test_three_command_displays(self, dev_tab) -> None:
+        displays = dev_tab.findChildren(QPlainTextEdit)
+        assert len(displays) == 3
+
+    def test_curve_labels_set_as_instance_attrs(self, qapp) -> None:
+        self_mock = MagicMock()
+        self_mock._seed_loaded_count = 0
+        MainWindow._build_dev_tab(self_mock)
+        assert isinstance(self_mock._dev_cdi_label, QLabel)
+        assert isinstance(self_mock._dev_pre_label, QLabel)
+        assert isinstance(self_mock._dev_ipca_label, QLabel)
+
+    def test_copy_handler_clipboard_only_no_subprocess(self, dev_tab) -> None:
+        """Copy button writes to clipboard only — no subprocess or QProcess."""
+        import subprocess
+        from PySide6.QtCore import QProcess
+
+        buttons = dev_tab.findChildren(QPushButton)
+        copy_btns = [b for b in buttons if b.text() == "Copy"]
+        assert copy_btns, "no Copy buttons found"
+
+        mock_board = MagicMock()
+        with patch("subprocess.run") as mock_run, \
+             patch("subprocess.Popen") as mock_popen, \
+             patch.object(QProcess, "start") as mock_qprocess, \
+             patch("justfixed.ui.main.QApplication.clipboard",
+                   return_value=mock_board):
+            copy_btns[0].click()
+
+        mock_run.assert_not_called()
+        mock_popen.assert_not_called()
+        mock_qprocess.assert_not_called()
+        mock_board.setText.assert_called_once()
+
+    def test_cmd_1b_text_matches_dev_routine(self, dev_tab) -> None:
+        displays = dev_tab.findChildren(QPlainTextEdit)
+        all_text = "\n---\n".join(d.toPlainText() for d in displays)
+        assert "publish_curves.py" in all_text
+        assert "--as-of" in all_text
+        assert "--commit" in all_text
+
+    def test_cmd_1c_text_matches_dev_routine(self, dev_tab) -> None:
+        displays = dev_tab.findChildren(QPlainTextEdit)
+        all_text = "\n---\n".join(d.toPlainText() for d in displays)
+        assert "show --stat HEAD" in all_text
+        assert "curves/latest.json" in all_text
+
+    def test_cmd_1d_text_matches_dev_routine(self, dev_tab) -> None:
+        displays = dev_tab.findChildren(QPlainTextEdit)
+        all_text = "\n---\n".join(d.toPlainText() for d in displays)
+        assert "justfixed-data push" in all_text
+        assert "status -sb" in all_text
