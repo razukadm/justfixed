@@ -25,7 +25,11 @@ from justfixed.domain.money import Money
 from justfixed.domain.rates import Prefixed, PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA
 from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fgc import ExposureStatus
-from justfixed.ui.main import _ActiveMock, _AddInvestmentPanel, ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow, compute_totals, _format_type, _format_rate, _is_matured
+from justfixed.ui.main import (
+    _ActiveMock, _AddInvestmentPanel, _CUSTODIAN_UNSET,
+    ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow,
+    compute_totals, _format_type, _format_rate, _is_matured,
+)
 
 
 class TestIsMatured:
@@ -333,12 +337,14 @@ def _make_inv(issuer_name: str, conglomerate: str, days_to_maturity: int) -> Mag
 class TestVisibleInvestmentsFilter:
     def _make_self(self, investments: list, *, hide_matured: bool = False,
                    filter_issuer: str | None = None,
-                   filter_conglomerate: str | None = None) -> MagicMock:
+                   filter_conglomerate: str | None = None,
+                   filter_custodian=None) -> MagicMock:
         self_mock = MagicMock(spec=MainWindow)
         self_mock._investments = investments
         self_mock._hide_matured = hide_matured
         self_mock._filter_issuer = filter_issuer
         self_mock._filter_conglomerate = filter_conglomerate
+        self_mock._filter_custodian = filter_custodian
         return self_mock
 
     def test_no_filters_returns_all_sorted_by_maturity(self) -> None:
@@ -736,6 +742,8 @@ def _make_integration_self_mock(
     self_mock._stack = MagicMock()
     self_mock._issuer_combo = MagicMock()
     self_mock._conglomerate_combo = MagicMock()
+    self_mock._custodian_combo = MagicMock()
+    self_mock._filter_custodian = None
     self_mock._principal_label = MagicMock()
     self_mock._current_label = MagicMock()
     self_mock._projected_label = MagicMock()
@@ -1190,6 +1198,132 @@ class TestEmptyStateButtonWiring:
 
         self_mock._empty_add_btn.click()
         self_mock._on_add_investment_clicked.assert_called_once()
+
+
+# ── Custodian B42 ─────────────────────────────────────────────────────────────
+
+
+def _inv_with_custodian(custodian, days: int = 30) -> MagicMock:
+    inv = MagicMock()
+    inv.custodian = custodian
+    inv.maturity_date = date.today() + timedelta(days=days)
+    inv.issuer.name = "Bank"
+    inv.issuer.conglomerate = "Group"
+    return inv
+
+
+class TestDistinctCustodians:
+    def test_returns_sorted_distinct_non_none(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._investments = [
+            _inv_with_custodian("XP"),
+            _inv_with_custodian("BTG Pactual"),
+            _inv_with_custodian("XP"),   # duplicate — deduplicated
+            _inv_with_custodian(None),   # excluded
+        ]
+        assert MainWindow._distinct_custodians(self_mock) == ["BTG Pactual", "XP"]
+
+    def test_empty_investments_returns_empty(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._investments = []
+        assert MainWindow._distinct_custodians(self_mock) == []
+
+    def test_all_none_returns_empty(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._investments = [_inv_with_custodian(None), _inv_with_custodian(None)]
+        assert MainWindow._distinct_custodians(self_mock) == []
+
+
+class TestCustodianFilterHandler:
+    def test_value_text_sets_filter_and_refreshes(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._filter_custodian = None
+        MainWindow._on_custodian_filter_changed(self_mock, "XP")
+        assert self_mock._filter_custodian == "XP"
+        self_mock.refresh_table.assert_called_once_with()
+
+    def test_all_clears_filter(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._filter_custodian = "XP"
+        MainWindow._on_custodian_filter_changed(self_mock, "All")
+        assert self_mock._filter_custodian is None
+        self_mock.refresh_table.assert_called_once_with()
+
+    def test_unset_text_sets_sentinel(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._filter_custodian = None
+        MainWindow._on_custodian_filter_changed(self_mock, "(unset)")
+        assert self_mock._filter_custodian is _CUSTODIAN_UNSET
+        self_mock.refresh_table.assert_called_once_with()
+
+
+class TestVisibleInvestmentsCustodianFilter:
+    def _self_mock(self, investments, *, filter_custodian=None) -> MagicMock:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._investments = investments
+        self_mock._hide_matured = False
+        self_mock._filter_issuer = None
+        self_mock._filter_conglomerate = None
+        self_mock._filter_custodian = filter_custodian
+        return self_mock
+
+    def test_no_filter_shows_all(self) -> None:
+        inv_xp = _inv_with_custodian("XP", 10)
+        inv_null = _inv_with_custodian(None, 20)
+        result = MainWindow.visible_investments(self._self_mock([inv_xp, inv_null]))
+        assert set(result) == {inv_xp, inv_null}
+
+    def test_value_filter_shows_matching_only(self) -> None:
+        inv_xp = _inv_with_custodian("XP", 10)
+        inv_btg = _inv_with_custodian("BTG Pactual", 20)
+        result = MainWindow.visible_investments(
+            self._self_mock([inv_xp, inv_btg], filter_custodian="XP")
+        )
+        assert result == [inv_xp]
+
+    def test_unset_filter_shows_only_null_custodian(self) -> None:
+        inv_xp = _inv_with_custodian("XP", 10)
+        inv_null = _inv_with_custodian(None, 20)
+        result = MainWindow.visible_investments(
+            self._self_mock([inv_xp, inv_null], filter_custodian=_CUSTODIAN_UNSET)
+        )
+        assert result == [inv_null]
+
+
+class TestDetailPanelCustodianConfig:
+    def test_custodian_in_field_keys(self) -> None:
+        keys = [key for _, key in InvestmentDetailPanel._FIELD_KEYS]
+        assert "custodian" in keys
+
+    def test_custodian_after_conglomerate_before_product(self) -> None:
+        keys = [key for _, key in InvestmentDetailPanel._FIELD_KEYS]
+        ci = keys.index("custodian")
+        assert keys[ci - 1] == "conglomerate"
+        assert keys[ci + 1] == "product"
+
+    def test_custodian_label_is_custodian(self) -> None:
+        labels = {key: label for label, key in InvestmentDetailPanel._FIELD_KEYS}
+        assert labels["custodian"] == "Custodian"
+
+    def test_custodian_editable_for_manual(self) -> None:
+        assert "custodian" in InvestmentDetailPanel._EDITABLE_FOR_MANUAL
+
+    def test_custodian_not_editable_for_import(self) -> None:
+        assert "custodian" not in InvestmentDetailPanel._EDITABLE_FOR_IMPORT
+
+
+class TestDetailPanelFormatFieldCustodian:
+    def test_real_custodian_value_formatted_verbatim(self) -> None:
+        self_mock = MagicMock(spec=InvestmentDetailPanel)
+        inv = MagicMock()
+        inv.custodian = "BTG Pactual"
+        assert InvestmentDetailPanel._format_field(self_mock, "custodian", inv) == "BTG Pactual"
+
+    def test_none_custodian_formats_as_em_dash(self) -> None:
+        self_mock = MagicMock(spec=InvestmentDetailPanel)
+        inv = MagicMock()
+        inv.custodian = None
+        assert InvestmentDetailPanel._format_field(self_mock, "custodian", inv) == "—"
 
 
 class TestSelectionHandlers:

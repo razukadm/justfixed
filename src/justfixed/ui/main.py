@@ -529,11 +529,12 @@ class _EditableField(QWidget):
     _COMBO_KEYS = frozenset({"coupon_frequency"})
     _RATE_KEYS = frozenset({"rate"})
 
-    def __init__(self, key: str, save_fn, error_fn, parent=None) -> None:
+    def __init__(self, key: str, save_fn, error_fn, completions: list[str] | None = None, parent=None) -> None:
         super().__init__(parent)
         self._key = key
         self._save_fn = save_fn
         self._error_fn = error_fn
+        self._completions = completions
         self._editable = False
         self._raw_value = None
         self._committing = False
@@ -566,6 +567,14 @@ class _EditableField(QWidget):
 
     def set_display_font(self, font: QFont) -> None:
         self._label.setFont(font)
+
+    def update_completions(self, completions: list[str]) -> None:
+        """Refresh the autocomplete list; updates the live completer if the editor exists."""
+        self._completions = completions
+        if self._editor is not None and isinstance(self._editor, QLineEdit):
+            c = self._editor.completer()
+            if c is not None:
+                c.setModel(QStringListModel(completions, c))
 
     # ── Event filter ──────────────────────────────────────────────────────────
 
@@ -612,6 +621,12 @@ class _EditableField(QWidget):
             return editor
         editor = QLineEdit()
         editor.editingFinished.connect(self._commit)
+        if self._completions is not None:
+            completer_model = QStringListModel(self._completions, editor)
+            completer = QCompleter(completer_model, editor)
+            completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            completer.setFilterMode(Qt.MatchFlag.MatchContains)
+            editor.setCompleter(completer)
         return editor
 
     def _seed_editor(self) -> None:
@@ -811,6 +826,7 @@ class InvestmentDetailPanel(QWidget):
     _FIELD_KEYS = [
         ("Issuer",        "issuer"),
         ("Conglomerate",  "conglomerate"),
+        ("Custodian",     "custodian"),       # B42 — adjacent to issuer/conglomerate
         ("Product",       "product"),
         ("Principal",     "principal"),
         ("Rate",          "rate"),
@@ -824,6 +840,7 @@ class InvestmentDetailPanel(QWidget):
     _EDITABLE_FOR_MANUAL = frozenset({
         "principal", "rate", "purchase_date", "issue_date",
         "maturity_date", "coupon_frequency", "description",
+        "custodian",                           # B42
     })
     _EDITABLE_FOR_IMPORT = frozenset({"description"})
     _MONO_FIELD_KEYS = frozenset({"rate", "purchase_date", "issue_date", "maturity_date", "principal"})
@@ -875,7 +892,9 @@ class InvestmentDetailPanel(QWidget):
             lbl.setProperty("role", "fieldLabel")
             lbl.setFixedWidth(100)
             lbl.setAlignment(Qt.AlignmentFlag.AlignTop)
-            val = _EditableField(key, self._save_field, self._set_error)
+            # Custodian gets autocomplete injected; other fields have no completions.
+            completions = self._main_window._distinct_custodians() if key == "custodian" else None
+            val = _EditableField(key, self._save_field, self._set_error, completions=completions)
             if key in self._MONO_FIELD_KEYS:
                 val.set_display_font(_MONO_FONT)
             self._field_values[key] = val
@@ -944,6 +963,10 @@ class InvestmentDetailPanel(QWidget):
         f = self._field_values
         f["issuer"].set_value(inv.issuer.name, inv.issuer.name, editable=False)
         f["conglomerate"].set_value(inv.issuer.conglomerate, inv.issuer.conglomerate, editable=False)
+        # Custodian: refresh completions so newly-added values appear; NULL→"—".
+        f["custodian"].update_completions(self._main_window._distinct_custodians())
+        custodian_display = inv.custodian if inv.custodian is not None else "—"
+        f["custodian"].set_value(inv.custodian, custodian_display, editable="custodian" in editable_keys)
         f["product"].set_value(product_name, product_name, editable=False)
         f["principal"].set_value(inv.principal, inv.principal.to_display(), editable="principal" in editable_keys)
         f["rate"].set_value(inv.rate, inv.rate.to_display(), editable="rate" in editable_keys)
@@ -1100,6 +1123,8 @@ class InvestmentDetailPanel(QWidget):
             return inv.coupon_frequency.to_display()
         if key == "description":
             return inv.description or "—"
+        if key == "custodian":
+            return inv.custodian if inv.custodian is not None else "—"
         return ""
 
     def _set_error(self, message: str | None) -> None:
@@ -1948,6 +1973,12 @@ class _CalculatorTab(QWidget):
 
 _NEW_ISSUER_SENTINEL = "__new_issuer__"
 
+# Sentinel used by the custodian filter to distinguish "filter for NULL
+# custodian" from "no filter" (None). Two states cannot encode three
+# meanings (no-filter / filter-for-value / filter-for-NULL) with a single
+# None sentinel, so a distinct object is used for the unset case.
+_CUSTODIAN_UNSET = object()
+
 
 class _AddInvestmentPanel(QWidget):
     """Form for creating a new Investment from scratch (source=MANUAL).
@@ -2070,6 +2101,16 @@ class _AddInvestmentPanel(QWidget):
         self._new_issuer_group.hide()
         self._body_layout.addWidget(self._new_issuer_group)
 
+        # Custodian (optional) — adjacent to issuer, consistent with detail panel
+        self._custodian_edit = QLineEdit()
+        self._custodian_edit.setPlaceholderText("(optional)")
+        self._custodian_completer_model = QStringListModel()
+        _cust_completer = QCompleter(self._custodian_completer_model, self._custodian_edit)
+        _cust_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        _cust_completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self._custodian_edit.setCompleter(_cust_completer)
+        self._add_form_row("Custodian", self._custodian_edit)
+
         # Product
         self._product_combo = QComboBox()
         for pt in ProductType:
@@ -2128,6 +2169,8 @@ class _AddInvestmentPanel(QWidget):
         if idx >= 0:
             self._coupon_combo.setCurrentIndex(idx)
         self._description_edit.setText("")
+        self._custodian_edit.setText("")
+        self._custodian_completer_model.setStringList(self._main_window._distinct_custodians())
         self._new_name_edit.setText("")
         self._new_cong_edit.setText("")
         self._new_kind_combo.setCurrentIndex(0)
@@ -2176,6 +2219,8 @@ class _AddInvestmentPanel(QWidget):
         maturity_date = self._qdate_to_date(self._maturity_date_edit.date())
         coupon_frequency = self._coupon_combo.currentData()
         description   = self._description_edit.text().strip()
+        custodian_text = self._custodian_edit.text().strip()
+        custodian     = custodian_text or None  # blank/whitespace → unset
 
         try:
             investment = Investment(
@@ -2189,6 +2234,7 @@ class _AddInvestmentPanel(QWidget):
                 coupon_frequency=coupon_frequency,
                 description=description,
                 source=InvestmentSource.MANUAL,
+                custodian=custodian,
             )
         except ValueError as exc:
             self._set_error(str(exc))
@@ -2399,6 +2445,7 @@ class MainWindow(QMainWindow):
         self._hide_matured: bool = True
         self._filter_issuer: str | None = None
         self._filter_conglomerate: str | None = None
+        self._filter_custodian = None  # None=no filter, _CUSTODIAN_UNSET=filter for NULL, str=filter for value
         # projection_cache holds the most recent projection results. Kept as a
         # list to match the worker return type and from_projections overload
         # signatures. Invalidated on: import done, Clear DB. Not invalidated on
@@ -2493,6 +2540,12 @@ class MainWindow(QMainWindow):
         self._issuer_combo.addItem("All")
         self._issuer_combo.textActivated.connect(self._on_issuer_filter_changed)
         filter_row.addWidget(self._issuer_combo)
+        filter_row.addSpacing(12)
+        filter_row.addWidget(QLabel("Custodian:"))
+        self._custodian_combo = QComboBox()
+        self._custodian_combo.addItem("All")
+        self._custodian_combo.textActivated.connect(self._on_custodian_filter_changed)
+        filter_row.addWidget(self._custodian_combo)
         filter_row.addSpacing(16)
         self._hide_matured_cb = QCheckBox("Hide matured")
         self._hide_matured_cb.setChecked(True)
@@ -2895,6 +2948,10 @@ class MainWindow(QMainWindow):
             else:
                 self._rows_label.setText(f"Rows: {len(active)}")
 
+    def _distinct_custodians(self) -> list[str]:
+        """Sorted distinct non-NULL custodian strings across all investments."""
+        return sorted({i.custodian for i in self._investments if i.custodian is not None})
+
     def _populate_filter_dropdowns(self) -> None:
         issuer_names = sorted({i.issuer.name for i in self._investments})
         conglomerate_names = sorted({i.issuer.conglomerate for i in self._investments})
@@ -2909,12 +2966,38 @@ class MainWindow(QMainWindow):
             if current is not None and combo.findText(current) != -1:
                 combo.setCurrentText(current)
 
+        # Custodian combo — handled separately: "(unset)" appended only when
+        # at least one investment has custodian IS NULL, with a separator.
+        self._custodian_combo.clear()
+        self._custodian_combo.addItem("All")
+        for name in self._distinct_custodians():
+            self._custodian_combo.addItem(name)
+        has_null = any(i.custodian is None for i in self._investments)
+        if has_null:
+            self._custodian_combo.insertSeparator(self._custodian_combo.count())
+            self._custodian_combo.addItem("(unset)")
+        if self._filter_custodian is _CUSTODIAN_UNSET:
+            if self._custodian_combo.findText("(unset)") != -1:
+                self._custodian_combo.setCurrentText("(unset)")
+        elif self._filter_custodian is not None:
+            if self._custodian_combo.findText(self._filter_custodian) != -1:
+                self._custodian_combo.setCurrentText(self._filter_custodian)
+
     def _on_issuer_filter_changed(self, text: str) -> None:
         self._filter_issuer = None if text == "All" else text
         self.refresh_table()
 
     def _on_conglomerate_filter_changed(self, text: str) -> None:
         self._filter_conglomerate = None if text == "All" else text
+        self.refresh_table()
+
+    def _on_custodian_filter_changed(self, text: str) -> None:
+        if text == "All":
+            self._filter_custodian = None
+        elif text == "(unset)":
+            self._filter_custodian = _CUSTODIAN_UNSET
+        else:
+            self._filter_custodian = text
         self.refresh_table()
 
     def visible_investments(self, *, apply_filter: bool = True) -> list:
@@ -2924,6 +3007,10 @@ class MainWindow(QMainWindow):
                 result = [i for i in result if i.issuer.name == self._filter_issuer]
             if self._filter_conglomerate is not None:
                 result = [i for i in result if i.issuer.conglomerate == self._filter_conglomerate]
+            if self._filter_custodian is _CUSTODIAN_UNSET:
+                result = [i for i in result if i.custodian is None]
+            elif self._filter_custodian is not None:
+                result = [i for i in result if i.custodian == self._filter_custodian]
         if self._hide_matured:
             today = date.today()
             result = [i for i in result if i.maturity_date > today]

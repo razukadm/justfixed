@@ -54,6 +54,7 @@ def _mock_inv(**overrides):
     inv.maturity_date = date(2026, 1, 15)
     inv.coupon_frequency = CouponFrequency.NONE
     inv.description = ""
+    inv.custodian = None      # B42 — explicit None so QLabel.setText receives a str ("—")
     inv.source = InvestmentSource.XP_IMPORT
     for k, v in overrides.items():
         setattr(inv, k, v)
@@ -324,7 +325,7 @@ class TestInvestmentDetailPanelSave:
         panel.clear()
         assert panel._error_label.isHidden()
 
-    def test_manual_investment_has_seven_editable_fields(self, qapp) -> None:
+    def test_manual_investment_has_eight_editable_fields(self, qapp) -> None:
         panel = InvestmentDetailPanel(MagicMock(), MagicMock())
         inv = _make_real_inv(source=InvestmentSource.MANUAL)
         panel.show_investment(inv)
@@ -332,6 +333,7 @@ class TestInvestmentDetailPanelSave:
         expected_editable = {
             "principal", "rate", "purchase_date", "issue_date",
             "maturity_date", "coupon_frequency", "description",
+            "custodian",   # B42
         }
         for key, field in panel._field_values.items():
             if key in expected_editable:
