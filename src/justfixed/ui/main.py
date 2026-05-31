@@ -314,6 +314,8 @@ def _make_cong_detail_header() -> QWidget:
         lbl = QLabel(text)
         if width:
             lbl.setFixedWidth(width)
+        if text == "FGC":
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
         h.addWidget(lbl, stretch=stretch)
     return w
 
@@ -2829,7 +2831,10 @@ class MainWindow(QMainWindow):
         ]:
             lbl = QLabel(text)
             lbl.setFixedWidth(width)
-            lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            lbl.setAlignment(
+                (Qt.AlignmentFlag.AlignCenter if text == "FGC" else Qt.AlignmentFlag.AlignRight)
+                | Qt.AlignmentFlag.AlignVCenter
+            )
             h.addWidget(lbl)
 
         return row_widget

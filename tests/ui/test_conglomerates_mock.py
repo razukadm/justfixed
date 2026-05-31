@@ -356,6 +356,19 @@ class TestDetailRowColumnWidths:
         fgc_lbl = next(lbl for lbl in labels if lbl.text() == "FGC")
         assert fgc_lbl.width() == _CONG_W_FGC
 
+    def test_detail_header_fgc_is_center_aligned(self, qapp) -> None:
+        w = _make_cong_detail_header()
+        fgc_lbl = next(lbl for lbl in w.findChildren(QLabel) if lbl.text() == "FGC")
+        assert Qt.AlignmentFlag.AlignCenter in fgc_lbl.alignment()
+        assert Qt.AlignmentFlag.AlignRight not in fgc_lbl.alignment()
+
+    def test_detail_header_non_fgc_labels_not_right_aligned(self, qapp) -> None:
+        # Only FGC gets center-alignment; all others keep default left.
+        w = _make_cong_detail_header()
+        non_fgc = [lbl for lbl in w.findChildren(QLabel) if lbl.text() not in ("FGC", "")]
+        for lbl in non_fgc:
+            assert Qt.AlignmentFlag.AlignRight not in lbl.alignment()
+
     def test_detail_row_maturity_width(self, qapp) -> None:
         w = _make_cong_detail_row(_make_detail_row(), 0)
         labels = [lbl for lbl in w.findChildren(QLabel)
@@ -438,6 +451,23 @@ class TestSummaryRowAlignment:
         self_mock = MagicMock(spec=MainWindow)
         header = MainWindow._make_summary_header(self_mock)
         assert header.maximumHeight() == 26
+
+    def test_summary_header_fgc_is_center_aligned(self, qapp) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        header = MainWindow._make_summary_header(self_mock)
+        fgc_lbl = next(lbl for lbl in header.findChildren(QLabel) if lbl.text() == "FGC")
+        assert Qt.AlignmentFlag.AlignCenter in fgc_lbl.alignment()
+        assert Qt.AlignmentFlag.AlignRight not in fgc_lbl.alignment()
+
+    def test_summary_header_non_fgc_labels_are_right_aligned(self, qapp) -> None:
+        # Next maturity / Principal / Current / Projected must stay AlignRight.
+        self_mock = MagicMock(spec=MainWindow)
+        header = MainWindow._make_summary_header(self_mock)
+        non_fgc = [lbl for lbl in header.findChildren(QLabel)
+                   if lbl.text() not in ("FGC", "", "Conglomerate")]
+        assert len(non_fgc) >= 4  # Next maturity, Principal, Current, Projected
+        for lbl in non_fgc:
+            assert Qt.AlignmentFlag.AlignRight in lbl.alignment()
 
 
 class TestAccordionSmokeExpanded:
