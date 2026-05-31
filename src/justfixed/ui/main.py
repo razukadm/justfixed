@@ -155,16 +155,19 @@ _BADGE_STYLE: dict[str, tuple[str, str]] = {
 # ── Conglomerate accordion: shared column widths ─────────────────────────────
 # Both parent summary builders (_make_summary_row / _make_summary_header) and
 # child detail builders (_make_cong_detail_row / _make_cong_detail_header) read
-# from these constants so Principal/Current/Projected/FGC share consistent fixed
-# widths.  The parent's 20px "+" spacer and the child container's
-# setContentsMargins(20,…) both produce a matching 20px left indent (option b —
-# no additional leading spacer added).  Perfect pixel column alignment is not
-# achievable with QHBoxLayout because the child has Product and Projected Balance
-# columns with no parent equivalents (CG-2); unified widths eliminate the
-# visible 120 vs 110 mismatch in the rightmost columns.
-_CONG_W_DATE  = 110   # Next maturity (parent) / Maturity (child)
-_CONG_W_MONEY = 120   # Principal, Current, Projected
-_CONG_W_FGC   = 130   # FGC badge
+# from these constants so every column from Maturity through FGC shares a fixed
+# width.  The parent's 20px "+" spacer and the child container's
+# setContentsMargins(20,…) both produce a matching 20px left indent.
+# The child has Product (100px, hardcoded) and Projected Balance columns that
+# the parent lacks; the parent inserts an empty _CONG_W_BALANCE spacer in place
+# of Projected Balance so the trailing FGC column aligns column-for-column.
+# _CONG_W_BALANCE and _CONG_W_MONEY share the value 120 today but are kept as
+# separate named constants because they represent semantically different columns
+# that could diverge independently.
+_CONG_W_DATE    = 110   # Next maturity (parent) / Maturity (child)
+_CONG_W_MONEY   = 120   # Principal, Current, Projected
+_CONG_W_BALANCE = 120   # Projected Balance (child); empty spacer in parent row/header
+_CONG_W_FGC     = 130   # FGC badge
 
 
 def _make_fgc_badge(status, width: int) -> QLabel:
@@ -305,7 +308,7 @@ def _make_cong_detail_header() -> QWidget:
         ("Principal",         _CONG_W_MONEY,   0),
         ("Current",           _CONG_W_MONEY,   0),
         ("Projected",         _CONG_W_MONEY,   0),
-        ("Projected Balance",           120,   0),
+        ("Projected Balance", _CONG_W_BALANCE,   0),
         ("FGC",               _CONG_W_FGC,     0),
     ]:
         lbl = QLabel(text)
@@ -354,7 +357,7 @@ def _make_cong_detail_row(row: ConglomerateDetailRow, idx: int, *, is_mock: bool
         (row.principal.to_display(),        _CONG_W_MONEY),
         (row.current_value.to_display(),    _CONG_W_MONEY),
         (row.projected_value.to_display(),  _CONG_W_MONEY),
-        (row.projected_balance.to_display(),          120),
+        (row.projected_balance.to_display(), _CONG_W_BALANCE),
     ]:
         lbl = QLabel(val)
         lbl.setFixedWidth(width)
@@ -2742,6 +2745,10 @@ class MainWindow(QMainWindow):
         projected_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         h.addWidget(projected_lbl)
 
+        balance_spacer = QLabel("")
+        balance_spacer.setFixedWidth(_CONG_W_BALANCE)
+        h.addWidget(balance_spacer)
+
         h.addWidget(_make_fgc_badge(section.summary_fgc_status, _CONG_W_FGC))
 
         return row_widget, plus
@@ -2817,6 +2824,7 @@ class MainWindow(QMainWindow):
             ("Principal",     _CONG_W_MONEY),
             ("Current",       _CONG_W_MONEY),
             ("Projected",     _CONG_W_MONEY),
+            ("",              _CONG_W_BALANCE),   # blank gap over child's Projected Balance column
             ("FGC",           _CONG_W_FGC),
         ]:
             lbl = QLabel(text)

@@ -29,6 +29,7 @@ from PySide6.QtCore import Qt
 
 from justfixed.ui.main import (
     _ActiveMock,
+    _CONG_W_BALANCE,
     _CONG_W_DATE,
     _CONG_W_FGC,
     _CONG_W_MONEY,
@@ -325,6 +326,11 @@ class TestSharedColumnConstants:
     def test_cong_w_money_value(self) -> None:
         assert _CONG_W_MONEY == 120
 
+    def test_cong_w_balance_value(self) -> None:
+        # Value matches _CONG_W_MONEY today; kept as a separate named constant
+        # because they're semantically distinct columns that could diverge.
+        assert _CONG_W_BALANCE == 120
+
     def test_cong_w_fgc_value(self) -> None:
         assert _CONG_W_FGC == 130
 
@@ -394,12 +400,35 @@ class TestSummaryRowAlignment:
         assert Qt.AlignmentFlag.AlignRight in date_labels[0].alignment()
 
     def test_money_labels_are_right_aligned(self, qapp) -> None:
+        # The balance_spacer is also _CONG_W_BALANCE == 120 wide but has empty text;
+        # exclude it so we count only the three named money labels.
         w = self._get_summary_row_widget(qapp)
         money_labels = [lbl for lbl in w.findChildren(QLabel)
-                        if lbl.width() == _CONG_W_MONEY]
+                        if lbl.width() == _CONG_W_MONEY and lbl.text() != ""]
         assert len(money_labels) == 3
         for lbl in money_labels:
             assert Qt.AlignmentFlag.AlignRight in lbl.alignment()
+
+    def test_summary_row_has_balance_spacer(self, qapp) -> None:
+        """The parent row contains exactly one empty label of width _CONG_W_BALANCE."""
+        w = self._get_summary_row_widget(qapp)
+        spacers = [lbl for lbl in w.findChildren(QLabel)
+                   if lbl.width() == _CONG_W_BALANCE and lbl.text() == ""]
+        assert len(spacers) == 1
+
+    def test_summary_row_trailing_sequence(self, qapp) -> None:
+        """Trailing fixed-width columns: ...Projected(_CONG_W_MONEY) → spacer(_CONG_W_BALANCE) → FGC(_CONG_W_FGC)."""
+        w = self._get_summary_row_widget(qapp)
+        # Collect all fixed-width direct-child labels (ignore stretch Conglomerate name)
+        from PySide6.QtWidgets import QHBoxLayout
+        h = w.layout()
+        fixed = [h.itemAt(i).widget() for i in range(h.count())
+                 if isinstance(h.itemAt(i).widget(), QLabel)
+                 and h.itemAt(i).widget().minimumWidth() == h.itemAt(i).widget().maximumWidth()
+                 and h.itemAt(i).widget().minimumWidth() > 0]
+        widths = [lbl.minimumWidth() for lbl in fixed]
+        # Last three fixed-width columns must be _CONG_W_MONEY, _CONG_W_BALANCE, _CONG_W_FGC
+        assert widths[-3:] == [_CONG_W_MONEY, _CONG_W_BALANCE, _CONG_W_FGC]
 
     def test_summary_row_fixed_height(self, qapp) -> None:
         w = self._get_summary_row_widget(qapp)
