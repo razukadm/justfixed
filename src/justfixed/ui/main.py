@@ -2053,15 +2053,15 @@ class _AddInvestmentPanel(QWidget):
         layout.addWidget(scroll, stretch=1)
 
         btn_row = QHBoxLayout()
-        btn_row.addStretch()
         self._save_btn = QPushButton("Save investment")
         self._save_btn.clicked.connect(self._on_save_clicked)
         self._save_btn.setProperty("role", "toolbar")
         self._cancel_btn = QPushButton("Cancel")
         self._cancel_btn.clicked.connect(lambda: self.cancelled.emit())
         self._cancel_btn.setProperty("role", "danger")
-        btn_row.addWidget(self._save_btn)
         btn_row.addWidget(self._cancel_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(self._save_btn)
         layout.addLayout(btn_row)
 
     # ── Form construction ─────────────────────────────────────────────────────
