@@ -1218,7 +1218,7 @@ class _CalculatorTab(QWidget):
 
         # Principal mode radios
         self._radio_enter = QRadioButton("Enter value")
-        self._radio_solve = QRadioButton("Solve for max")
+        self._radio_solve = QRadioButton("Solve for max under FGC")
         self._radio_enter.setChecked(True)
         self._mode_group = QButtonGroup(self)
         self._mode_group.addButton(self._radio_enter, 0)
@@ -1249,6 +1249,7 @@ class _CalculatorTab(QWidget):
         self._calc_btn = QPushButton("Calculate")
         self._calc_btn.setEnabled(False)
         self._calc_btn.clicked.connect(self._on_calculate_clicked)
+        self._calc_btn.setProperty("role", "toolbar")
         btn_row.addWidget(self._reset_btn)
         btn_row.addStretch()
         btn_row.addWidget(self._calc_btn)
@@ -2054,6 +2055,7 @@ class _AddInvestmentPanel(QWidget):
         btn_row.addStretch()
         self._save_btn = QPushButton("Save investment")
         self._save_btn.clicked.connect(self._on_save_clicked)
+        self._save_btn.setProperty("role", "toolbar")
         self._cancel_btn = QPushButton("Cancel")
         self._cancel_btn.clicked.connect(lambda: self.cancelled.emit())
         btn_row.addWidget(self._save_btn)
@@ -3119,6 +3121,10 @@ class MainWindow(QMainWindow):
             badge.setForeground(QColor(color))
         badge.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self._table.setItem(row, _COL_FGC, badge)
+        # FGC coverage no longer applies on matured rows — grey the badge explicitly
+        # so it matches the whole-row demote below (status color would survive otherwise).
+        if show_paid:
+            badge.setForeground(_MATURED_COLOR)
 
         if highlight:
             for col in range(_NCOLS):

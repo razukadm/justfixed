@@ -407,3 +407,13 @@ class TestReset:
         panel.cancelled.connect(lambda: fired.append(True))
         panel._cancel_btn.click()
         assert fired == [True]
+
+
+# ── CA-4: Save button has toolbar role ───────────────────────────────────────
+
+class TestSaveButtonRole:
+    """CA-4: Save is the primary commit action → green toolbar accent."""
+
+    def test_save_button_has_toolbar_role(self, qapp) -> None:
+        panel = _make_panel(issuers=[])
+        assert panel._save_btn.property("role") == "toolbar"

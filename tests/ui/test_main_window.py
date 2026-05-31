@@ -1851,3 +1851,36 @@ class TestInvestmentsTableAlignment:
             assert Qt.AlignmentFlag.AlignCenter in Qt.Alignment(hdr_item.textAlignment())
         finally:
             win.close()
+
+    def test_paid_row_fgc_badge_is_greyed(self, qapp) -> None:
+        """FIX 2: matured PAID row — FGC badge foreground == _MATURED_COLOR."""
+        from justfixed.ui.main import _MATURED_COLOR
+        win = self._make_window()
+        try:
+            win._hide_matured = False
+            inv = _make_smoke_investment(maturity_offset_days=-1)
+            win._table.setRowCount(1)
+            win._populate_row(0, inv, current_value=None, projected_value=None, fgc_status=None)
+            fgc_item = win._table.item(0, _COL_FGC)
+            assert fgc_item is not None
+            assert fgc_item.foreground().color() == _MATURED_COLOR
+        finally:
+            win.close()
+
+    def test_active_row_fgc_badge_keeps_status_color(self, qapp) -> None:
+        """FIX 2 regression: non-matured row FGC keeps its own foreground, not _MATURED_COLOR."""
+        from PySide6.QtGui import QColor
+        from justfixed.engine.fgc import ExposureStatus
+        from justfixed.ui.main import _MATURED_COLOR, COLORS
+        win = self._make_window()
+        try:
+            inv = _make_smoke_investment(maturity_offset_days=365)
+            win._table.setRowCount(1)
+            win._populate_row(0, inv, current_value=None, projected_value=None,
+                              fgc_status=ExposureStatus.UNDER)
+            fgc_item = win._table.item(0, _COL_FGC)
+            assert fgc_item is not None
+            assert fgc_item.foreground().color() != _MATURED_COLOR
+            assert fgc_item.foreground().color() == QColor(COLORS.FGC_UNDER)
+        finally:
+            win.close()

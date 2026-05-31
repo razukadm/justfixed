@@ -118,6 +118,16 @@ class TestCalculatorTabDefaults:
         assert tab._radio_enter.isChecked()
         assert not tab._radio_solve.isChecked()
 
+    def test_solve_radio_label_includes_fgc_qualifier(self, qapp) -> None:
+        # CA-5: full label "Solve for max under FGC", not the truncated form.
+        tab = _make_tab()
+        assert tab._radio_solve.text() == "Solve for max under FGC"
+
+    def test_calculate_button_has_toolbar_role(self, qapp) -> None:
+        # CA-4: Calculate is the primary commit action → green toolbar accent.
+        tab = _make_tab()
+        assert tab._calc_btn.property("role") == "toolbar"
+
     def test_value_field_enabled_when_enter_value_selected(self, qapp) -> None:
         tab = _make_tab()
         assert tab._value_edit.isEnabled()
