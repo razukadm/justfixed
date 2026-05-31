@@ -221,4 +221,31 @@ QLabel[indicator="peak"] {{
     color: {c.PEAK_INDICATOR};
     font-weight: bold;
 }}
+
+/* ── Investments table (scoped to objectName — curve inspector untouched) ── */
+QTableWidget#investmentsTable {{
+    background-color: {c.PANEL};
+    alternate-background-color: {c.PANEL_2};
+    color: {c.INK};
+    border-top: 1px solid {c.RULE};
+    border-bottom: 1px solid {c.RULE};
+    gridline-color: transparent;
+}}
+QTableWidget#investmentsTable::item {{
+    border-bottom: 1px solid {c.RULE_2};
+    padding: 2px 4px;
+}}
+QTableWidget#investmentsTable::item:selected {{
+    background-color: {c.HIGHLIGHT_ROW};
+    color: {c.INK};
+}}
+QTableWidget#investmentsTable QHeaderView::section {{
+    background-color: {c.PANEL_2};
+    color: {c.INK_3};
+    font-weight: 600;
+    font-size: {f.UI_SIZE_MD}pt;
+    padding: 4px 6px;
+    border: none;
+    border-bottom: 1px solid {c.RULE};
+}}
 """

@@ -208,3 +208,21 @@ class TestMakeStylesheet:
         end = sheet.index("}", idx)
         qwidget_block = sheet[idx:end + 1]
         assert "background" not in qwidget_block
+
+    # ── Investments table visual pass (commit 2 of global styling) ──────────
+
+    def test_investments_table_alternate_background_color(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        assert "alternate-background-color" in sheet
+        assert COLORS.PANEL_2 in sheet
+
+    def test_investments_table_header_section_rule(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert "QHeaderView::section" in make_stylesheet()
+
+    def test_investments_table_scoped_to_objectname(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        assert "investmentsTable" in sheet
+        assert "QTableWidget#investmentsTable" in sheet

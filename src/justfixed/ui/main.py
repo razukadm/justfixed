@@ -2559,6 +2559,9 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
 
         self._table = QTableWidget(0, _NCOLS)
+        self._table.setObjectName("investmentsTable")
+        self._table.setAlternatingRowColors(True)
+        self._table.setShowGrid(False)
         self._table.setHorizontalHeaderLabels(_HEADERS)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -3057,6 +3060,7 @@ class MainWindow(QMainWindow):
             for col in (_COL_CURRENT, _COL_PROJECTED):
                 paid = QTableWidgetItem("PAID")
                 paid.setFont(_MONO_FONT)
+                paid.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self._table.setItem(row, col, paid)
         else:
             self._cell(row, _COL_CURRENT, current_value.to_display() if current_value else "", mono=True)
@@ -3092,6 +3096,7 @@ class MainWindow(QMainWindow):
         item = QTableWidgetItem(text)
         if mono:
             item.setFont(_MONO_FONT)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self._table.setItem(row, col, item)
 
     def _update_button_states(self) -> None:

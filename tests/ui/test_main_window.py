@@ -1696,3 +1696,82 @@ class TestDevTabRunbook:
         all_text = "\n---\n".join(d.toPlainText() for d in displays)
         assert "justfixed-data push" in all_text
         assert "status -sb" in all_text
+
+
+# ── Investments table smoke (commit 2 of global styling) ─────────────────────
+
+def _make_smoke_investment(*, maturity_offset_days: int):
+    from justfixed.domain.investment import Investment
+    from justfixed.domain.issuer import Issuer, IssuerKind
+    from justfixed.domain.money import Money
+    from justfixed.domain.product import ProductType
+    from justfixed.domain.rates import Prefixed
+    issuer = Issuer.create("Banco Smoke", "Smoke Group", IssuerKind.COMMERCIAL_BANK)
+    return Investment(
+        product=ProductType.CDB,
+        issuer=issuer,
+        principal=Money.from_reais("10000"),
+        rate=Prefixed.from_percent("12"),
+        purchase_date=date(2022, 1, 3),
+        maturity_date=date.today() + timedelta(days=maturity_offset_days),
+    )
+
+
+class TestInvestmentsTableSmoke:
+    """Construction smoke: objectName, widget props, and row population do not raise."""
+
+    def _make_window(self):
+        with patch("justfixed.ui.main.default_database_url", return_value="sqlite:///:memory:"), \
+             patch("justfixed.ui.main.run_migrations"), \
+             patch("justfixed.ui.main.fetch_seed_data", return_value={}), \
+             patch("justfixed.ui.main.load_seed_if_empty", return_value=0):
+            return MainWindow()
+
+    def test_table_objectname(self, qapp) -> None:
+        win = self._make_window()
+        try:
+            assert win._table.objectName() == "investmentsTable"
+        finally:
+            win.close()
+
+    def test_table_alternating_rows_enabled(self, qapp) -> None:
+        win = self._make_window()
+        try:
+            assert win._table.alternatingRowColors() is True
+        finally:
+            win.close()
+
+    def test_table_grid_hidden(self, qapp) -> None:
+        win = self._make_window()
+        try:
+            assert win._table.showGrid() is False
+        finally:
+            win.close()
+
+    def test_populate_active_row_no_exception(self, qapp) -> None:
+        win = self._make_window()
+        try:
+            inv = _make_smoke_investment(maturity_offset_days=365)
+            win._table.setRowCount(1)
+            win._populate_row(0, inv, current_value=None, projected_value=None, fgc_status=None)
+        finally:
+            win.close()
+
+    def test_populate_paid_row_no_exception(self, qapp) -> None:
+        """PAID path (matured row, hide_matured=False) runs without exception."""
+        win = self._make_window()
+        try:
+            win._hide_matured = False
+            inv = _make_smoke_investment(maturity_offset_days=-1)
+            win._table.setRowCount(1)
+            win._populate_row(0, inv, current_value=None, projected_value=None, fgc_status=None)
+        finally:
+            win.close()
+
+    def test_stylesheet_applied_no_exception(self, qapp) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        win = self._make_window()
+        try:
+            win.setStyleSheet(make_stylesheet())
+        finally:
+            win.close()
