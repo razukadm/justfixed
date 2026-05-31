@@ -405,14 +405,15 @@ class TestSummaryRowAlignment:
         row_widget, _ = MainWindow._make_summary_row(self_mock, self._make_section(), 0)
         return row_widget
 
-    def test_date_label_is_right_aligned(self, qapp) -> None:
+    def test_date_label_is_left_aligned(self, qapp) -> None:
         w = self._get_summary_row_widget(qapp)
         date_labels = [lbl for lbl in w.findChildren(QLabel)
                        if lbl.width() == _CONG_W_DATE]
         assert len(date_labels) == 1
-        assert Qt.AlignmentFlag.AlignRight in date_labels[0].alignment()
+        assert Qt.AlignmentFlag.AlignLeft in date_labels[0].alignment()
+        assert Qt.AlignmentFlag.AlignRight not in date_labels[0].alignment()
 
-    def test_money_labels_are_right_aligned(self, qapp) -> None:
+    def test_money_labels_are_left_aligned(self, qapp) -> None:
         # The balance_spacer is also _CONG_W_BALANCE == 120 wide but has empty text;
         # exclude it so we count only the three named money labels.
         w = self._get_summary_row_widget(qapp)
@@ -420,7 +421,8 @@ class TestSummaryRowAlignment:
                         if lbl.width() == _CONG_W_MONEY and lbl.text() != ""]
         assert len(money_labels) == 3
         for lbl in money_labels:
-            assert Qt.AlignmentFlag.AlignRight in lbl.alignment()
+            assert Qt.AlignmentFlag.AlignLeft in lbl.alignment()
+            assert Qt.AlignmentFlag.AlignRight not in lbl.alignment()
 
     def test_summary_row_has_balance_spacer(self, qapp) -> None:
         """The parent row contains exactly one empty label of width _CONG_W_BALANCE."""
@@ -459,15 +461,16 @@ class TestSummaryRowAlignment:
         assert Qt.AlignmentFlag.AlignCenter in fgc_lbl.alignment()
         assert Qt.AlignmentFlag.AlignRight not in fgc_lbl.alignment()
 
-    def test_summary_header_non_fgc_labels_are_right_aligned(self, qapp) -> None:
-        # Next maturity / Principal / Current / Projected must stay AlignRight.
+    def test_summary_header_non_fgc_labels_are_left_aligned(self, qapp) -> None:
+        # Next maturity / Principal / Current / Projected are now left-aligned.
         self_mock = MagicMock(spec=MainWindow)
         header = MainWindow._make_summary_header(self_mock)
         non_fgc = [lbl for lbl in header.findChildren(QLabel)
                    if lbl.text() not in ("FGC", "", "Conglomerate")]
         assert len(non_fgc) >= 4  # Next maturity, Principal, Current, Projected
         for lbl in non_fgc:
-            assert Qt.AlignmentFlag.AlignRight in lbl.alignment()
+            assert Qt.AlignmentFlag.AlignLeft in lbl.alignment()
+            assert Qt.AlignmentFlag.AlignRight not in lbl.alignment()
 
 
 class TestAccordionSmokeExpanded:

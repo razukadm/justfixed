@@ -2726,25 +2726,25 @@ class MainWindow(QMainWindow):
         )
         next_lbl.setFixedWidth(_CONG_W_DATE)
         next_lbl.setFont(_MONO_FONT)
-        next_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        next_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         h.addWidget(next_lbl)
 
         principal_lbl = QLabel(section.total_principal.to_display())
         principal_lbl.setFixedWidth(_CONG_W_MONEY)
         principal_lbl.setFont(_MONO_FONT)
-        principal_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        principal_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         h.addWidget(principal_lbl)
 
         current_lbl = QLabel(section.total_current_value.to_display())
         current_lbl.setFixedWidth(_CONG_W_MONEY)
         current_lbl.setFont(_MONO_FONT)
-        current_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        current_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         h.addWidget(current_lbl)
 
         projected_lbl = QLabel(section.total_projected_value.to_display())
         projected_lbl.setFixedWidth(_CONG_W_MONEY)
         projected_lbl.setFont(_MONO_FONT)
-        projected_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        projected_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         h.addWidget(projected_lbl)
 
         balance_spacer = QLabel("")
@@ -2832,7 +2832,7 @@ class MainWindow(QMainWindow):
             lbl = QLabel(text)
             lbl.setFixedWidth(width)
             lbl.setAlignment(
-                (Qt.AlignmentFlag.AlignCenter if text == "FGC" else Qt.AlignmentFlag.AlignRight)
+                (Qt.AlignmentFlag.AlignCenter if text == "FGC" else Qt.AlignmentFlag.AlignLeft)
                 | Qt.AlignmentFlag.AlignVCenter
             )
             h.addWidget(lbl)
