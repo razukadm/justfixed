@@ -178,6 +178,90 @@ QPushButton[role="secondary"]:disabled {{
     color: {c.INK_3};
 }}
 
+/* ── Form and control chrome ─────────────────────────────────────────
+   Global rules for QLineEdit, QComboBox, QDateEdit, QCheckBox, and
+   QRadioButton.  Applies to the filter row, Calculator form, Add
+   Investment form, and inline table editors all at once.
+   Cascade note: QLineEdit[hasError="true"] appears AFTER these base
+   rules so the danger border wins on same-specificity when a field is
+   both focused and in error.
+   QComboBox::down-arrow and QDateEdit up/down arrow glyphs left at
+   Qt default — no custom image assets available.
+   QCheckBox::indicator and QRadioButton::indicator left at Qt default
+   (Accept) — reliable cross-state checked rendering requires image
+   assets; forcing a border-only style leaves an empty indicator.     */
+QLineEdit {{
+    background-color: {c.PANEL};
+    border: 1px solid {c.RULE};
+    border-radius: 3px;
+    padding: 4px;
+    color: {c.INK};
+    selection-background-color: {c.CALLOUT_BG};
+}}
+QLineEdit:focus {{
+    border-color: {c.LINK};
+}}
+QLineEdit:disabled {{
+    background-color: {c.PANEL_2};
+    color: {c.INK_3};
+}}
+
+QComboBox {{
+    background-color: {c.PANEL};
+    border: 1px solid {c.RULE};
+    border-radius: 3px;
+    padding: 4px;
+    color: {c.INK};
+}}
+QComboBox:focus {{
+    border-color: {c.LINK};
+}}
+QComboBox:disabled {{
+    background-color: {c.PANEL_2};
+    color: {c.INK_3};
+}}
+QComboBox::drop-down {{
+    border: none;
+    width: 20px;
+}}
+
+QDateEdit {{
+    background-color: {c.PANEL};
+    border: 1px solid {c.RULE};
+    border-radius: 3px;
+    padding: 4px;
+    color: {c.INK};
+}}
+QDateEdit:focus {{
+    border-color: {c.LINK};
+}}
+QDateEdit:disabled {{
+    background-color: {c.PANEL_2};
+    color: {c.INK_3};
+}}
+QDateEdit::up-button,
+QDateEdit::down-button {{
+    border: none;
+    background-color: transparent;
+    width: 16px;
+}}
+
+QCheckBox {{
+    spacing: 6px;
+    color: {c.INK};
+}}
+QCheckBox:disabled {{
+    color: {c.INK_3};
+}}
+
+QRadioButton {{
+    spacing: 6px;
+    color: {c.INK};
+}}
+QRadioButton:disabled {{
+    color: {c.INK_3};
+}}
+
 /* ── Calculator: field error border ─────────────────────────────────── */
 QLineEdit[hasError="true"] {{
     border: 1px solid {c.DANGER};

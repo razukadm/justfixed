@@ -226,3 +226,51 @@ class TestMakeStylesheet:
         sheet = make_stylesheet()
         assert "investmentsTable" in sheet
         assert "QTableWidget#investmentsTable" in sheet
+
+    # ── Form and control chrome (global styling commit 3) ───────────────────
+
+    def test_form_controls_qlineedit_rule_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        assert "QLineEdit {" in sheet
+
+    def test_form_controls_qcombobox_rule_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert "QComboBox {" in make_stylesheet()
+
+    def test_form_controls_qdateedit_rule_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert "QDateEdit {" in make_stylesheet()
+
+    def test_qlineedit_error_border_regression(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert 'QLineEdit[hasError="true"]' in make_stylesheet()
+
+    def test_error_border_rule_after_base_qlineedit_for_cascade(self) -> None:
+        # QLineEdit[hasError] and QLineEdit:focus have equal specificity;
+        # the later one wins. Match the CSS rules themselves (include the
+        # opening brace) to avoid matching the comment that also references
+        # the selector string.
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        focus_idx = sheet.index("QLineEdit:focus {")
+        error_idx = sheet.index('QLineEdit[hasError="true"] {')
+        assert error_idx > focus_idx
+
+    def test_form_controls_use_rule_token_for_border(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        assert COLORS.RULE in sheet
+
+    def test_form_controls_use_link_token_for_focus(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        assert COLORS.LINK in sheet
+
+    def test_checkbox_rule_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert "QCheckBox {" in make_stylesheet()
+
+    def test_radiobutton_rule_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert "QRadioButton {" in make_stylesheet()
