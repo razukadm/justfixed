@@ -128,6 +128,10 @@ class TestCalculatorTabDefaults:
         tab = _make_tab()
         assert tab._calc_btn.property("role") == "toolbar"
 
+    def test_reset_button_has_danger_role(self, qapp) -> None:
+        tab = _make_tab()
+        assert tab._reset_btn.property("role") == "danger"
+
     def test_value_field_enabled_when_enter_value_selected(self, qapp) -> None:
         tab = _make_tab()
         assert tab._value_edit.isEnabled()

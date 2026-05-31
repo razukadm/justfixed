@@ -417,3 +417,7 @@ class TestSaveButtonRole:
     def test_save_button_has_toolbar_role(self, qapp) -> None:
         panel = _make_panel(issuers=[])
         assert panel._save_btn.property("role") == "toolbar"
+
+    def test_cancel_button_has_danger_role(self, qapp) -> None:
+        panel = _make_panel(issuers=[])
+        assert panel._cancel_btn.property("role") == "danger"
