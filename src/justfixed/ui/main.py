@@ -152,6 +152,20 @@ _BADGE_STYLE: dict[str, tuple[str, str]] = {
     "not_fgc":     ("N/A",           COLORS.FGC_NA),
 }
 
+# ── Conglomerate accordion: shared column widths ─────────────────────────────
+# Both parent summary builders (_make_summary_row / _make_summary_header) and
+# child detail builders (_make_cong_detail_row / _make_cong_detail_header) read
+# from these constants so Principal/Current/Projected/FGC share consistent fixed
+# widths.  The parent's 20px "+" spacer and the child container's
+# setContentsMargins(20,…) both produce a matching 20px left indent (option b —
+# no additional leading spacer added).  Perfect pixel column alignment is not
+# achievable with QHBoxLayout because the child has Product and Projected Balance
+# columns with no parent equivalents (CG-2); unified widths eliminate the
+# visible 120 vs 110 mismatch in the rightmost columns.
+_CONG_W_DATE  = 110   # Next maturity (parent) / Maturity (child)
+_CONG_W_MONEY = 120   # Principal, Current, Projected
+_CONG_W_FGC   = 130   # FGC badge
+
 
 def _make_fgc_badge(status, width: int) -> QLabel:
     """Return a styled FGC badge QLabel for either ExposureStatus or ConglomerateStatus."""
@@ -285,14 +299,14 @@ def _make_cong_detail_header() -> QWidget:
     h = QHBoxLayout(w)
     h.setContentsMargins(8, 4, 8, 4)
     for text, width, stretch in [
-        ("Maturity",            100, 0),
-        ("Issuer",                0, 1),
-        ("Product",             100, 0),
-        ("Principal",           110, 0),
-        ("Current",             110, 0),
-        ("Projected",           110, 0),
-        ("Projected Balance",   120, 0),
-        ("FGC",                 110, 0),
+        ("Maturity",          _CONG_W_DATE,    0),
+        ("Issuer",                         0,  1),
+        ("Product",                      100,  0),
+        ("Principal",         _CONG_W_MONEY,   0),
+        ("Current",           _CONG_W_MONEY,   0),
+        ("Projected",         _CONG_W_MONEY,   0),
+        ("Projected Balance",           120,   0),
+        ("FGC",               _CONG_W_FGC,     0),
     ]:
         lbl = QLabel(text)
         if width:
@@ -314,7 +328,7 @@ def _make_cong_detail_row(row: ConglomerateDetailRow, idx: int, *, is_mock: bool
     mat_lbl = QLabel(
         _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat)
     )
-    mat_lbl.setFixedWidth(100)
+    mat_lbl.setFixedWidth(_CONG_W_DATE)
     mat_lbl.setFont(_MONO_FONT)
     h.addWidget(mat_lbl)
 
@@ -337,17 +351,17 @@ def _make_cong_detail_row(row: ConglomerateDetailRow, idx: int, *, is_mock: bool
     h.addWidget(product_lbl)
 
     for val, width in [
-        (row.principal.to_display(),        110),
-        (row.current_value.to_display(),     110),
-        (row.projected_value.to_display(),   110),
-        (row.projected_balance.to_display(), 120),
+        (row.principal.to_display(),        _CONG_W_MONEY),
+        (row.current_value.to_display(),    _CONG_W_MONEY),
+        (row.projected_value.to_display(),  _CONG_W_MONEY),
+        (row.projected_balance.to_display(),          120),
     ]:
         lbl = QLabel(val)
         lbl.setFixedWidth(width)
         lbl.setFont(_MONO_FONT)
         h.addWidget(lbl)
 
-    h.addWidget(_make_fgc_badge(row.fgc_status, 110))
+    h.addWidget(_make_fgc_badge(row.fgc_status, _CONG_W_FGC))
 
     return w
 
@@ -2690,8 +2704,9 @@ class MainWindow(QMainWindow):
     ) -> tuple[QWidget, QLabel]:
         row_widget = QWidget()
         row_widget.setProperty("congRowParity", "even" if index % 2 == 0 else "odd")
+        row_widget.setFixedHeight(26)
         h = QHBoxLayout(row_widget)
-        h.setContentsMargins(8, 6, 8, 6)
+        h.setContentsMargins(8, 3, 8, 3)
 
         plus = QLabel("+")
         plus.setFixedWidth(20)
@@ -2704,26 +2719,30 @@ class MainWindow(QMainWindow):
         next_lbl = QLabel(
             _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat)
         )
-        next_lbl.setFixedWidth(120)
+        next_lbl.setFixedWidth(_CONG_W_DATE)
         next_lbl.setFont(_MONO_FONT)
+        next_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         h.addWidget(next_lbl)
 
         principal_lbl = QLabel(section.total_principal.to_display())
-        principal_lbl.setFixedWidth(120)
+        principal_lbl.setFixedWidth(_CONG_W_MONEY)
         principal_lbl.setFont(_MONO_FONT)
+        principal_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         h.addWidget(principal_lbl)
 
         current_lbl = QLabel(section.total_current_value.to_display())
-        current_lbl.setFixedWidth(120)
+        current_lbl.setFixedWidth(_CONG_W_MONEY)
         current_lbl.setFont(_MONO_FONT)
+        current_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         h.addWidget(current_lbl)
 
         projected_lbl = QLabel(section.total_projected_value.to_display())
-        projected_lbl.setFixedWidth(120)
+        projected_lbl.setFixedWidth(_CONG_W_MONEY)
         projected_lbl.setFont(_MONO_FONT)
+        projected_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         h.addWidget(projected_lbl)
 
-        h.addWidget(_make_fgc_badge(section.summary_fgc_status, 130))
+        h.addWidget(_make_fgc_badge(section.summary_fgc_status, _CONG_W_FGC))
 
         return row_widget, plus
 
@@ -2783,8 +2802,9 @@ class MainWindow(QMainWindow):
     def _make_summary_header(self) -> QWidget:
         row_widget = QWidget()
         row_widget.setObjectName("congHeader")
+        row_widget.setFixedHeight(26)
         h = QHBoxLayout(row_widget)
-        h.setContentsMargins(8, 6, 8, 6)
+        h.setContentsMargins(8, 3, 8, 3)
 
         spacer = QLabel()
         spacer.setFixedWidth(20)
@@ -2793,14 +2813,15 @@ class MainWindow(QMainWindow):
         h.addWidget(QLabel("Conglomerate"), stretch=1)
 
         for text, width in [
-            ("Next maturity",   120),
-            ("Principal",       120),
-            ("Current",   120),
-            ("Projected", 120),
-            ("FGC",             130),
+            ("Next maturity", _CONG_W_DATE),
+            ("Principal",     _CONG_W_MONEY),
+            ("Current",       _CONG_W_MONEY),
+            ("Projected",     _CONG_W_MONEY),
+            ("FGC",           _CONG_W_FGC),
         ]:
             lbl = QLabel(text)
             lbl.setFixedWidth(width)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             h.addWidget(lbl)
 
         return row_widget
