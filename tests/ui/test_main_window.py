@@ -27,8 +27,10 @@ from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fgc import ExposureStatus
 from PySide6.QtWidgets import QPlainTextEdit, QScrollArea
 
+from PySide6.QtCore import Qt
+
 from justfixed.ui.main import (
-    _ActiveMock, _AddInvestmentPanel, _CUSTODIAN_UNSET,
+    _ActiveMock, _AddInvestmentPanel, _COL_FGC, _COL_PRINCIPAL, _CUSTODIAN_UNSET,
     ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow,
     compute_totals, _format_type, _format_rate, _is_matured,
 )
@@ -1773,5 +1775,79 @@ class TestInvestmentsTableSmoke:
         win = self._make_window()
         try:
             win.setStyleSheet(make_stylesheet())
+        finally:
+            win.close()
+
+
+# ── Investments table alignment (commit 3a: left-align) ──────────────────────
+
+class TestInvestmentsTableAlignment:
+    """Left-align for data columns; center for FGC — in both cells and headers."""
+
+    def _make_window(self):
+        with patch("justfixed.ui.main.default_database_url", return_value="sqlite:///:memory:"), \
+             patch("justfixed.ui.main.run_migrations"), \
+             patch("justfixed.ui.main.fetch_seed_data", return_value={}), \
+             patch("justfixed.ui.main.load_seed_if_empty", return_value=0):
+            return MainWindow()
+
+    def test_mono_cell_is_left_aligned(self, qapp) -> None:
+        win = self._make_window()
+        try:
+            inv = _make_smoke_investment(maturity_offset_days=365)
+            win._table.setRowCount(1)
+            win._populate_row(0, inv, current_value=None, projected_value=None, fgc_status=None)
+            from justfixed.ui.main import _COL_PRINCIPAL
+            item = win._table.item(0, _COL_PRINCIPAL)
+            assert item is not None
+            assert Qt.AlignmentFlag.AlignLeft in Qt.Alignment(item.textAlignment())
+            assert Qt.AlignmentFlag.AlignRight not in Qt.Alignment(item.textAlignment())
+        finally:
+            win.close()
+
+    def test_paid_cell_is_left_aligned(self, qapp) -> None:
+        win = self._make_window()
+        try:
+            win._hide_matured = False
+            inv = _make_smoke_investment(maturity_offset_days=-1)
+            win._table.setRowCount(1)
+            win._populate_row(0, inv, current_value=None, projected_value=None, fgc_status=None)
+            from justfixed.ui.main import _COL_CURRENT
+            item = win._table.item(0, _COL_CURRENT)
+            assert item is not None
+            assert item.text() == "PAID"
+            assert Qt.AlignmentFlag.AlignLeft in Qt.Alignment(item.textAlignment())
+            assert Qt.AlignmentFlag.AlignRight not in Qt.Alignment(item.textAlignment())
+        finally:
+            win.close()
+
+    def test_fgc_cell_is_center_aligned(self, qapp) -> None:
+        win = self._make_window()
+        try:
+            inv = _make_smoke_investment(maturity_offset_days=365)
+            win._table.setRowCount(1)
+            win._populate_row(0, inv, current_value=None, projected_value=None, fgc_status=None)
+            item = win._table.item(0, _COL_FGC)
+            assert item is not None
+            assert Qt.AlignmentFlag.AlignCenter in Qt.Alignment(item.textAlignment())
+        finally:
+            win.close()
+
+    def test_data_column_header_is_left_aligned(self, qapp) -> None:
+        win = self._make_window()
+        try:
+            hdr_item = win._table.horizontalHeaderItem(_COL_PRINCIPAL)
+            assert hdr_item is not None
+            assert Qt.AlignmentFlag.AlignLeft in Qt.Alignment(hdr_item.textAlignment())
+            assert Qt.AlignmentFlag.AlignRight not in Qt.Alignment(hdr_item.textAlignment())
+        finally:
+            win.close()
+
+    def test_fgc_column_header_is_center_aligned(self, qapp) -> None:
+        win = self._make_window()
+        try:
+            hdr_item = win._table.horizontalHeaderItem(_COL_FGC)
+            assert hdr_item is not None
+            assert Qt.AlignmentFlag.AlignCenter in Qt.Alignment(hdr_item.textAlignment())
         finally:
             win.close()

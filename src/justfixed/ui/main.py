@@ -2582,6 +2582,13 @@ class MainWindow(QMainWindow):
         self._table.setAlternatingRowColors(True)
         self._table.setShowGrid(False)
         self._table.setHorizontalHeaderLabels(_HEADERS)
+        for _col in range(_NCOLS):
+            _hdr_item = self._table.horizontalHeaderItem(_col)
+            _hdr_item.setTextAlignment(
+                Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
+                if _col == _COL_FGC
+                else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -3094,7 +3101,7 @@ class MainWindow(QMainWindow):
             for col in (_COL_CURRENT, _COL_PROJECTED):
                 paid = QTableWidgetItem("PAID")
                 paid.setFont(_MONO_FONT)
-                paid.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                paid.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
                 self._table.setItem(row, col, paid)
         else:
             self._cell(row, _COL_CURRENT, current_value.to_display() if current_value else "", mono=True)
@@ -3130,7 +3137,7 @@ class MainWindow(QMainWindow):
         item = QTableWidgetItem(text)
         if mono:
             item.setFont(_MONO_FONT)
-            item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self._table.setItem(row, col, item)
 
     def _update_button_states(self) -> None:
