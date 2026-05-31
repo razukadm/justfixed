@@ -128,3 +128,83 @@ class TestMakeStylesheet:
         sheet = make_stylesheet()
         assert FONTS.UI_FAMILY in sheet
         assert str(FONTS.UI_SIZE_MD) in sheet
+
+    # ── Base surface + typography (commit 1 of global styling) ───────────────
+
+    def test_paper_background_in_qmainwindow_rule(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        assert COLORS.PAPER in sheet
+        assert "QMainWindow" in sheet
+
+    def test_qdialog_gets_paper_background(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        assert "QDialog" in sheet
+
+    def test_base_font_family_on_qwidget(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        # QWidget rule carries the font-family token
+        assert "QWidget" in sheet
+        assert FONTS.UI_FAMILY in sheet
+
+    def test_base_font_size_uses_ui_size_md(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        # font-size token value appears in the sheet (already true for status bar;
+        # this guards the base QWidget rule carries it too)
+        assert f"{FONTS.UI_SIZE_MD}pt" in sheet
+
+    def test_h1_role_selector_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert 'role="h1"' in make_stylesheet()
+
+    def test_h2_role_selector_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert 'role="h2"' in make_stylesheet()
+
+    # ── Regression: existing rules not removed ───────────────────────────────
+
+    def test_toolbar_role_still_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert 'role="toolbar"' in make_stylesheet()
+
+    def test_danger_role_still_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert 'role="danger"' in make_stylesheet()
+
+    def test_secondary_role_still_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert 'role="secondary"' in make_stylesheet()
+
+    def test_mock_row_rule_still_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert 'rowKind="mock"' in make_stylesheet()
+
+    def test_peak_row_rule_still_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert 'rowKind="peak"' in make_stylesheet()
+
+    def test_cong_parity_rows_still_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        assert 'congRowParity="even"' in sheet
+        assert 'congRowParity="odd"' in sheet
+
+    def test_panel_title_role_still_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert 'role="panelTitle"' in make_stylesheet()
+
+    def test_qwidget_base_rule_has_no_background_property(self) -> None:
+        # The QWidget base rule must carry only font/color, NOT background-color,
+        # to avoid clobbering CODE_BLOCK_BG command displays and accordion rows.
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        # Find the QWidget block and confirm it does not set background-color.
+        # Strategy: locate "QWidget {" and extract until the closing "}"
+        idx = sheet.find("QWidget {")
+        assert idx != -1, "QWidget base rule missing"
+        end = sheet.index("}", idx)
+        qwidget_block = sheet[idx:end + 1]
+        assert "background" not in qwidget_block

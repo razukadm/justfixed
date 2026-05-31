@@ -14,6 +14,39 @@ def make_stylesheet() -> str:
     c = COLORS
     f = FONTS
     return f"""
+/* ── Base surface and typography ────────────────────────────────────
+   Background is scoped to QMainWindow + QDialog only — NOT a blanket
+   QWidget — so QPlainTextEdit code blocks (CODE_BLOCK_BG set inline),
+   accordion parity rows, and role-styled buttons all keep their own
+   backgrounds.  Font properties are set on QWidget with no background
+   so they cascade safely to every child widget; widgets that need a
+   different color (danger button, status bar, FGC badges) already carry
+   more-specific selectors that override this default. */
+QMainWindow {{
+    background-color: {c.PAPER};
+}}
+QDialog {{
+    background-color: {c.PAPER};
+}}
+QWidget {{
+    font-family: '{f.UI_FAMILY}';
+    font-size: {f.UI_SIZE_MD}pt;
+    color: {c.INK};
+}}
+
+/* ── Type-scale heading labels ──────────────────────────────────────
+   Available for use; not yet applied to existing labels (later pass). */
+QLabel[role="h1"] {{
+    font-size: 22pt;
+    font-weight: 600;
+    color: {c.INK};
+}}
+QLabel[role="h2"] {{
+    font-size: 16pt;
+    font-weight: 600;
+    color: {c.INK};
+}}
+
 /* ── Toolbar action buttons ─────────────────────────────────────── */
 QPushButton[role="toolbar"] {{
     background-color: {c.TOOLBAR_BTN};
