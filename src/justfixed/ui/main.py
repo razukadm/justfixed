@@ -2607,6 +2607,10 @@ class MainWindow(QMainWindow):
         for col, px in ((_COL_PRODUCT, 80), (_COL_TYPE, 60), (_COL_FGC, 110)):
             hdr.setSectionResizeMode(col, _Fixed)
             self._table.setColumnWidth(col, px)
+        # IN-6: floor column widths so headers never truncate mid-word at a narrow
+        # window; the table scrolls horizontally instead of crushing columns.
+        hdr.setMinimumSectionSize(60)
+        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._delegate = ConglomerateEditDelegate(self, self._session_factory)
         self._table.setItemDelegateForColumn(_COL_CONGLOMERATE, self._delegate)
         self._table.cellDoubleClicked.connect(self._on_cell_double_clicked)

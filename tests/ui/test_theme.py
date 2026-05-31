@@ -288,3 +288,33 @@ class TestMakeStylesheet:
         block_end = sheet.index("}", idx)
         block = sheet[idx:block_end + 1]
         assert COLORS.PANEL_2 in block
+
+    # ── CH-1: tab styling ────────────────────────────────────────────────────
+
+    def test_tab_bar_tab_rule_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert "QTabBar::tab {" in make_stylesheet()
+
+    def test_tab_bar_tab_selected_rule_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert "QTabBar::tab:selected {" in make_stylesheet()
+
+    def test_tab_widget_pane_rule_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert "QTabWidget::pane {" in make_stylesheet()
+
+    def test_tab_bar_uses_panel_2_for_inactive(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        idx = sheet.index("QTabBar::tab {")
+        block_end = sheet.index("}", idx)
+        block = sheet[idx:block_end + 1]
+        assert COLORS.PANEL_2 in block
+
+    def test_tab_bar_selected_uses_panel(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        idx = sheet.index("QTabBar::tab:selected {")
+        block_end = sheet.index("}", idx)
+        block = sheet[idx:block_end + 1]
+        assert COLORS.PANEL in block

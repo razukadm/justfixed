@@ -1796,6 +1796,22 @@ class TestInvestmentsTableSmoke:
         finally:
             win.close()
 
+    def test_table_horizontal_scroll_as_needed(self, qapp) -> None:
+        # IN-6: table scrolls horizontally instead of crushing columns.
+        win = self._make_window()
+        try:
+            assert win._table.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        finally:
+            win.close()
+
+    def test_table_minimum_section_size(self, qapp) -> None:
+        # IN-6: columns won't shrink below 60px; prevents mid-word header truncation.
+        win = self._make_window()
+        try:
+            assert win._table.horizontalHeader().minimumSectionSize() == 60
+        finally:
+            win.close()
+
 
 # ── Investments table alignment (commit 3a: left-align) ──────────────────────
 

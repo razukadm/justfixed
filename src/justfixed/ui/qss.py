@@ -306,6 +306,34 @@ QLabel[indicator="peak"] {{
     font-weight: bold;
 }}
 
+/* ── Tab widget chrome (CH-1) ────────────────────────────────────────
+   90% goal: branded, readable tabs.  The pane-seam between the active
+   tab and the content area is accepted as a Qt rendering artefact and
+   not fought.  Heavy QTabWidget frame replaced with a single RULE line.
+   Hover uses PAPER (lighter than inactive PANEL_2); no extra border so
+   the hover doesn't add visual weight.                                */
+QTabWidget::pane {{
+    border: none;
+    border-top: 1px solid {c.RULE};
+}}
+QTabBar::tab {{
+    background-color: {c.PANEL_2};
+    color: {c.INK_3};
+    padding: 7px 16px;
+    margin-right: 2px;
+    border: none;
+    border-bottom: 2px solid transparent;
+}}
+QTabBar::tab:selected {{
+    background-color: {c.PANEL};
+    color: {c.INK};
+    border-bottom: 2px solid {c.INK};
+}}
+QTabBar::tab:hover:!selected {{
+    background-color: {c.PAPER};
+    color: {c.INK_2};
+}}
+
 /* ── Investments totals strip ────────────────────────────────────── */
 QWidget#totalsStrip {{
     background-color: {c.PANEL_2};
