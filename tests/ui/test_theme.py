@@ -43,6 +43,13 @@ class TestColors:
     def test_highlight_row(self) -> None:
         assert COLORS.HIGHLIGHT_ROW == "#FFF8DC"
 
+    def test_selection_bg(self) -> None:
+        assert COLORS.SELECTION_BG == "#d9e9f7"
+
+    def test_highlight_row_unchanged_from_selection_bg(self) -> None:
+        # Import-flash (cream) and selection (soft blue) are distinct; must not drift.
+        assert COLORS.HIGHLIGHT_ROW != COLORS.SELECTION_BG
+
     def test_fgc_over_is_red(self) -> None:
         assert COLORS.FGC_OVER == "#e74c3c"
 
@@ -318,3 +325,22 @@ class TestMakeStylesheet:
         block_end = sheet.index("}", idx)
         block = sheet[idx:block_end + 1]
         assert COLORS.PANEL in block
+
+    # ── IN-1: soft-blue selection ────────────────────────────────────────────
+
+    def test_item_selected_uses_selection_bg(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        idx = sheet.index("QTableWidget#investmentsTable::item:selected {")
+        block_end = sheet.index("}", idx)
+        block = sheet[idx:block_end + 1]
+        assert COLORS.SELECTION_BG in block
+
+    def test_item_selected_does_not_use_highlight_row(self) -> None:
+        # Cream HIGHLIGHT_ROW is the import-flash, not the selection color.
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        idx = sheet.index("QTableWidget#investmentsTable::item:selected {")
+        block_end = sheet.index("}", idx)
+        block = sheet[idx:block_end + 1]
+        assert COLORS.HIGHLIGHT_ROW not in block

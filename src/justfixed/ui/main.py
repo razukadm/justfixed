@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from PySide6.QtCore import QDate, QEvent, QLocale, QStandardPaths, QStringListModel, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QFont, QIcon
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -2611,6 +2611,16 @@ class MainWindow(QMainWindow):
         # window; the table scrolls horizontally instead of crushing columns.
         hdr.setMinimumSectionSize(60)
         self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        # IN-1: QSS ::item:selected only applies to the Active palette group; when focus
+        # leaves the table Qt repaints with the Inactive group's Highlight — a pale cream.
+        # Fix both groups to SELECTION_BG so selection looks identical focused or not.
+        _pal = self._table.palette()
+        _sel = QColor(COLORS.SELECTION_BG)
+        _seltext = QColor(COLORS.INK)
+        for _grp in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
+            _pal.setColor(_grp, QPalette.ColorRole.Highlight, _sel)
+            _pal.setColor(_grp, QPalette.ColorRole.HighlightedText, _seltext)
+        self._table.setPalette(_pal)
         self._delegate = ConglomerateEditDelegate(self, self._session_factory)
         self._table.setItemDelegateForColumn(_COL_CONGLOMERATE, self._delegate)
         self._table.cellDoubleClicked.connect(self._on_cell_double_clicked)

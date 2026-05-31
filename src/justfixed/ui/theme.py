@@ -86,7 +86,8 @@ class Colors:
     CODE_BLOCK_BG: str = "#1e1e1e"   # dark background for monospace command blocks
 
     # ── Investments table ──────────────────────────────────────────────────────
-    HIGHLIGHT_ROW: str = "#FFF8DC"
+    HIGHLIGHT_ROW: str = "#FFF8DC"   # freshly-imported row flash (cream) — NOT selection
+    SELECTION_BG: str = "#d9e9f7"   # soft blue — selected table row (active + inactive)
 
     # ── Calculator: drawdown preview — mock/peak row colours ──────────────────
     # MOCK_ROW_EDGE is a close stand-in for a future ACCENT_SKETCH token; the

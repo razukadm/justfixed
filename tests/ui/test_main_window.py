@@ -1812,6 +1812,40 @@ class TestInvestmentsTableSmoke:
         finally:
             win.close()
 
+    def test_table_inactive_selection_color_is_selection_bg(self, qapp) -> None:
+        # IN-1: inactive palette group Highlight == SELECTION_BG so selection
+        # looks identical whether or not the table has keyboard focus.
+        from PySide6.QtGui import QPalette, QColor
+        from justfixed.ui.theme import COLORS
+        win = self._make_window()
+        try:
+            pal = win._table.palette()
+            assert pal.color(
+                QPalette.ColorGroup.Inactive, QPalette.ColorRole.Highlight
+            ) == QColor(COLORS.SELECTION_BG)
+        finally:
+            win.close()
+
+    def test_table_active_selection_color_is_selection_bg(self, qapp) -> None:
+        from PySide6.QtGui import QPalette, QColor
+        from justfixed.ui.theme import COLORS
+        win = self._make_window()
+        try:
+            pal = win._table.palette()
+            assert pal.color(
+                QPalette.ColorGroup.Active, QPalette.ColorRole.Highlight
+            ) == QColor(COLORS.SELECTION_BG)
+        finally:
+            win.close()
+
+    def test_highlight_row_cream_still_used_for_import_flash(self, qapp) -> None:
+        # Import-flash (_HIGHLIGHT_COLOR) must remain cream, not the selection blue.
+        from PySide6.QtGui import QColor
+        from justfixed.ui.main import _HIGHLIGHT_COLOR
+        from justfixed.ui.theme import COLORS
+        assert _HIGHLIGHT_COLOR == QColor(COLORS.HIGHLIGHT_ROW)
+        assert _HIGHLIGHT_COLOR != QColor(COLORS.SELECTION_BG)
+
 
 # ── Investments table alignment (commit 3a: left-align) ──────────────────────
 

@@ -354,7 +354,7 @@ QTableWidget#investmentsTable::item {{
     padding: 2px 4px;
 }}
 QTableWidget#investmentsTable::item:selected {{
-    background-color: {c.HIGHLIGHT_ROW};
+    background-color: {c.SELECTION_BG};
     color: {c.INK};
 }}
 QTableWidget#investmentsTable QHeaderView::section {{
