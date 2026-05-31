@@ -306,6 +306,12 @@ QLabel[indicator="peak"] {{
     font-weight: bold;
 }}
 
+/* ── Investments totals strip ────────────────────────────────────── */
+QWidget#totalsStrip {{
+    background-color: {c.PANEL_2};
+    border-top: 1px solid {c.RULE_2};
+}}
+
 /* ── Investments table (scoped to objectName — curve inspector untouched) ── */
 QTableWidget#investmentsTable {{
     background-color: {c.PANEL};

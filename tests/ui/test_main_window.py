@@ -1778,6 +1778,24 @@ class TestInvestmentsTableSmoke:
         finally:
             win.close()
 
+    def test_table_row_height_is_26(self, qapp) -> None:
+        # IN-3: row density pinned to 26px via setDefaultSectionSize.
+        win = self._make_window()
+        try:
+            assert win._table.verticalHeader().defaultSectionSize() == 26
+        finally:
+            win.close()
+
+    def test_totals_strip_objectname(self, qapp) -> None:
+        # IN-5: wrapper widget exists and carries the QSS objectName.
+        from PySide6.QtWidgets import QWidget
+        win = self._make_window()
+        try:
+            strip = win.findChild(QWidget, "totalsStrip")
+            assert strip is not None
+        finally:
+            win.close()
+
 
 # ── Investments table alignment (commit 3a: left-align) ──────────────────────
 

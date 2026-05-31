@@ -2634,7 +2634,11 @@ class MainWindow(QMainWindow):
         root.addWidget(self._splitter, stretch=1)
 
         # Totals strip — principal, current, projected, row count
-        totals_row = QHBoxLayout()
+        # IN-5: QWidget wrapper carries objectName so QSS can paint the background band.
+        totals_container = QWidget()
+        totals_container.setObjectName("totalsStrip")
+        totals_row = QHBoxLayout(totals_container)
+        totals_row.setContentsMargins(8, 4, 8, 4)
         self._principal_label = QLabel("Principal: —")
         self._principal_label.setFont(_MONO_FONT)
         self._current_label = QLabel("Current: —")
@@ -2649,7 +2653,7 @@ class MainWindow(QMainWindow):
         totals_row.addWidget(self._projected_label)
         totals_row.addStretch()
         totals_row.addWidget(self._rows_label)
-        root.addLayout(totals_row)
+        root.addWidget(totals_container)
 
         status_bar = QStatusBar()
         self._curve_label = QLabel("")
@@ -2728,13 +2732,18 @@ class MainWindow(QMainWindow):
         plus.setFixedWidth(20)
         h.addWidget(plus)
 
+        # CG-5: force PlainText so Qt's AutoText heuristic never interprets "&" in
+        # conglomerate names (e.g. "J&F") as an HTML entity and bleeds link-palette
+        # colour onto sibling labels via the parent widget's resolved palette.
         name = QLabel(section.conglomerate_name)
+        name.setTextFormat(Qt.TextFormat.PlainText)
         h.addWidget(name, stretch=1)
 
         d = section.next_maturity
         next_lbl = QLabel(
             _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat)
         )
+        next_lbl.setTextFormat(Qt.TextFormat.PlainText)
         next_lbl.setFixedWidth(_CONG_W_DATE)
         next_lbl.setFont(_MONO_FONT)
         next_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)

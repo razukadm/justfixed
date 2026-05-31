@@ -274,3 +274,17 @@ class TestMakeStylesheet:
     def test_radiobutton_rule_present(self) -> None:
         from justfixed.ui.qss import make_stylesheet
         assert "QRadioButton {" in make_stylesheet()
+
+    # ── IN-5: totals strip background band ───────────────────────────────────
+
+    def test_totals_strip_rule_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert "QWidget#totalsStrip" in make_stylesheet()
+
+    def test_totals_strip_uses_panel_2(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        idx = sheet.index("QWidget#totalsStrip")
+        block_end = sheet.index("}", idx)
+        block = sheet[idx:block_end + 1]
+        assert COLORS.PANEL_2 in block

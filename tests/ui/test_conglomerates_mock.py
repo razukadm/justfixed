@@ -317,6 +317,55 @@ class TestInvestmentsBoundary:
 
 # ── CG-1/2/3/4: shared column constants and alignment (commit 2 accordion) ───
 
+class TestCG5PlainTextFormat:
+    """CG-5: summary row name and date labels use PlainText to prevent link-palette bleed."""
+
+    def test_conglomerate_name_label_is_plain_text(self, qapp) -> None:
+        # "&" in names like "J&F" must not trigger Qt's rich-text auto-detection.
+        row = _make_detail_row()
+        section = ConglomerateSection(
+            conglomerate_name="J&F Investimentos",
+            investment_count=1,
+            total_principal=row.principal,
+            total_current_value=Money.from_reais("51000"),
+            total_projected_value=Money.from_reais("55000"),
+            next_maturity=row.maturity_date,
+            summary_fgc_status=ConglomerateStatus.UNDER,
+            rows=[row],
+        )
+        self_mock = MagicMock(spec=MainWindow)
+        row_widget, _ = MainWindow._make_summary_row(self_mock, section, 0)
+        # The stretch name label has no fixed width; find it among direct children.
+        from PySide6.QtWidgets import QHBoxLayout
+        h = row_widget.layout()
+        stretch_labels = [
+            h.itemAt(i).widget() for i in range(h.count())
+            if isinstance(h.itemAt(i).widget(), QLabel)
+            and h.itemAt(i).widget().minimumWidth() != h.itemAt(i).widget().maximumWidth()
+        ]
+        assert len(stretch_labels) == 1
+        assert stretch_labels[0].textFormat() == Qt.TextFormat.PlainText
+
+    def test_date_label_is_plain_text(self, qapp) -> None:
+        row = _make_detail_row()
+        section = ConglomerateSection(
+            conglomerate_name="Test Cong",
+            investment_count=1,
+            total_principal=row.principal,
+            total_current_value=Money.from_reais("51000"),
+            total_projected_value=Money.from_reais("55000"),
+            next_maturity=row.maturity_date,
+            summary_fgc_status=ConglomerateStatus.UNDER,
+            rows=[row],
+        )
+        self_mock = MagicMock(spec=MainWindow)
+        row_widget, _ = MainWindow._make_summary_row(self_mock, section, 0)
+        date_labels = [lbl for lbl in row_widget.findChildren(QLabel)
+                       if lbl.width() == _CONG_W_DATE]
+        assert len(date_labels) == 1
+        assert date_labels[0].textFormat() == Qt.TextFormat.PlainText
+
+
 class TestSharedColumnConstants:
     """CG-2: shared column-width constants exist and have the intended values."""
 
