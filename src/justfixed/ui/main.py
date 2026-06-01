@@ -2517,7 +2517,7 @@ class MainWindow(QMainWindow):
         cong_bottom = QHBoxLayout()
         self._cong_project_btn = QPushButton("Project as of today")
         self._cong_project_btn.clicked.connect(self._on_project_clicked)
-        self._cong_project_btn.setProperty("role", "secondary")
+        self._cong_project_btn.setProperty("role", "toolbar")
         cong_bottom.addStretch()
         cong_bottom.addWidget(self._cong_project_btn)
         _cong_outer.addLayout(cong_bottom)

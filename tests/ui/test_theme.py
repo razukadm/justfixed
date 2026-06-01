@@ -37,8 +37,24 @@ class TestColors:
         assert COLORS.TOOLBAR_BTN_PRESSED == "#4cae6a"
 
     def test_detail_row_odd_matches_detail_header_bg(self) -> None:
-        # #f0f0f0 is shared between the detail header and odd detail rows.
+        # Both now PANEL_2 (#f4f4f1); distinction via bold header label text.
         assert COLORS.DETAIL_ROW_ODD == COLORS.DETAIL_HEADER_BG
+
+    def test_cong_row_border_equals_rule_2(self) -> None:
+        # CG-6: accordion dividers remapped to RULE_2 — the main visible fix.
+        assert COLORS.CONG_ROW_BORDER == COLORS.RULE_2
+
+    def test_cong_row_odd_equals_panel_2(self) -> None:
+        assert COLORS.CONG_ROW_ODD == COLORS.PANEL_2
+
+    def test_cong_header_bg_equals_panel_2(self) -> None:
+        assert COLORS.CONG_HEADER_BG == COLORS.PANEL_2
+
+    def test_detail_row_border_equals_rule_2(self) -> None:
+        assert COLORS.DETAIL_ROW_BORDER == COLORS.RULE_2
+
+    def test_detail_row_even_equals_panel(self) -> None:
+        assert COLORS.DETAIL_ROW_EVEN == COLORS.PANEL
 
     def test_highlight_row(self) -> None:
         assert COLORS.HIGHLIGHT_ROW == "#FFF8DC"

@@ -1786,6 +1786,22 @@ class TestInvestmentsTableSmoke:
         finally:
             win.close()
 
+    def test_cong_project_button_has_toolbar_role(self, qapp) -> None:
+        # CG-6: Conglomerates "Project as of today" is now green (toolbar), not secondary.
+        win = self._make_window()
+        try:
+            assert win._cong_project_btn.property("role") == "toolbar"
+        finally:
+            win.close()
+
+    def test_investments_project_button_still_has_toolbar_role(self, qapp) -> None:
+        # Regression: Investments tab Project button was already toolbar; must stay.
+        win = self._make_window()
+        try:
+            assert win._project_btn.property("role") == "toolbar"
+        finally:
+            win.close()
+
     def test_totals_strip_objectname(self, qapp) -> None:
         # IN-5: wrapper widget exists and carries the QSS objectName.
         from PySide6.QtWidgets import QWidget

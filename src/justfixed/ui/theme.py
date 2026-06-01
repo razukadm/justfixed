@@ -66,17 +66,23 @@ class Colors:
     # ── Form chrome ────────────────────────────────────────────────────────────
     FIELD_LABEL_FG: str = "#666666"
 
-    # ── Conglomerate accordion rows ────────────────────────────────────────────
-    CONG_ROW_ODD: str = "#f5f5f5"
-    CONG_ROW_BORDER: str = "#dddddd"
-    CONG_HEADER_BG: str = "#eaeaea"
+    # ── Conglomerate accordion rows (remapped to Foundations surface tokens) ──────
+    # Previous values were bespoke greys; now aligned to PANEL_2/RULE_2 so the
+    # accordion reads as part of the same surface system as the rest of the app.
+    # CG-6 side-effect note: CONG_ROW_BORDER is also used for Calculator drawdown
+    # row dividers (rowKind="mock"/"peak") — those borders become lighter too,
+    # which is consistent with Foundations.
+    CONG_ROW_ODD: str = "#f4f4f1"    # was #f5f5f5 → PANEL_2 alternating tint
+    CONG_ROW_BORDER: str = "#ececea"  # was #dddddd → RULE_2 (main visible fix)
+    CONG_HEADER_BG: str = "#f4f4f1"  # was #eaeaea → PANEL_2 header strip
 
-    # ── Conglomerate detail rows ────────────────────────────────────────────────
-    DETAIL_HEADER_BG: str = "#f0f0f0"
-    DETAIL_ROW_EVEN: str = "#fafafa"
-    # NOTE: DETAIL_ROW_ODD == DETAIL_HEADER_BG (#f0f0f0) — same shade.
-    DETAIL_ROW_ODD: str = "#f0f0f0"
-    DETAIL_ROW_BORDER: str = "#eeeeee"
+    # ── Conglomerate detail rows (remapped to Foundations surface tokens) ────────
+    DETAIL_HEADER_BG: str = "#f4f4f1"  # was #f0f0f0 → PANEL_2
+    DETAIL_ROW_EVEN: str = "#ffffff"   # was #fafafa → PANEL (aligns with parent even rows)
+    # NOTE: DETAIL_ROW_ODD == DETAIL_HEADER_BG (#f4f4f1) — same shade; header/row
+    # distinction is preserved by font-weight: bold on the header labels.
+    DETAIL_ROW_ODD: str = "#f4f4f1"   # was #f0f0f0 → PANEL_2
+    DETAIL_ROW_BORDER: str = "#ececea" # was #eeeeee → RULE_2
 
     # ── Secondary (outlined) button ────────────────────────────────────────────
     # Border uses existing RULE token (#d9d6cf). Only the hover tint is new.
