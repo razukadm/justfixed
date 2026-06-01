@@ -26,6 +26,7 @@ from justfixed.domain.rates import _format_brazilian_percent
 from justfixed.engine.calendar import add_business_days
 from justfixed.engine.curve import Curve
 from justfixed.engine.fetcher import FetchResult
+from justfixed.ui.theme import COLORS
 from justfixed.ui.widgets.panel import Panel
 from justfixed.ui.widgets.provenance_callout import ProvenanceCallout
 
@@ -38,22 +39,23 @@ _B3_REFERENCE_RATES_URL = (
     "https://sistemaswebb3-derivativos.b3.com.br/referenceRatesPage/all?language=pt-br"
 )
 
-# ── Design tokens (from wireframe CSS custom properties) ──────────────────────
+# ── Design-token aliases — all values sourced from COLORS (theme.py) ──────────
+# Aliased rather than replaced throughout to keep f-string usage unchanged.
 
-_INK          = "#1a1a1a"
-_INK_2        = "#4a4a4a"
-_INK_3        = "#888888"
-_PAPER        = "#fafaf7"
-_PANEL        = "#ffffff"
-_PANEL_2      = "#f4f4f1"
-_RULE         = "#d9d6cf"
-_RULE_2       = "#ececea"
-_LINK         = "#1f6feb"
-_WARN         = "#e67e22"
-_CALLOUT_BG   = "#eef4fb"
-_CALLOUT_EDGE = "#c5dbf2"
-_ACCENT       = "#d35400"
-_ROW_HOVER    = "#fff7d6"
+_INK          = COLORS.INK
+_INK_2        = COLORS.INK_2
+_INK_3        = COLORS.INK_3
+_PAPER        = COLORS.PAPER
+_PANEL        = COLORS.PANEL
+_PANEL_2      = COLORS.PANEL_2
+_RULE         = COLORS.RULE
+_RULE_2       = COLORS.RULE_2
+_LINK         = COLORS.LINK
+_WARN         = COLORS.WARN
+_CALLOUT_BG   = COLORS.CALLOUT_BG
+_CALLOUT_EDGE = COLORS.CALLOUT_EDGE
+_ACCENT       = COLORS.ACCENT
+_ROW_HOVER    = COLORS.ROW_HOVER
 
 # ── Series keys ───────────────────────────────────────────────────────────────
 
@@ -302,14 +304,14 @@ class CurveInspectorWindow(QWidget):
             QTableWidget {{
                 gridline-color: {_RULE_2};
                 background: {_PANEL};
-                alternate-background-color: #fafaf8;
+                alternate-background-color: {COLORS.TABLE_ALT_BG};
                 border: none;
                 font-family: Consolas, "Courier New", monospace;
                 font-size: 12px;
                 color: {_INK};
             }}
             QHeaderView::section {{
-                background: #fbfbf9;
+                background: {COLORS.TABLE_HEADER_BG};
                 border: none;
                 border-bottom: 1px solid {_RULE};
                 font-weight: 600;
@@ -416,6 +418,7 @@ class CurveInspectorWindow(QWidget):
     def _build_table(self) -> QTableWidget:
         rows = self._table_rows()
         table = QTableWidget(len(rows), 2)
+        table.setObjectName("verticesTable")
         table.setHorizontalHeaderLabels(["Settles on", "Rate a.a."])
         table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
@@ -484,7 +487,7 @@ class CurveInspectorWindow(QWidget):
         lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         lbl.setFixedHeight(22)
         lbl.setStyleSheet(
-            f"background: #f7f6f3; border: none; border-top: 1px solid {_RULE}; "
+            f"background: {COLORS.STATUS_BAR_BG}; border: none; border-top: 1px solid {_RULE}; "
             f"font-family: Consolas, 'Courier New', monospace; "
             f"font-size: 11px; color: {_INK_3}; padding: 0px 10px; margin: 0;"
         )
@@ -493,7 +496,7 @@ class CurveInspectorWindow(QWidget):
     def _build_unavailable(self) -> QWidget:
         container = QWidget()
         container.setStyleSheet(
-            f"background: #fdfbf6; border: 1px dashed {_RULE}; border-radius: 4px;"
+            f"background: {COLORS.UNAVAIL_BG}; border: 1px dashed {_RULE}; border-radius: 4px;"
         )
         layout = QVBoxLayout(container)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)

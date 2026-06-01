@@ -8,9 +8,13 @@ unavailable-state degradation, and hover-sync index mapping.
 
 from __future__ import annotations
 
+import sys
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock
+
+import pytest
+from PySide6.QtWidgets import QApplication
 
 from justfixed.engine.calendar import add_business_days
 from justfixed.engine.curve import Curve, CurveVertex
@@ -23,8 +27,18 @@ from justfixed.ui.curve_inspector import (
     _ANBIMA_URL,
     _B3_REFERENCE_RATES_URL,
     _INFOMONEY_URL,
+    _INK,
     _WARN,
 )
+from justfixed.ui.theme import COLORS
+
+
+@pytest.fixture(scope="session")
+def qapp():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+    yield app
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -347,3 +361,37 @@ class TestVertexIndexForPoint:
         xs = [_MS_A, _MS_A]
         ys = [14.40, 14.50]
         assert CurveInspectorWindow._vertex_index_for_point(xs, ys, _MS_A, 14.50) == 1
+
+
+# ── CV-1: token migration ──────────────────────────────────────────────────────
+
+class TestCurveInspectorTokenMigration:
+    """CV-1: module constants are aliases to COLORS; no hardcoded hex values remain."""
+
+    def test_ink_alias_matches_colors(self) -> None:
+        assert _INK == COLORS.INK
+
+    def test_warn_alias_matches_colors(self) -> None:
+        assert _WARN == COLORS.WARN
+
+    def test_table_alt_bg_token_value(self) -> None:
+        # Already existed in theme.py; confirmed value used for vertices table alternating rows.
+        assert COLORS.TABLE_ALT_BG == "#fafaf8"
+
+    def test_table_header_bg_token_value(self) -> None:
+        assert COLORS.TABLE_HEADER_BG == "#fbfbf9"
+
+    def test_status_bar_bg_token_value(self) -> None:
+        assert COLORS.STATUS_BAR_BG == "#f7f6f3"
+
+    def test_unavail_bg_token_value(self) -> None:
+        assert COLORS.UNAVAIL_BG == "#fdfbf6"
+
+    def test_vertices_table_objectname(self, qapp) -> None:
+        """Step 4: _build_table sets objectName 'verticesTable'."""
+        win = CurveInspectorWindow(SERIES_CDI, _make_curve(3), None)
+        try:
+            assert win._table is not None
+            assert win._table.objectName() == "verticesTable"
+        finally:
+            win.close()
