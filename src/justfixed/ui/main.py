@@ -2645,20 +2645,9 @@ class MainWindow(QMainWindow):
         self._splitter.setSizes([700, 300])
         root.addWidget(self._splitter, stretch=1)
 
-        # Below-table action bar — Project and Export, right-aligned.
-        # Wrapped in a QWidget (same pattern as totalsStrip) so the buttons have a
-        # distinct parentWidget — testable and leaves room for future QSS objectName.
-        # Ordering: table → button bar → totals strip (matches mockup .below-table).
-        _below_table_container = QWidget()
-        _below_table_layout = QHBoxLayout(_below_table_container)
-        _below_table_layout.setContentsMargins(0, 2, 0, 2)
-        _below_table_layout.addStretch()
-        _below_table_layout.addWidget(self._project_btn)
-        _below_table_layout.addWidget(self._export_btn)
-        root.addWidget(_below_table_container)
-
         # Totals strip — principal, current, projected, row count
         # IN-5: QWidget wrapper carries objectName so QSS can paint the background band.
+        # Ordering: table → totals strip → button bar (totals reads directly off the table).
         totals_container = QWidget()
         totals_container.setObjectName("totalsStrip")
         totals_row = QHBoxLayout(totals_container)
@@ -2678,6 +2667,17 @@ class MainWindow(QMainWindow):
         totals_row.addStretch()
         totals_row.addWidget(self._rows_label)
         root.addWidget(totals_container)
+
+        # Below-table action bar — Project and Export, right-aligned.
+        # Wrapped in a QWidget (same pattern as totalsStrip) so the buttons have a
+        # distinct parentWidget — testable and leaves room for future QSS objectName.
+        _below_table_container = QWidget()
+        _below_table_layout = QHBoxLayout(_below_table_container)
+        _below_table_layout.setContentsMargins(0, 2, 0, 2)
+        _below_table_layout.addStretch()
+        _below_table_layout.addWidget(self._project_btn)
+        _below_table_layout.addWidget(self._export_btn)
+        root.addWidget(_below_table_container)
 
         status_bar = QStatusBar()
         self._curve_label = QLabel("")
