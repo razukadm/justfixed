@@ -110,7 +110,7 @@ class Colors:
 class Fonts:
     UI_FAMILY: str = "Segoe UI"
     UI_SIZE_SM: int = 8
-    UI_SIZE_MD: int = 9
+    UI_SIZE_MD: int = 10   # 10pt ≈ 13.3px @ 96 DPI — matches Foundations 13px body spec
     MONO_FAMILY: str = "Consolas"
     MONO_SIZE: int = 10
 

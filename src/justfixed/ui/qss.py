@@ -318,7 +318,7 @@ QTabWidget::pane {{
 }}
 QTabBar::tab {{
     background-color: {c.PANEL_2};
-    color: {c.INK_3};
+    color: {c.INK_2};
     padding: 7px 16px;
     margin-right: 2px;
     border: none;

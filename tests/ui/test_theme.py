@@ -101,7 +101,7 @@ class TestFonts:
 
     def test_sizes(self) -> None:
         assert FONTS.UI_SIZE_SM == 8
-        assert FONTS.UI_SIZE_MD == 9
+        assert FONTS.UI_SIZE_MD == 10   # 10pt ≈ 13.3px — Foundations 13px body spec
         assert FONTS.MONO_SIZE == 10
 
 
@@ -360,3 +360,19 @@ class TestMakeStylesheet:
         block_end = sheet.index("}", idx)
         block = sheet[idx:block_end + 1]
         assert COLORS.HIGHLIGHT_ROW not in block
+
+    # ── B43-font: typography fixes ───────────────────────────────────────────
+
+    def test_ui_size_md_is_10(self) -> None:
+        # Foundations body spec: 13px ≈ 10pt at 96 DPI.
+        assert FONTS.UI_SIZE_MD == 10
+
+    def test_inactive_tab_uses_ink_2_not_ink_3(self) -> None:
+        # CH-1 inactive tab text: INK_2 (#4a4a4a) for contrast; INK_3 (#888888) is too light.
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        idx = sheet.index("QTabBar::tab {")
+        block_end = sheet.index("}", idx)
+        block = sheet[idx:block_end + 1]
+        assert COLORS.INK_2 in block
+        assert COLORS.INK_3 not in block
