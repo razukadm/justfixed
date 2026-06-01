@@ -1173,9 +1173,10 @@ class _CalculatorTab(QWidget):
         outer.setContentsMargins(8, 8, 8, 8)
         outer.setSpacing(8)
 
-        # ── Left: form panel (fixed ~360px) ───────────────────────────────────
+        # ── Left: form panel (fixed ~420px) ───────────────────────────────────
+        # Widened from 360 to 420 so "Solve for max under FGC" radio fits without clipping.
         form_container = QWidget()
-        form_container.setFixedWidth(360)
+        form_container.setFixedWidth(420)
         form_layout = QVBoxLayout(form_container)
         form_layout.setContentsMargins(0, 0, 0, 0)
         form_layout.setSpacing(2)
