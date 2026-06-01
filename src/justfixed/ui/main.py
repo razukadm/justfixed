@@ -2545,8 +2545,6 @@ class MainWindow(QMainWindow):
         self._status_label = QLabel("Ready.")
         toolbar.addWidget(self._import_btn)
         toolbar.addWidget(self._add_btn)
-        toolbar.addWidget(self._project_btn)
-        toolbar.addWidget(self._export_btn)
         toolbar.addStretch()
         toolbar.addWidget(self._status_label)
         root.addLayout(toolbar)
@@ -2646,6 +2644,18 @@ class MainWindow(QMainWindow):
         self._splitter.addWidget(self._right_pane)
         self._splitter.setSizes([700, 300])
         root.addWidget(self._splitter, stretch=1)
+
+        # Below-table action bar — Project and Export, right-aligned.
+        # Wrapped in a QWidget (same pattern as totalsStrip) so the buttons have a
+        # distinct parentWidget — testable and leaves room for future QSS objectName.
+        # Ordering: table → button bar → totals strip (matches mockup .below-table).
+        _below_table_container = QWidget()
+        _below_table_layout = QHBoxLayout(_below_table_container)
+        _below_table_layout.setContentsMargins(0, 2, 0, 2)
+        _below_table_layout.addStretch()
+        _below_table_layout.addWidget(self._project_btn)
+        _below_table_layout.addWidget(self._export_btn)
+        root.addWidget(_below_table_container)
 
         # Totals strip — principal, current, projected, row count
         # IN-5: QWidget wrapper carries objectName so QSS can paint the background band.

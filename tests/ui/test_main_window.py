@@ -1802,6 +1802,31 @@ class TestInvestmentsTableSmoke:
         finally:
             win.close()
 
+    def test_export_button_has_toolbar_role(self, qapp) -> None:
+        win = self._make_window()
+        try:
+            assert win._export_btn.property("role") == "toolbar"
+        finally:
+            win.close()
+
+    def test_project_and_export_not_in_top_toolbar(self, qapp) -> None:
+        # Relocation: Project and Export moved below the table — they must NOT
+        # share a parent widget with the Import and Add buttons.
+        win = self._make_window()
+        try:
+            assert win._project_btn.parentWidget() is not win._import_btn.parentWidget()
+            assert win._export_btn.parentWidget() is not win._import_btn.parentWidget()
+        finally:
+            win.close()
+
+    def test_project_and_export_share_parent(self, qapp) -> None:
+        # Both below-table buttons live in the same layout container.
+        win = self._make_window()
+        try:
+            assert win._project_btn.parentWidget() is win._export_btn.parentWidget()
+        finally:
+            win.close()
+
     def test_totals_strip_objectname(self, qapp) -> None:
         # IN-5: wrapper widget exists and carries the QSS objectName.
         from PySide6.QtWidgets import QWidget
