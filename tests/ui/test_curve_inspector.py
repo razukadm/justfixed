@@ -28,6 +28,7 @@ from justfixed.ui.curve_inspector import (
     _B3_REFERENCE_RATES_URL,
     _INFOMONEY_URL,
     _INK,
+    _ROW_HOVER,
     _WARN,
 )
 from justfixed.ui.theme import COLORS
@@ -393,5 +394,87 @@ class TestCurveInspectorTokenMigration:
         try:
             assert win._table is not None
             assert win._table.objectName() == "verticesTable"
+        finally:
+            win.close()
+
+    def test_row_hover_alias_still_defined(self) -> None:
+        # _ROW_HOVER is kept as an alias even though the hover now uses SELECTION_BG.
+        assert _ROW_HOVER == COLORS.ROW_HOVER
+
+
+# ── CV-2: hover highlight color fix ───────────────────────────────────────────
+
+class TestCurveInspectorHover:
+    """CV-2: hover brush uses SELECTION_BG; palette Highlight matches on both groups."""
+
+    def _make_win(self) -> CurveInspectorWindow:
+        return CurveInspectorWindow(SERIES_CDI, _make_curve(5), None)
+
+    def test_highlight_table_row_uses_selection_bg(self, qapp) -> None:
+        from PySide6.QtGui import QColor
+        win = self._make_win()
+        try:
+            win._highlight_table_row(0)
+            item = win._table.item(0, 0)
+            assert item is not None
+            assert item.background().color() == QColor(COLORS.SELECTION_BG)
+        finally:
+            win.close()
+
+    def test_highlight_applies_to_all_columns(self, qapp) -> None:
+        from PySide6.QtGui import QColor
+        win = self._make_win()
+        try:
+            win._highlight_table_row(1)
+            for col in range(win._table.columnCount()):
+                item = win._table.item(1, col)
+                assert item is not None
+                assert item.background().color() == QColor(COLORS.SELECTION_BG)
+        finally:
+            win.close()
+
+    def test_clear_hover_resets_background(self, qapp) -> None:
+        from PySide6.QtGui import QBrush
+        win = self._make_win()
+        try:
+            win._highlight_table_row(2)
+            win._clear_hover()
+            item = win._table.item(2, 0)
+            assert item is not None
+            # Empty brush == no explicit background
+            assert item.background() == QBrush()
+        finally:
+            win.close()
+
+    def test_table_active_palette_highlight_is_selection_bg(self, qapp) -> None:
+        from PySide6.QtGui import QPalette, QColor
+        win = self._make_win()
+        try:
+            pal = win._table.palette()
+            assert pal.color(
+                QPalette.ColorGroup.Active, QPalette.ColorRole.Highlight
+            ) == QColor(COLORS.SELECTION_BG)
+        finally:
+            win.close()
+
+    def test_table_inactive_palette_highlight_is_selection_bg(self, qapp) -> None:
+        from PySide6.QtGui import QPalette, QColor
+        win = self._make_win()
+        try:
+            pal = win._table.palette()
+            assert pal.color(
+                QPalette.ColorGroup.Inactive, QPalette.ColorRole.Highlight
+            ) == QColor(COLORS.SELECTION_BG)
+        finally:
+            win.close()
+
+    def test_hover_does_not_use_row_hover_cream(self, qapp) -> None:
+        # _ROW_HOVER (cream) is no longer the hover color — SELECTION_BG (soft blue) is.
+        from PySide6.QtGui import QColor
+        win = self._make_win()
+        try:
+            win._highlight_table_row(0)
+            item = win._table.item(0, 0)
+            assert item.background().color() != QColor(COLORS.ROW_HOVER)
         finally:
             win.close()

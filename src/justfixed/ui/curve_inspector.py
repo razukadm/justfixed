@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from PySide6.QtCharts import QChart, QChartView, QDateTimeAxis, QLineSeries, QScatterSeries, QValueAxis
 from PySide6.QtCore import QDate, QDateTime, QEvent, QMargins, QPointF, Qt, QTime, QTimer
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPalette, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -236,7 +236,7 @@ class CurveInspectorWindow(QWidget):
                 if item is not None:
                     item.setBackground(QBrush())
         self._hover_row = idx
-        brush = QBrush(QColor(_ROW_HOVER))
+        brush = QBrush(QColor(COLORS.SELECTION_BG))
         for col in range(self._table.columnCount()):
             item = self._table.item(idx, col)
             if item is not None:
@@ -429,6 +429,17 @@ class CurveInspectorWindow(QWidget):
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.setShowGrid(False)
         table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        # CV-2: scrollToItem implicitly sets the current item whose QPalette.Highlight
+        # renders as the system blue even with NoSelection. Neutralise it by setting
+        # both Active and Inactive Highlight to SELECTION_BG so any current-item
+        # background matches the hover brush — eliminating the two-tone split.
+        _pal = table.palette()
+        _sel = QColor(COLORS.SELECTION_BG)
+        _seltext = QColor(COLORS.INK)
+        for _grp in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
+            _pal.setColor(_grp, QPalette.ColorRole.Highlight, _sel)
+            _pal.setColor(_grp, QPalette.ColorRole.HighlightedText, _seltext)
+        table.setPalette(_pal)
 
         for r, (settle, rate) in enumerate(rows):
             s_item = QTableWidgetItem(settle)
