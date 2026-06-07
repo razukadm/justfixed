@@ -9,7 +9,7 @@ this file is the working-style and conventions summary.
 JustFixed is a Windows desktop portfolio tracker for Brazilian fixed-income investments
 (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, single-user. Engine,
 persistence, exports, and the XP, BTG, and BB importers are complete; the UI (PySide6)
-covers milestones A′, B′, B24, B9a, B27, B34, B41, B44, C′, and the Curve Inspector —
+covers milestones A′, A′-plus, B′, B′ companion, B24, B9a, B27, C′, B34, B41, B44, B22, and the Curve Inspector —
 all shipped. The README covers the user-facing intent; ARCHITECTURE.md covers the
 internal shape.
 
@@ -23,7 +23,7 @@ Strict layer ordering, no upward dependencies:
 - `importers/` — three layers: parser (file → strings), mapper (strings → typed),
   loader (typed → persisted). Three complete pipelines: XP (XLSX), BTG (XLSX), BB (fixed-width .txt).
 - `exports/` — calendar.py: iCalendar (.ics) export. Depends on domain + engine, not persistence.
-- `ui/` — PySide6 single-window app. Milestones A′, B′, B24, B9a, B27, B34, B41, B44, C′, and Curve Inspector shipped (read-only viewer, conglomerate curation, Conglomerates accordion tab, dev view with curve/seed status, Curve Inspector, manual entry, per-investment delete, projection detail view). See docs/UI_DESIGN.md.
+- `ui/` — PySide6 single-window app. Milestones A′, A′-plus, B′, B′ companion, B24, B9a, B27, C′, B34, B41, B44, B22, and Curve Inspector shipped (read-only viewer, conglomerate curation, Conglomerates accordion tab, dev view with curve/seed status, Curve Inspector, manual entry, per-investment delete, projection detail view). See docs/UI_DESIGN.md.
 
 Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 
@@ -35,7 +35,7 @@ Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 - **Domain types validate in `__post_init__`.** Corrupt data fails to load with a
   clear `ValueError`. The domain is the gatekeeper for invariants.
 - **Tests are the spec.** If behavior changes, the test changes first. Currently
-  1146 tests, ~8 second runtime, no skips. Tests pass on every commit.
+  1349 tests, ~16 second runtime, no skips. Tests pass on every commit.
 - **Hand-compute financial test expected values.** Show all decimals; don't approximate.
   Approximation has been a real source of bugs.
 - **Repositories are the only public access to persistence.** Engine, UI, and importers
@@ -108,8 +108,12 @@ structures. A third mechanism (curation memory) is database-backed, not hardcode
   entirely. Entries are populated by the B′ curation UI (shipped) and the seed
   loader's first-run import (B9a Phase 3, shipped). The repository is also writable
   directly, which is how tests seed curation memory.
-- **Development-bank set** (xp_loader.py `_DEVELOPMENT_BANK_NAMES`): issuers in this
-  set get `IssuerKind.DEVELOPMENT_BANK` instead of the `COMMERCIAL_BANK` default.
+- **Issuer-kind catalog** (`importers/_kind_catalog.py` `_ISSUER_KIND_CATALOG`, via
+  `classify_issuer_kind`): maps a fully-normalized issuer name to a non-default
+  `IssuerKind` — e.g. `BDMG` → `DEVELOPMENT_BANK`, POUPEX's full institution name →
+  `SAVINGS_LOAN_ASSOCIATION`. Unknown names default to `COMMERCIAL_BANK`. Shared by all
+  three loaders (XP, BTG, BB); merged the per-loader tables that previously lived in
+  `xp_loader` and `btg_loader` (B33).
 - **Section-terminator set** (xp.py `_RENDA_FIXA_TERMINATORS`): row text matching
   these strings ends the Renda Fixa reading loop, preventing the parser from reading
   into subsequent non-fixed-income sections.
@@ -169,8 +173,9 @@ docs, not on memory of what shipped. This is what protects against the
   status, available functions. When making substantial changes, sweep the docs
   in the same PR or as the immediate-next commit.
 - **Personal data in the repo.** Real `PosicaoDetalhada.xlsx` files belong outside
-  the working tree (e.g., `~/Documents/JustFixed/`). Only `synthetic_xp_statement.xlsx`
-  goes in `tests/importers/fixtures/`. The `.gitignore` enforces this.
+  the working tree (e.g., `~/Documents/JustFixed/`). Only the synthetic fixtures (`synthetic_xp_statement.xlsx` and
+  `synthetic_btg_statement.xlsx`) go in `tests/importers/fixtures/`. The `.gitignore`
+  enforces this.
 
 ## Pointers
 

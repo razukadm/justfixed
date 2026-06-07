@@ -1,8 +1,8 @@
 # FGC Concentration Engine — Design Spec
 
-This document specifies the FGC concentration check feature that will be built
-in `src/justfixed/engine/fgc.py`. It is the input to the implementation session;
-read it before writing any code.
+This document specifies the FGC concentration check feature implemented in
+`src/justfixed/engine/fgc.py`, and describes its as-built behavior. The test
+suite in `tests/engine/test_fgc.py` is the executable form of this spec.
 
 ## What it does
 
@@ -37,18 +37,25 @@ Out of scope (deferred to future versions):
 
 ## Public API
 
-One public function:
+Two public functions, both returning an `FGCReport`:
 
 ```python
 def fgc_concentration_report(
     investments: list[Investment],
     as_of: date,
     assumed_cdi: Decimal,
+    assumed_ipca: Decimal | None = None,
 ) -> FGCReport:
     """Compute FGC concentration exposure across the portfolio."""
+
+
+def fgc_concentration_report_from_projections(
+    projections: list[ProjectionResult],
+) -> FGCReport:
+    """Compute FGC concentration exposure from already-projected results."""
 ```
 
-Parameters:
+`fgc_concentration_report` parameters:
 - `investments` — all of the user's investments. Treasury holdings are
   filtered out internally (FGC does not cover Tesouro).
 - `as_of` — date for "current" calculations. Tests pass fixed dates; UI
@@ -56,9 +63,19 @@ Parameters:
 - `assumed_cdi` — annualized CDI rate (e.g., `Decimal("0.12")` for 12%).
   Required by the projection engine for post-fixed-rate investments.
   Unused for Prefixed and IPCA but still required for API consistency.
+- `assumed_ipca` — annualized IPCA rate, optional; required only when the
+  portfolio holds IPCA-linked investments. Propagated to `project()`.
 
-The function delegates to `engine/projection.py:project()` to compute each
-investment's current and peak values, then aggregates by conglomerate.
+It delegates to `engine/projection.py:project()` to compute each investment's
+current and peak values, then aggregates by conglomerate.
+
+`fgc_concentration_report_from_projections` takes a list of already-computed
+`ProjectionResult`s instead of projecting internally — use it when projections
+are already cached (e.g. on a conglomerate rename) to avoid re-projecting. It
+derives `as_of` from the projections' shared `as_of` and raises `ValueError`
+if they disagree. Both functions share the private
+`_build_report_from_projections` helper, so they produce identical reports for
+the same inputs.
 
 ## Data structures
 
@@ -130,19 +147,22 @@ buffer below the hard limit.
 ## Algorithm
 
 1. **Filter to FGC-covered investments.** Skip any investment whose
-   `product.required_issuer_kind == IssuerKind.TREASURY`. (Treasury is
-   not FGC-covered — the user's Tesouro holdings are guaranteed by the
-   federal government instead.)
+   `issuer.kind == IssuerKind.TREASURY`. The issuer kind — not the product
+   type — is the authoritative FGC-coverage signal. (Treasury is not
+   FGC-covered: the user's Tesouro holdings are guaranteed by the federal
+   government instead.)
 
 2. **Group by conglomerate.** Each remaining investment's
    `issuer.conglomerate` is the grouping key. `[unverified] BMG` is its own
    group; `[unverified] PINE` is its own group; truly-grouped issuers
    share a key.
 
-3. **For each conglomerate, project each investment.** Call
-   `project(investment, as_of=as_of, assumed_cdi=assumed_cdi)` to get
-   `current_value`. Call `project(investment, as_of=investment.maturity_date,
-   assumed_cdi=assumed_cdi)` to get `peak_value` (the per-investment peak).
+3. **Project each investment once.** Call
+   `project(investment, as_of=as_of, assumed_cdi=assumed_cdi, assumed_ipca=assumed_ipca)`.
+   A single call yields both numbers: `current_value` comes from
+   `result.current_value` and `peak_value` (the per-investment peak) from
+   `result.gross_at_maturity` — both live on the same `ProjectionResult`, so
+   no second call with `as_of=maturity_date` is needed.
 
 4. **Sum to produce conglomerate-level exposures.**
    - `current_exposure = sum(inv.current_value for inv in conglomerate)`
@@ -173,7 +193,7 @@ engine docstring must document this clearly so future maintainers don't
 
 ## Test plan
 
-Eleven tests, in `tests/engine/test_fgc.py`. The test list is the spec —
+Sixteen tests, in `tests/engine/test_fgc.py`. The test list is the spec —
 implementation that doesn't satisfy these tests is wrong, and implementation
 satisfying these tests is correct.
 
@@ -245,6 +265,34 @@ satisfying these tests is correct.
     Expected: two conglomerates in the report, both with
     `is_unverified == True`.
 
+### Group F — `conglomerates_at_or_over_limit` and IPCA propagation
+
+12. **`test_approaching_not_in_at_or_over_limit_list`**
+    Input: one conglomerate whose `current_status == APPROACHING` (between the
+    thresholds). Expected: it appears in `conglomerates` but **not** in
+    `conglomerates_at_or_over_limit` — that property lists only OVER (and
+    exactly-at-limit) conglomerates.
+
+13. **`test_fgc_concentration_report_propagates_assumed_ipca`**
+    Input: an IPCA-linked investment with a non-None `assumed_ipca`.
+    Expected: the value reflects the supplied `assumed_ipca` — i.e. the rate
+    is passed through to `project()` rather than dropped.
+
+### Group G — `fgc_concentration_report_from_projections`
+
+14. **`test_from_projections_empty`**
+    Input: `projections=[]`. Expected: empty `FGCReport` (no conglomerates),
+    `as_of` defaulting to `date.today()`.
+
+15. **`test_from_projections_single_conglomerate_sums_exposure`**
+    Input: already-computed `ProjectionResult`s for one conglomerate.
+    Expected: the same aggregation as `fgc_concentration_report`, consuming
+    `current_value` from each result without re-projecting.
+
+16. **`test_from_projections_mismatched_as_of_raises`**
+    Input: projections with two different `as_of` dates. Expected:
+    `ValueError` — the variant requires a single shared valuation date.
+
 ### Test-style guidance
 
 - **Tests look up conglomerates by name**, not by index. Use:
@@ -263,26 +311,22 @@ satisfying these tests is correct.
   resulting current_value, resulting peak_value. The test must remain
   understandable without re-deriving the math from scratch.
 
-## Prep work before this engine
+## Prerequisite (done first)
 
-One small refactor must happen first: **move `UNVERIFIED_CONGLOMERATE_PREFIX`
-from `src/justfixed/importers/xp_loader.py` to `src/justfixed/domain/issuer.py`.**
+`UNVERIFIED_CONGLOMERATE_PREFIX` was moved from
+`src/justfixed/importers/xp_loader.py` to `src/justfixed/domain/issuer.py`
+before this engine landed: the engine needs it to detect unverified
+conglomerates, and importing it from the importers layer would have broken
+the layer ordering (engine sits "below" importers in the dependency graph).
+It now lives in `domain/issuer.py` as a module-level export, consumed by both
+the loaders and this engine.
 
-The constant currently lives in importers. The FGC engine needs it to detect
-unverified conglomerates. Engine importing from importers would break the
-layer ordering (engine is "below" importers in the dependency graph).
+## How it was built
 
-Move the constant to `domain/issuer.py` as a module-level export. Update
-the existing import in `xp_loader.py`. This is its own commit ("Move
-UNVERIFIED_CONGLOMERATE_PREFIX to domain layer") with the existing 429
-tests still passing. The FGC work begins after.
-
-## Order of work
-
-1. Move `UNVERIFIED_CONGLOMERATE_PREFIX` to `domain/issuer.py` (~5 min, 1 commit).
-2. Write the test file `tests/engine/test_fgc.py` with all 11 tests. Tests fail
-   with `ImportError` because `engine/fgc.py` doesn't exist yet (~20 min, 1 commit).
-3. Implement `engine/fgc.py`. Tests turn green (~30-45 min, 1 commit).
-4. Update `docs/ARCHITECTURE.md` and `CLAUDE.md` to reflect FGC as built (~10 min, 1 commit).
-
-Total estimate: ~1.5-2 hours. Likely 1 session.
+1. Moved `UNVERIFIED_CONGLOMERATE_PREFIX` to `domain/issuer.py`.
+2. Wrote the test file `tests/engine/test_fgc.py` (TDD — the tests failed with
+   `ImportError` until the engine existed).
+3. Implemented `engine/fgc.py` until the tests turned green. The second entry
+   point, `fgc_concentration_report_from_projections`, and its tests were added
+   later when the UI needed cache-aware re-aggregation on a conglomerate rename.
+4. Updated `docs/ARCHITECTURE.md` and `CLAUDE.md` to reflect FGC as built.

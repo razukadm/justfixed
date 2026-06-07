@@ -1,8 +1,9 @@
 # Maturity Calendar Export — Design Spec
 
-This document specifies the maturity calendar export feature that will be
-built in `src/justfixed/exports/calendar.py`. It is the input to the
-implementation session; read it before writing any code.
+This document specifies the maturity calendar export feature implemented in
+`src/justfixed/exports/calendar.py`, and describes its as-built behavior. The
+test suite in `tests/exports/test_calendar.py` is the executable form of this
+spec.
 
 ## What it does
 
@@ -55,6 +56,20 @@ exports (CSV, PDF, Excel) live alongside it.
 ## Public API
 
 ```python
+def export_maturity_calendar(
+    investments: list[Investment],
+    *,
+    as_of: date,
+    assumed_cdi: Decimal,
+    assumed_ipca: Decimal | None = None,
+) -> bytes:
+    """Generate an iCalendar (.ics) file with one event per upcoming maturity."""
+```
+
+Returns the .ics file as `bytes`; the caller writes it to disk. Investments
+whose `maturity_date < as_of` are excluded (the boundary `maturity_date ==
+as_of` is included). `assumed_cdi` is required for post-fixed investments and
+`assumed_ipca` only when the portfolio holds IPCA-linked investments.
 
 Notes on choices:
 
@@ -78,7 +93,7 @@ Notes on choices:
 
 For each investment:
 
-1. Call `project(investment, as_of=as_of, assumed_cdi=assumed_cdi)`.
+1. Call `project(investment, as_of=as_of, assumed_cdi=assumed_cdi, assumed_ipca=assumed_ipca)`.
 2. Use `result.net_at_maturity` as the calendar event's payout amount.
 
 Why `net_at_maturity`:
@@ -185,29 +200,25 @@ doesn't satisfy these tests is wrong.
 
 ## Dependency
 
-Add `icalendar` to `pyproject.toml` `[project.dependencies]`. As of May
-2026, the current stable version is on PyPI. Pin loosely (e.g.,
-`icalendar>=5.0,<7`) to allow patch updates without major-version
-surprises.
+`icalendar` is in `pyproject.toml` `[project.dependencies]`, pinned
+`icalendar>=6.0,<7` — a loose floor that allows patch and minor updates
+without a major-version surprise.
 
-## Order of work
+## How it was built
 
-1. Create `src/justfixed/exports/__init__.py` (empty) and
-   `tests/exports/__init__.py` (empty) — the package skeletons.
-2. Add `icalendar` dependency to pyproject.toml. Run `pip install -e .[dev]`
-   to pick it up.
-3. Write `tests/exports/test_calendar.py` with all 8 tests.
-4. For test 7, write a scratch script to compute the exact
-   net_at_maturity for the chosen Treasury investment. Hardcode the
-   resulting display string in the test.
-5. Tests fail with ImportError because `exports/calendar.py` doesn't
-   exist yet — that's the expected state for this commit.
-6. Implement `src/justfixed/exports/calendar.py`.
-7. Tests turn green.
-8. Update `docs/ARCHITECTURE.md` and `CLAUDE.md` to reflect:
-   - New `exports/` layer in architectural shape
-   - `exports/calendar.py` subsection
-   - Status table updated
-   - "What's next" — remove "Maturity calendar / ICS export"
+1. Created `src/justfixed/exports/__init__.py` and `tests/exports/__init__.py`
+   (the package skeletons).
+2. Added the `icalendar` dependency to `pyproject.toml` and ran
+   `pip install -e .[dev]` to pick it up.
+3. Wrote `tests/exports/test_calendar.py` (TDD — tests failed with
+   `ImportError` until `exports/calendar.py` existed). For the Treasury
+   net-amount test, a scratch script computed the exact `net_at_maturity`
+   once and the resulting display string was hardcoded into the test.
+4. Implemented `src/justfixed/exports/calendar.py` until the tests turned
+   green.
+5. Updated `docs/ARCHITECTURE.md` and `CLAUDE.md` (new `exports/` layer, the
+   `exports/calendar.py` subsection, the status table, and removing
+   "Maturity calendar / ICS export" from "What's next").
 
-Estimated total: ~1.5 hours, one session.
+The custodian "Custodiante:" line in the DESCRIPTION was added later as B3,
+bringing the suite to its current eleven tests.

@@ -1,7 +1,8 @@
 # Building JustFixed
 
 This document covers manual and diagnostic builds. The everyday build tool is
-`build.py` (Pass 5, not yet written); this doc is for understanding the spec
+`build.py` (documented in the **Automated build with `build.py`** section
+below); the manual and diagnostic sections here are for understanding the spec
 directly and for debugging when the automated build fails.
 
 ---
@@ -56,9 +57,9 @@ Build time: ~60–90 seconds on this machine.
 `src/justfixed/_build_info.py` holds `VERSION`, `BUILD_DATE`, and `EXPIRY_DATE`
 as module-level constants. The app refuses to launch after `EXPIRY_DATE`.
 
-The committed values reflect the most recent build. To change them by hand:
-edit `_build_info.py`, rebuild. `build.py` (Pass 5) will do this
-programmatically via `--expiry` and `--version` arguments.
+The committed values reflect the most recent build. To change them by hand,
+edit `_build_info.py` and rebuild. `build.py` does this programmatically via
+its `--expiry` and `--version` arguments (see the Automated build section).
 
 ---
 
@@ -78,7 +79,7 @@ directories and rebuild from scratch:
     Remove-Item -Recurse -Force build, dist
     .\.venv\Scripts\pyinstaller justfixed.spec
 
-`build.py` (Pass 5) wipes `build\` automatically before every run.
+`build.py` wipes `build\` automatically before every run.
 
 **The four harmless warnings.** Every build emits these:
 

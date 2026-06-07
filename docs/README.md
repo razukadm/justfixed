@@ -2,7 +2,7 @@
 
 A desktop portfolio tracker for Brazilian fixed-income investments (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, Windows-targeted, single-user.
 
-**Status:** in development. Engine, persistence, importer, and export layers complete; UI not started. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for what's built and what isn't.
+**Status:** in development. Engine, persistence, the XP/BTG/BB importers, exports, and the PySide6 desktop UI are all functional. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for what's built and what isn't.
 
 ## What it does
 
@@ -43,7 +43,7 @@ alembic upgrade head
 pytest tests/ -v
 ```
 
-You should see ~450 tests passing in about 2 seconds. If anything fails, the architecture doc covers common environment issues.
+You should see 1349 tests passing in about 16 seconds. If anything fails, the architecture doc covers common environment issues.
 
 ## Using what's built
 
@@ -77,7 +77,7 @@ print(f"IR tax:            {result.tax_amount.to_display()}")
 print(f"Net at maturity:   {result.net_at_maturity.to_display()}")
 ```
 
-To import an XP statement into the database:
+To import an XP statement into the database (BTG and BB have analogous loaders; `load_statement` auto-detects the broker):
 
 ```python
 from pathlib import Path
@@ -131,9 +131,9 @@ src/justfixed/
   domain/         # Money, Rate, Issuer, Investment — pure value/entity types
   persistence/    # SQLAlchemy models, migrations, repositories
   engine/         # Calendar, accrual, tax, cash flows, projection, FGC analysis
-  importers/      # XP statement parser + DB loader
+  importers/      # XP / BTG / BB statement parsers + DB loaders
   exports/        # iCalendar (.ics) export
-tests/            # 450 tests; mirrors src/ structure
+tests/            # 1349 tests; mirrors src/ structure
 alembic/          # Database migrations
 docs/             # ARCHITECTURE.md and other design notes
 ```
