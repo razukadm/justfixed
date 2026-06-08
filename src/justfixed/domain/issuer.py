@@ -4,10 +4,11 @@ Issuers are entities (have identity), unlike Money and Rate (value objects).
 Two Issuers with the same name and CNPJ are still distinct if their UUIDs
 differ. This matters for data deduplication and audit trails.
 
-FGC coverage is determined by the issuer's kind:
-- COMMERCIAL_BANK and DEVELOPMENT_BANK: FGC-covered (R$250k per CPF per
-  conglomerate, R$1M per 4-year period overall).
-- TREASURY: not FGC-covered (sovereign credit only).
+FGC coverage is determined by the issuer's kind. Every deposit-taking kind is
+covered (R$250k per CPF per conglomerate, R$1M per 4-year period overall;
+FGCoop provides the equivalent for COOP). Only TREASURY (sovereign credit) and
+OTHERS are uncovered — see IssuerKind.is_deposit_guaranteed, which returns True
+for every kind except those two.
 
 The conglomerate field exists separately from name because the FGC limit
 is calculated per conglomerate, not per brand. Itau and Unibanco are

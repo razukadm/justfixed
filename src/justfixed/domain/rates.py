@@ -1,8 +1,9 @@
 """Rate types for Brazilian fixed-income products.
 
-Three rate kinds are supported:
+Four rate kinds are supported:
 - Prefixed: a fixed annual rate, e.g. 12% a.a.
 - PostFixedCDI: a percentage of the CDI rate, e.g. 112% do CDI.
+- PostFixedCDIPlusSpread: CDI plus a fixed annual spread, e.g. CDI + 2% a.a.
 - PostFixedIPCA: IPCA + a fixed annual spread, e.g. IPCA + 5.5% a.a.
 
 Design notes:
@@ -48,7 +49,8 @@ def _format_brazilian_percent(value: Decimal, places: int = 2) -> str:
 class Rate:
     """Abstract base for all rate types.
 
-    Subclasses are sealed: only Prefixed, PostFixedCDI, PostFixedIPCA exist.
+    Subclasses are sealed: only Prefixed, PostFixedCDI, PostFixedCDIPlusSpread,
+    and PostFixedIPCA exist.
     Do not instantiate this directly.
     """
 
