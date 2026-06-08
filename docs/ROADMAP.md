@@ -35,10 +35,15 @@ delete (B34, commit `a0e333e`), and projection detail view (B44,
 `InvestmentDetailPanel`: accrual breakdown, IR tax rate and amount, and
 net-at-maturity. C′ is complete.
 
-Deferred scope (from B27, 2026-05-19): display payment frequency for
-each investment (Mensal / Vencimento / Trimestral / Semestral / Anual).
-Investments tab column count is at its visual density limit; the detail
-view is the natural home for per-investment metadata like payment frequency.
+Coupon frequency display (deferred from B27, 2026-05-19) — SHIPPED. The
+`InvestmentDetailPanel` "Coupon" row shows the frequency via
+`CouponFrequency.to_display()` (Nenhum / Mensal / Semestral), editable for
+manual investments and read-only for imported ones; it landed with the
+detail-panel field rows (C′ era). The Investments tab stays at its column
+limit, so the value lives in the detail panel only. The note's five-way
+wishlist (Trimestral / Anual) was aspirational — the domain models three
+frequencies (NONE / MONTHLY / SEMI_ANNUAL); adding quarterly/annual is a
+domain change under the audit-when-it-crashes rule, not a display task.
 
 ### 2. Windows installer
 
