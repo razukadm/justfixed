@@ -234,7 +234,8 @@ or when a beta user from a different broker asks.
 (parser/mapper/loader) generalizes. XP (XLSX), BTG (XLSX), and BB
 (fixed-width .txt) are all complete. The third importer (BB) has
 shipped — the stated trigger for extracting shared utilities (B32, B33)
-has now fired. Those items are no longer parked.
+has now fired. Those items are no longer parked — both shipped 2026-05-29
+(commits `4ba3f5b`, `a958e68`).
 
 ### B9. DI-curve mark-to-market — SPLIT
 
@@ -1172,10 +1173,11 @@ The UI did not change. The third-importer trigger for B32 and B33 has fired.
 
 ### Open items (pointers)
 
-B32 (shared Brazilian-number parsing), B33 (unified issuer-kind classifier),
-and the GuaranteeFund milestone (Part 1 §4, "Model guarantee funds
-(FGC / FGCoop) as first-class entities") remain open. B32 and B33 are no
-longer parked — the third-importer trigger fired with BB.
+The GuaranteeFund milestone (Part 1 §4, "Model guarantee funds
+(FGC / FGCoop) as first-class entities") remains open. B32 (shared
+Brazilian-number parsing) and B33 (unified issuer-kind classifier) were
+un-parked here when the third-importer trigger fired with BB, and shipped
+2026-05-29 (commits `4ba3f5b` and `a958e68`).
 
 ---
 
@@ -1216,4 +1218,5 @@ rows. Pill shows `N active · M matured` when matured rows are visible.
 B41 (Calculator tab) and B44 (C′ projection detail view) both shipped
 2026-05-28; C′ is now complete. B41a (promote mock to real investment)
 and B41b (Solve-Tesouro hardening) are deferred items spun off from
-B41. B32, B33, and the GuaranteeFund milestone remain open.
+B41. B32 and B33 shipped 2026-05-29 (commits `4ba3f5b`, `a958e68`); the
+GuaranteeFund milestone remains open.
