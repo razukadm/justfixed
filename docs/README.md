@@ -2,7 +2,7 @@
 
 A desktop portfolio tracker for Brazilian fixed-income investments (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, Windows-targeted, single-user.
 
-**Status:** in development. Engine, persistence, the XP/BTG/BB importers, exports, and the PySide6 desktop UI are all functional. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for what's built and what isn't.
+**Status:** in development. Engine, persistence, the XP/BTG/BB importers, exports, and the PySide6 desktop UI are all functional. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for what's built and what isn't.
 
 ## What it does
 
@@ -140,7 +140,7 @@ docs/             # ARCHITECTURE.md and other design notes
 
 ## Contributing
 
-Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) first. Key conventions:
+Read [`ARCHITECTURE.md`](ARCHITECTURE.md) first. Key conventions:
 
 - All money is `Decimal`, never `float`
 - All rates are typed (one of four `Rate` subclasses)
