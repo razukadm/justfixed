@@ -8,7 +8,7 @@ the three windows share this code.
 from __future__ import annotations
 
 from PySide6.QtCharts import QChart, QChartView, QDateTimeAxis, QLineSeries, QScatterSeries, QValueAxis
-from PySide6.QtCore import QDate, QDateTime, QEvent, QMargins, QPointF, Qt, QTime, QTimer
+from PySide6.QtCore import QDate, QDateTime, QEvent, QMargins, QPointF, Qt, QTime, QTimer, QTimeZone
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPalette, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -166,7 +166,7 @@ class CurveInspectorWindow(QWidget):
             qdt = QDateTime(
                 QDate(settle.year, settle.month, settle.day),
                 QTime(0, 0, 0),
-                Qt.TimeSpec.UTC,
+                QTimeZone(QTimeZone.Initialization.UTC),
             )
             result.append(float(qdt.toMSecsSinceEpoch()))
         return result
