@@ -25,15 +25,15 @@ careful pace this project uses (2–4 hours each).
 ### 1. UI — PySide6
 
 **Status:** Milestones A′, A′-plus, B′, B′ companion, B24, B9a, B27,
-C′ partial, B34, and Curve Inspector complete. See `docs/UI_DESIGN.md`
+C′, B34, B41, B44, B22, and Curve Inspector complete. See `docs/UI_DESIGN.md`
 and `docs/ARCHITECTURE.md` for what shipped.
 
-**C′ — projection detail view (remaining scope).**
-Manual-entry form (C′ commits 1–6, commit `08a2ead`) and per-investment
-delete (B34, commit `a0e333e`) have shipped. The remaining C′ gap is the
-per-investment projection detail view: accrual breakdown, IR tax, and
-net-at-maturity shown in the detail panel. This is the main open feature
-in this area. See B44 below.
+**C′ — projection detail view — COMPLETE.**
+Manual-entry form (C′ commits 1–6, commit `08a2ead`), per-investment
+delete (B34, commit `a0e333e`), and projection detail view (B44,
+2026-05-28) have all shipped. B44 delivered the Projection Panel in
+`InvestmentDetailPanel`: accrual breakdown, IR tax rate and amount, and
+net-at-maturity. C′ is complete.
 
 Deferred scope (from B27, 2026-05-19): display payment frequency for
 each investment (Mensal / Vencimento / Trimestral / Semestral / Anual).
@@ -977,47 +977,32 @@ own milestone when picked up.
 **Source:** Session 2026-05-23 handoff document ("propagating the
 curve-inspector look to the rest of JustFixed").
 
-**What it is:** The Curve Inspector windows established a visual
-language (provenance callout, panel chrome, mono numerics, the green
-toolbar). The rest of the app predates it and carries scattered inline
-`setStyleSheet` calls, magic hex codes, and ad-hoc fonts. This entry
-consolidates styling into a single source of truth before more windows
-are built on the old pattern.
+**Infrastructure shipped (steps 1, 2, 5):** `theme.py` (frozen
+`COLORS`/`FONTS` dataclasses), `qss.py` (global stylesheet via
+`make_stylesheet()`, applied once on the `QApplication`), and the
+`widgets/` subpackage (`Panel`, `ProvenanceCallout`) are all on disk
+and in use. The 2026-05-30 visual pass (commits through `6af1063`)
+was built on this infrastructure: role/property QSS selectors,
+`SELECTION_BG` and other new tokens, the `investmentsTable` and
+`totalsStrip` objectName rules, tab and form-input chrome.
 
-**Scope (ordered — each step is a no-op-or-small visual diff except
-where noted):**
-1. `justfixed/ui/theme.py` — palette and type tokens as frozen
-   dataclasses (`Color`, `Font`). Replaces magic hex in `main.py`.
-2. `justfixed/ui/qss.py` — one global stylesheet applied once on the
-   `QApplication` before `MainWindow()`, replacing inline
-   `setStyleSheet` calls.
-3. Refactor `main.py` to consume tokens and `setProperty("role", ...)`
-   selectors instead of inline styles. Visual diff should be zero on
-   existing screens.
-4. Mono-numeric convention for all money/rate cells in the Investments
-   table, the detail panel, and the totals strip.
-5. Extract `ProvenanceCallout` and `Panel` widget classes into
-   `justfixed/ui/widgets.py`; a shared `justfixed/ui/format.py` for
-   the existing scattered locale/number formatters.
-6. Once the consolidation lands, remove the now-redundant dev-tab
-   curve summaries.
+**Remaining scope:**
+3. Full audit of `main.py` inline `setStyleSheet` calls — the visual
+   pass addressed the primary surfaces but scattered inline styles
+   remain in the detail panel, dev tab, and curve inspector.
+6. Remove now-redundant dev-tab curve summaries once the consolidation
+   is considered complete.
 
-**Order of operations:** land tokens + global QSS as a zero-visual-diff
-refactor first; verify existing screens look identical; then add the
-shared widgets; only then build new windows on top of them.
-
-**Why deferred:** Not blocking — the app works. But every new window
-built before this entry inherits the scattered-style pattern, so this
-should land before the next significant UI surface.
+**Scope reference (original):**
+1. ~~`theme.py` — tokens~~ SHIPPED
+2. ~~`qss.py` — global stylesheet~~ SHIPPED
+3. Refactor remaining inline `setStyleSheet` calls in `main.py`.
+4. ~~Mono-numeric convention~~ SHIPPED (visual pass, commit 2).
+5. ~~Extract `ProvenanceCallout` and `Panel`~~ SHIPPED (`widgets/`).
+6. Remove redundant dev-tab curve summaries.
 
 **Relationship to B38:** B38 is the open-ended UI design-review pass.
-B43 is narrower and mechanical — a styling-infrastructure refactor with
-a concrete, already-written plan, not a design evaluation. B43 can
-proceed independently of B38; doing B43 first gives B38 a clean
-substrate to review.
-
-**Trigger to revisit:** Before the next significant new UI window, or
-alongside B38.
+B43 infrastructure is complete; open items are cleanup/polish.
 
 ---
 
