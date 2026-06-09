@@ -298,6 +298,9 @@ class TestInvestmentsBoundary:
         self_mock.projection_cache = [fake_proj]
         self_mock.visible_investments.return_value = []
         self_mock.active_mock = _make_active_mock()
+        self_mock._fgc_status_by_id.side_effect = (
+            lambda: MainWindow._fgc_status_by_id(self_mock)
+        )
 
         fake_fgc_report = MagicMock()
         fake_fgc_report.conglomerates = []

@@ -95,6 +95,10 @@ from justfixed.engine.fgc import (
 )
 from justfixed.engine.projection import ProjectionResult, project
 from justfixed.exports.calendar import export_maturity_calendar
+from justfixed.exports.xlsx import (
+    export_conglomerates_xlsx,
+    export_investments_xlsx,
+)
 from justfixed.importers.detection import Broker, load_statement
 from justfixed.importers.xp_mapper import parse_brazilian_money
 from justfixed.importers.xp_loader import LoadResult
@@ -2694,6 +2698,12 @@ class MainWindow(QMainWindow):
         # Menu bar — File (Clear DB when JUSTFIXED_DEV set) + View
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("File")
+        self._export_investments_action = QAction("Export investments to Excel…", self)
+        self._export_investments_action.triggered.connect(self._on_export_investments_xlsx)
+        file_menu.addAction(self._export_investments_action)
+        self._export_conglomerates_action = QAction("Export conglomerates to Excel…", self)
+        self._export_conglomerates_action.triggered.connect(self._on_export_conglomerates_xlsx)
+        file_menu.addAction(self._export_conglomerates_action)
         if os.environ.get("JUSTFIXED_DEV"):
             clear_db_action = QAction("Clear Database…", self)
             clear_db_action.triggered.connect(self._on_clear_db_clicked)
@@ -2951,6 +2961,20 @@ class MainWindow(QMainWindow):
 
     # ── Table ─────────────────────────────────────────────────────────────────
 
+    def _fgc_status_by_id(self) -> dict[uuid.UUID, ExposureStatus]:
+        """Per-investment FGC status (the conglomerate's current_status),
+        keyed by investment id. Empty when no projection has run. Single
+        source shared by the investments table and the XLSX export so the
+        two cannot drift."""
+        if self.projection_cache is None:
+            return {}
+        report = fgc_concentration_report_from_projections(self.projection_cache)
+        return {
+            inv_exposure.investment_id: c.current_status
+            for c in report.conglomerates
+            for inv_exposure in c.investments
+        }
+
     def refresh_table(self, highlight_issuer_id: uuid.UUID | None = None) -> None:
         """Reload all investments from DB and repopulate the table."""
         _selected_id = self._capture_selected_id()
@@ -2961,15 +2985,9 @@ class MainWindow(QMainWindow):
         scroll_y = self._table.verticalScrollBar().value()
 
         projection_map: dict[uuid.UUID, ProjectionResult] = {}
-        status_by_investment: dict[uuid.UUID, ExposureStatus] = {}
         if self.projection_cache is not None:
-            fgc_report = fgc_concentration_report_from_projections(self.projection_cache)
             projection_map = {p.investment.id: p for p in self.projection_cache}
-            status_by_investment = {
-                inv_exposure.investment_id: c.current_status
-                for c in fgc_report.conglomerates
-                for inv_exposure in c.investments
-            }
+        status_by_investment = self._fgc_status_by_id()
 
         self._table.blockSignals(True)
         self._table.setRowCount(len(visible))
@@ -3189,6 +3207,8 @@ class MainWindow(QMainWindow):
         self._export_btn.setEnabled(
             any(inv.maturity_date >= today for inv in self._investments)
         )
+        self._export_investments_action.setEnabled(bool(self._investments))
+        self._export_conglomerates_action.setEnabled(self.projection_cache is not None)
 
     def _capture_selected_id(self) -> uuid.UUID | None:
         items = self._table.selectedItems()
@@ -3719,6 +3739,46 @@ class MainWindow(QMainWindow):
             )
             Path(path_str).write_bytes(ics)
             self.statusBar().showMessage(f"Calendar exported to {path_str}.", 8000)
+        except Exception as exc:
+            QMessageBox.critical(self, "Export failed", str(exc))
+
+    # ── XLSX exports ──────────────────────────────────────────────────────────
+
+    def _on_export_investments_xlsx(self) -> None:
+        path_str, _ = QFileDialog.getSaveFileName(
+            self, "Export investments",
+            f"justfixed-investments-{date.today().isoformat()}.xlsx",
+            "Excel files (*.xlsx)",
+        )
+        if not path_str:
+            return
+        try:
+            data = export_investments_xlsx(
+                self.visible_investments(),
+                projection_cache=self.projection_cache,
+                fgc_status_by_id=self._fgc_status_by_id(),
+                as_of=date.today(),
+            )
+            Path(path_str).write_bytes(data)
+            self.statusBar().showMessage(f"Investments exported to {path_str}.", 8000)
+        except Exception as exc:
+            QMessageBox.critical(self, "Export failed", str(exc))
+
+    def _on_export_conglomerates_xlsx(self) -> None:
+        path_str, _ = QFileDialog.getSaveFileName(
+            self, "Export conglomerates",
+            f"justfixed-conglomerates-{date.today().isoformat()}.xlsx",
+            "Excel files (*.xlsx)",
+        )
+        if not path_str:
+            return
+        try:
+            report = build_conglomerate_report_from_projections(
+                self.projection_cache, as_of=date.today()
+            )
+            data = export_conglomerates_xlsx(report)
+            Path(path_str).write_bytes(data)
+            self.statusBar().showMessage(f"Conglomerates exported to {path_str}.", 8000)
         except Exception as exc:
             QMessageBox.critical(self, "Export failed", str(exc))
 

@@ -141,6 +141,9 @@ class TestRefreshTableCacheAwareness:
         self_mock._repo = MagicMock()
         self_mock._table = MagicMock()
         self_mock._stack = MagicMock()
+        self_mock._fgc_status_by_id.side_effect = (
+            lambda: MainWindow._fgc_status_by_id(self_mock)
+        )
         return self_mock
 
     def test_refresh_table_with_cache_uses_fgc_report(self) -> None:
@@ -240,6 +243,9 @@ class TestRefreshTableHighlight:
         self_mock._table = MagicMock()
         self_mock._stack = MagicMock()
         self_mock.projection_cache = None
+        self_mock._fgc_status_by_id.side_effect = (
+            lambda: MainWindow._fgc_status_by_id(self_mock)
+        )
         return self_mock
 
     def test_refresh_table_highlights_matching_issuer_rows(self) -> None:
@@ -769,6 +775,9 @@ def _make_integration_self_mock(
     self_mock.refresh_table.side_effect = (
         lambda highlight_issuer_id=None:
         MainWindow.refresh_table(self_mock, highlight_issuer_id=highlight_issuer_id)
+    )
+    self_mock._fgc_status_by_id.side_effect = (
+        lambda: MainWindow._fgc_status_by_id(self_mock)
     )
 
     return self_mock
@@ -1599,6 +1608,9 @@ class TestRefreshConglomeratesMockSplice:
         self_mock.projection_cache = [fake_proj]
         self_mock.visible_investments.return_value = []
         self_mock.active_mock = MagicMock()  # mock IS set
+        self_mock._fgc_status_by_id.side_effect = (
+            lambda: MainWindow._fgc_status_by_id(self_mock)
+        )
 
         fake_fgc_report = MagicMock()
         fake_fgc_report.conglomerates = []
