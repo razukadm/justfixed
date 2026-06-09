@@ -138,7 +138,7 @@ def test_investments_header_row() -> None:
     )
     ws = _ws(data)
     expected = [
-        "Issuer", "Conglomerate", "Product", "Type", "Rate",
+        "Issuer", "Conglomerate", "Custodian", "Product", "Type", "Rate",
         "Principal", "Maturity", "Current", "Projected", "FGC",
     ]
     actual = [ws.cell(row=1, column=c).value for c in range(1, len(expected) + 1)]
@@ -159,23 +159,23 @@ def test_investments_one_row_values() -> None:
     ws = _ws(data)
 
     assert ws.cell(row=2, column=1).value == issuer.name
-    assert ws.cell(row=2, column=3).value == inv.product.value
+    assert ws.cell(row=2, column=4).value == inv.product.value
 
-    principal_cell = ws.cell(row=2, column=6)
+    principal_cell = ws.cell(row=2, column=7)
     assert isinstance(principal_cell.value, (int, float))
     assert principal_cell.value == float(inv.principal.amount)
 
-    assert _date_eq(ws.cell(row=2, column=7).value, inv.maturity_date)
+    assert _date_eq(ws.cell(row=2, column=8).value, inv.maturity_date)
 
-    current_cell = ws.cell(row=2, column=8)
+    current_cell = ws.cell(row=2, column=9)
     assert isinstance(current_cell.value, (int, float))
     assert current_cell.value == float(result.current_value.amount)
 
-    projected_cell = ws.cell(row=2, column=9)
+    projected_cell = ws.cell(row=2, column=10)
     assert isinstance(projected_cell.value, (int, float))
     assert projected_cell.value == float(result.gross_at_maturity.amount)
 
-    fgc_cell = ws.cell(row=2, column=10).value
+    fgc_cell = ws.cell(row=2, column=11).value
     assert fgc_cell in {"under", "approaching", "over", "not_fgc"}
 
 
@@ -187,9 +187,9 @@ def test_investments_uncached_row_blank_value_cells() -> None:
     )
     ws = _ws(data)
 
-    assert ws.cell(row=2, column=8).value is None    # Current blank
-    assert ws.cell(row=2, column=9).value is None    # Projected blank
-    assert ws.cell(row=2, column=10).value is None   # FGC blank (not in map)
+    assert ws.cell(row=2, column=9).value is None    # Current blank
+    assert ws.cell(row=2, column=10).value is None   # Projected blank
+    assert ws.cell(row=2, column=11).value is None   # FGC blank (not in map)
 
 
 def test_investments_treasury_fgc_cell() -> None:
@@ -211,7 +211,7 @@ def test_investments_treasury_fgc_cell() -> None:
     )
     ws = _ws(data)
 
-    assert ws.cell(row=2, column=10).value == "not_fgc"
+    assert ws.cell(row=2, column=11).value == "not_fgc"
 
 
 def test_investments_money_cells_are_numeric() -> None:
@@ -226,7 +226,7 @@ def test_investments_money_cells_are_numeric() -> None:
     )
     ws = _ws(data)
 
-    for col in (6, 8, 9):  # Principal, Current, Projected
+    for col in (7, 9, 10):  # Principal, Current, Projected
         val = ws.cell(row=2, column=col).value
         assert isinstance(val, (int, float)), (
             f"column {col} expected numeric, got {type(val)}"
@@ -279,10 +279,42 @@ def test_investments_fgc_reflects_conglomerate_not_individual() -> None:
     ws = _ws(data)
 
     for row in (2, 3, 4):
-        assert ws.cell(row=row, column=10).value == "over", (
+        assert ws.cell(row=row, column=11).value == "over", (
             f"row {row}: expected 'over' (conglomerate aggregate ≈ R$336k), "
-            f"got {ws.cell(row=row, column=10).value!r}"
+            f"got {ws.cell(row=row, column=11).value!r}"
         )
+
+
+def test_investments_custodian_column() -> None:
+    issuer = _bank("Banco Inter")
+    inv_with = Investment.create(
+        product=ProductType.CDB,
+        issuer=issuer,
+        principal=Money.from_reais("10000"),
+        rate=Prefixed.from_percent("12"),
+        purchase_date=PURCHASE,
+        maturity_date=date(2027, 6, 1),
+        custodian="XP Investimentos",
+    )
+    inv_without = Investment.create(
+        product=ProductType.CDB,
+        issuer=issuer,
+        principal=Money.from_reais("10000"),
+        rate=Prefixed.from_percent("12"),
+        purchase_date=PURCHASE,
+        maturity_date=date(2027, 9, 1),
+    )
+
+    data = export_investments_xlsx(
+        [inv_with, inv_without],
+        projection_cache=None,
+        fgc_status_by_id={},
+        as_of=AS_OF,
+    )
+    ws = _ws(data)
+
+    assert ws.cell(row=2, column=3).value == "XP Investimentos"
+    assert ws.cell(row=3, column=3).value is None
 
 
 # ── Conglomerates: empty / header ─────────────────────────────────────────────

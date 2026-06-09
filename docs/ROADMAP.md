@@ -583,8 +583,8 @@ commit `745bc4e`): two File-menu actions ("Export investments to Excel…",
 - Format: XLSX. Money cells are written as numeric reais (not the formatted
   display string) so the file is analysable in Excel/LibreOffice.
 - Investments export: one row per `visible_investments()` (filter dropdowns +
-  Hide matured already applied), columns Issuer / Conglomerate / Product /
-  Type / Rate / Principal / Maturity / Current / Projected / FGC. Current and
+  Hide matured already applied), columns Issuer / Conglomerate / Custodian / Product /
+  Type / Rate / Principal / Maturity / Current / Projected / FGC. (Custodian is export-only — it is not shown on the Investments table, which is at its column-density limit; the export is deliberately a superset. Unset custodian exports as a blank cell.) Current and
   Projected are blank when no projection has run. The FGC column reports the
   per-conglomerate `ExposureStatus` from the same `_fgc_status_by_id()` map
   the table uses (Treasury → "not_fgc"), so the file cannot disagree with the

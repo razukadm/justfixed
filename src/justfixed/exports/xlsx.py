@@ -22,7 +22,7 @@ from justfixed.engine.projection import ProjectionResult
 
 
 _INVESTMENTS_HEADER = [
-    "Issuer", "Conglomerate", "Product", "Type", "Rate",
+    "Issuer", "Conglomerate", "Custodian", "Product", "Type", "Rate",
     "Principal", "Maturity", "Current", "Projected", "FGC",
 ]
 
@@ -88,6 +88,7 @@ def export_investments_xlsx(
         ws.append([
             inv.issuer.name,
             inv.issuer.conglomerate,
+            inv.custodian,
             inv.product.value,
             _rate_type(inv),
             inv.rate.to_display(),
