@@ -101,7 +101,7 @@ from justfixed.exports.xlsx import (
 )
 from justfixed.importers.detection import Broker, load_statement
 from justfixed.importers.xp_mapper import parse_brazilian_money
-from justfixed.importers.xp_loader import LoadResult
+from justfixed.importers.loader_types import LoadResult
 from justfixed.persistence.database import (
     Base,
     default_database_url,
