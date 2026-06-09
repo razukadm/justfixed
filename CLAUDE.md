@@ -8,8 +8,8 @@ this file is the working-style and conventions summary.
 
 JustFixed is a Windows desktop portfolio tracker for Brazilian fixed-income investments
 (CDB, LCI, LCA, LCD, LC, Tesouro Direto). Offline-first, single-user. Engine,
-persistence, exports, and the XP, BTG, and BB importers are complete; the UI (PySide6)
-covers milestones A′, A′-plus, B′, B′ companion, B24, B9a, B27, C′, B34, B41, B44, B22, and the Curve Inspector —
+persistence, exports (ICS calendar + XLSX), and the XP, BTG, and BB importers are complete; the UI (PySide6)
+covers milestones A′, A′-plus, B′, B′ companion, B24, B9a, B27, C′, B34, B41, B44, B22, B28, and the Curve Inspector —
 all shipped. The README covers the user-facing intent; ARCHITECTURE.md covers the
 internal shape.
 
@@ -18,12 +18,12 @@ internal shape.
 Strict layer ordering, no upward dependencies:
 
 - `domain/` — pure value/entity types (Money, Rate, Issuer, Investment). No I/O.
-- `persistence/` — SQLAlchemy models, mappers, repositories, alembic migrations.
+- `persistence/` — SQLAlchemy models, mappers, repositories, alembic migrations, plus a `user_version` runtime migration runner (B42 added the custodian column + provenance backfill).
 - `engine/` — calendar, accrual, tax, projection, fgc. Pure functions over domain types.
 - `importers/` — three layers: parser (file → strings), mapper (strings → typed),
-  loader (typed → persisted). Three complete pipelines: XP (XLSX), BTG (XLSX), BB (fixed-width .txt).
-- `exports/` — calendar.py: iCalendar (.ics) export. Depends on domain + engine, not persistence.
-- `ui/` — PySide6 single-window app. Milestones A′, A′-plus, B′, B′ companion, B24, B9a, B27, C′, B34, B41, B44, B22, and Curve Inspector shipped (read-only viewer, conglomerate curation, Conglomerates accordion tab, dev view with curve/seed status, Curve Inspector, manual entry, per-investment delete, projection detail view). See docs/UI_DESIGN.md.
+  loader (typed → persisted). Three complete pipelines: XP (XLSX), BTG (XLSX), BB (fixed-width .txt). Each loader sets custodian from the detected broker (B42).
+- `exports/` — `calendar.py` (iCalendar .ics, with B3 custodian line in the event description) and `xlsx.py` (B28: investments + conglomerates XLSX export). Depend on domain + engine, not persistence.
+- `ui/` — PySide6 single-window app. Milestones A′, A′-plus, B′, B′ companion, B24, B9a, B27, C′, B34, B41, B44, B22, B28, and Curve Inspector shipped (read-only viewer, conglomerate curation, Conglomerates accordion tab, dev view with curve/seed status, Curve Inspector, manual entry, per-investment delete, projection detail view, Excel export). See docs/UI_DESIGN.md.
 
 Each layer's tests live in `tests/<layer>/` mirroring `src/justfixed/<layer>/`.
 
