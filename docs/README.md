@@ -43,7 +43,7 @@ alembic upgrade head
 pytest tests/ -v
 ```
 
-You should see 1349 tests passing in about 16 seconds. If anything fails, the architecture doc covers common environment issues.
+You should see 1364 tests passing in about 16 seconds. If anything fails, the architecture doc covers common environment issues.
 
 ## Using what's built
 
@@ -133,7 +133,7 @@ src/justfixed/
   engine/         # Calendar, accrual, tax, cash flows, projection, FGC analysis
   importers/      # XP / BTG / BB statement parsers + DB loaders
   exports/        # iCalendar (.ics) export
-tests/            # 1349 tests; mirrors src/ structure
+tests/            # 1364 tests; mirrors src/ structure
 alembic/          # Database migrations
 docs/             # ARCHITECTURE.md and other design notes
 ```
