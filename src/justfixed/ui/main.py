@@ -726,15 +726,17 @@ def _parse_rate_percent(text: str) -> Decimal:
     period or unparseable input.
     """
     s = text.strip().rstrip("%").strip()
+    # B37(i18n): these two messages are pt-BR while surrounding dialog text is
+    # English; resolve the language mix in the i18n pass, not here.
     if "." in s:
         raise ValueError(
-            f"Use vírgula como separador decimal (ex: 112,50), não ponto: {text!r}"
+            "Use vírgula como separador decimal, não ponto (ex: 112,50)."
         )
     s = s.replace(",", ".")
     try:
         return Decimal(s)
     except InvalidOperation:
-        raise ValueError(f"Valor inválido: {text!r}")
+        raise ValueError("Valor de taxa inválido — verifique o formato (ex: 112,50).")
 
 
 _RATE_TYPE_ENTRIES = [
@@ -2454,7 +2456,7 @@ class MainWindow(QMainWindow):
             self._session_factory = make_session_factory(engine)
             self._repo = InvestmentRepository(self._session_factory)
         except Exception as exc:
-            QMessageBox.critical(None, "Database error", str(exc))
+            QMessageBox.critical(None, "Database error", f"JustFixed could not open its database and will now close.\n\n{exc}")
             sys.exit(1)
 
         # Seed DB on first run (empty DB only; no-op on every subsequent launch).
@@ -3740,7 +3742,7 @@ class MainWindow(QMainWindow):
             Path(path_str).write_bytes(ics)
             self.statusBar().showMessage(f"Calendar exported to {path_str}.", 8000)
         except Exception as exc:
-            QMessageBox.critical(self, "Export failed", str(exc))
+            QMessageBox.critical(self, "Calendar export failed", str(exc))
 
     # ── XLSX exports ──────────────────────────────────────────────────────────
 
@@ -3762,7 +3764,7 @@ class MainWindow(QMainWindow):
             Path(path_str).write_bytes(data)
             self.statusBar().showMessage(f"Investments exported to {path_str}.", 8000)
         except Exception as exc:
-            QMessageBox.critical(self, "Export failed", str(exc))
+            QMessageBox.critical(self, "Excel export failed", str(exc))
 
     def _on_export_conglomerates_xlsx(self) -> None:
         path_str, _ = QFileDialog.getSaveFileName(
@@ -3780,7 +3782,7 @@ class MainWindow(QMainWindow):
             Path(path_str).write_bytes(data)
             self.statusBar().showMessage(f"Conglomerates exported to {path_str}.", 8000)
         except Exception as exc:
-            QMessageBox.critical(self, "Export failed", str(exc))
+            QMessageBox.critical(self, "Excel export failed", str(exc))
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
