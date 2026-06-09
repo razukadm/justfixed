@@ -568,33 +568,45 @@ complexity. Defer until real user feedback confirms this is a pain point.
 
 **Shipped:** 2026-05-19, commit 32a433d ("B27: Type and Rate columns on Investments tab"). Two columns added to the Investments tab between Product and Principal: "Type" (Pré / Pós / Pós+ / IPCA+, via `_format_type`) and "Taxa" (configured rate, with effective annualized rate in parentheses for post-fixed types via `_format_rate`; Prefixed shows the single rate without a redundant parenthetical). Effective rate uses the CDI curve when available, `_ASSUMED_CDI`/`_ASSUMED_IPCA` fallback otherwise. Changes in `src/justfixed/ui/main.py`; tests in `tests/ui/test_main_window.py`.
 
-### B28. XLSX export for Investments and Conglomerates tabs
+### B28. XLSX export for Investments and Conglomerates tabs — SHIPPED
+
+**Shipped:** 2026-06 in two slices. Slice 1 (pure module + tests): the
+`exports/xlsx.py` module with `export_investments_xlsx` and
+`export_conglomerates_xlsx`, both pure functions returning bytes, mirroring
+`exports/calendar.py` (depend on domain + engine only). Slice 2 (UI wiring,
+commit `745bc4e`): two File-menu actions ("Export investments to Excel…",
+"Export conglomerates to Excel…") via the QFileDialog save flow.
 
 **Source:** User request 2026-05-17.
 
-**What it is:** User-facing "Export to XLSX" action on each tab. The
-exported file contains the same data the user sees, in a format
-suitable for sharing, accountant handoff, or external analysis in
-Excel/LibreOffice.
+**As built:**
+- Format: XLSX. Money cells are written as numeric reais (not the formatted
+  display string) so the file is analysable in Excel/LibreOffice.
+- Investments export: one row per `visible_investments()` (filter dropdowns +
+  Hide matured already applied), columns Issuer / Conglomerate / Product /
+  Type / Rate / Principal / Maturity / Current / Projected / FGC. Current and
+  Projected are blank when no projection has run. The FGC column reports the
+  per-conglomerate `ExposureStatus` from the same `_fgc_status_by_id()` map
+  the table uses (Treasury → "not_fgc"), so the file cannot disagree with the
+  on-screen badge — a regression test pins this (three same-conglomerate
+  R$100k holdings export "over" on every row, not "under").
+- Conglomerates export: one summary row per `ConglomerateSection` (detail
+  rows are not exported), rebuilt from `projection_cache` the same way the
+  accordion is.
+- Placement: File menu (not per-tab buttons — the Investments tab is at its
+  column-density limit and the File menu already holds tab-spanning actions).
+- Enablement: investments export whenever investments exist; conglomerates
+  export only once a projection has run.
+- Filename: `justfixed-investments-{YYYY-MM-DD}.xlsx` /
+  `justfixed-conglomerates-{YYYY-MM-DD}.xlsx`; user can override in the save
+  dialog.
 
-**Pinned decisions:**
-- Format: XLSX (modern Excel; not legacy XLS).
-- Investments tab: all visible rows (respecting filter dropdowns and
-  Hide matured), all columns currently shown.
-- Conglomerates tab: summary rows only. Detail rows for expanded
-  sections are NOT included — the Investments tab itself is the
-  per-investment export.
-- Trigger: button next to the existing "Project as of today" button,
-  or via a tab-level menu action. Final placement decided at
-  implementation time.
-- Filename: defaults to `justfixed-{tab}-{YYYY-MM-DD}.xlsx`. User can
-  override in the save dialog.
-
-**Effort:** ~2-3 calibrated sessions. New action handler per tab,
-`openpyxl` for XLSX generation (already a dependency from the seed
-files / installer work), tests for column-mapping correctness.
-
-**Trigger to revisit:** Any time. Independent of B9a's progress.
+**Known follow-up (not yet done):** the Investments export's Type and Rate
+columns emit English labels ("Prefixed", "CDI%") and the rate's raw
+`to_display()`, not the table's pt-BR ("Pré", "Pós"). Byte-faithful Type/Rate
+needs `_format_type`/`_format_rate` extracted out of `ui/main.py` into a
+shared non-UI location first (an exports→ui import is forbidden by the layer
+rules). Pairs naturally with B37 (i18n).
 
 ### B29. Dev view: XLSX curve export
 

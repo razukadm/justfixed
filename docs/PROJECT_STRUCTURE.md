@@ -90,6 +90,7 @@ SQLAlchemy models, mappers, repositories, and Alembic migration runner.
 | File | Purpose | Public symbols |
 |------|---------|----------------|
 | `calendar.py` | Generate iCalendar (.ics) for maturity dates | `export_maturity_calendar` |
+| `xlsx.py` | Generate XLSX workbooks for the Investments and Conglomerates tabs | `export_investments_xlsx`, `export_conglomerates_xlsx` |
 
 ### `ui/`
 PySide6 single-window application.

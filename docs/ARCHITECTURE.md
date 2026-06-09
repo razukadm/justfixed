@@ -15,11 +15,11 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Engine | Complete | 194 |
 | Importers | Complete — XP, BTG, and BB pipelines all three layers done | 274 |
 | UI (PySide6) | A′, A′-plus, B′, B′ companion, B24, B9a, B27, C′, B34, B41, B44, B22, and Curve Inspector complete | 489 |
-| Exports (calendar / ICS) | Complete | 11 |
+| Exports (calendar / ICS, XLSX) | Complete | 25 |
 | Tools (admin scripts) | Complete | 71 |
 | Build info | Complete | 3 |
 
-1349 tests pass in ~16 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+1363 tests pass in ~16 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -393,6 +393,19 @@ Design choices:
   the user's calendar. Re-importing only updates/adds; calendar apps don't
   delete absent UIDs.
 
+### `exports/xlsx.py`
+
+Two pure functions producing `.xlsx` bytes for the user to save:
+`export_investments_xlsx(investments, *, projection_cache, fgc_status_by_id,
+as_of)` and `export_conglomerates_xlsx(report)`. Like `calendar.py`, they
+depend only on domain + engine and take already-loaded data — the caller
+writes the bytes to disk. Money cells are numeric reais (analysable in a
+spreadsheet), not formatted display strings. The investments export's FGC
+column reports the per-conglomerate `ExposureStatus` supplied by the caller
+(the UI passes the same status map that drives the table badges), so the file
+and the on-screen badge share one source and cannot diverge. (B28, shipped
+2026-06.)
+
 ---
 
 ## UI layer (`src/justfixed/ui/`)
@@ -419,7 +432,7 @@ See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′
 
 ## Test discipline
 
-**1349 tests, ~16 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**1363 tests, ~16 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
