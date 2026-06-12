@@ -295,8 +295,23 @@ based on current market rates." Display somewhere in the UI.
 At that point Q3 gets answered in context, and B9b can be designed as
 "add MtM to the detail view C′ built."
 
-**Architectural note:** Engine support is already complete (B9a). B9b
-is UI work only.
+**Architectural note:** B9a built the *curve* engine, but the
+mark-to-market *computation* does not exist — `projection.py`,
+`cashflow.py`, and `tax.py` all flag MtM as not-implemented (current_value
+is accrual-only). So B9b is NOT UI-only as earlier stated; it needs a new
+engine discounting function first.
+
+**Verdict (2026-06-09, investigation):** Deferred, low value-per-hour for
+this portfolio. Three findings: (1) the "replace current_value with MtM"
+option is RULED OUT on correctness grounds — FGC concentration (`fgc.py`)
+and back-solve (`back_solve.py`) both consume `current_value`; MtM-as-FGC-input
+would understate exposure, since FGC pays out on contracted balance, not a
+hypothetical resale price. (2) For CDI-linked instruments MtM ≈ accrual
+(no rate divergence to capture); it only diverges for prefixed / IPCA+ /
+Tesouro. (3) Most holdings (CDB/LCI/LCA) have no secondary market, so the
+"sell today" price is informational only. If ever built, the only safe shape
+is an additive display-only `market_value` field, leaving `current_value`
+(and its FGC/back-solve consumers) untouched. Pivoted to B10 instead.
 
 ### B10. Multi-source current value (broker / user-edited / computed)
 
@@ -318,7 +333,7 @@ is UI work only.
 - The `Investment` domain model has no field for a broker-reported or user-edited current value; the engine computes current/projected values independently at projection time.
 - Touch points to carry a non-computed current value through: a new field in `ParsedXPRow` / `ParsedBTGRow` (layer 2), a field in `Investment` (domain), a persistence-schema migration, and UI display logic. Layer-1 structs already hold the data.
 
-**Dependencies / sequencing:** Overlaps B9b (mark-to-market display), which the roadmap defers until C′ (per-investment detail view) ships — the detail view is the natural home for a multi-source value display with provenance. B10 should be staged after C′. The historical-computed source (a Banco Central / IBGE fetcher with disk cache) should mirror the existing curve fetcher from B9a.
+**Dependencies / sequencing:** C′ (per-investment detail view) has shipped, so the staging blocker is cleared — the detail view is the natural home for a multi-source value display with provenance. B9b (MtM display) was investigated and deferred (see its verdict above), so B10 no longer overlaps an active item. The historical-computed source (a Banco Central / IBGE fetcher with disk cache) should mirror the existing curve fetcher from B9a; those endpoints (Banco Central SGS, IBGE SIDRA) must be verified live against a primary source before that source is coded.
 
 **Until B10 lands:** `_ASSUMED_CDI` and `_ASSUMED_IPCA` in `src/justfixed/ui/main.py` remain hardcoded module-level constants. They drift between Copom decisions (CDI; ~45-day cycle) and IBGE releases (IPCA; monthly). Verify both at any rebuild and update if material. Comment headers in `ui/main.py` carry source attribution (Banco Central for Selic→CDI, IBGE for IPCA acumulado 12 meses).
 
@@ -370,6 +385,12 @@ CNPJ, not name. Four options were discussed:
 - (d) Accept it stays empty; FGC uses normalized name as proxy
 
 None unblocked yet. (a) is probably easiest to bootstrap.
+
+**Parked (2026-06-09):** Specifically blocked on *data availability* — there
+is no CNPJ data source on hand to populate the curated table (a), and the
+registry-API route (c) is a larger lift. Until a CNPJ source exists, the app
+stays on (d): FGC uses normalized conglomerate name as proxy. This is the
+real blocker, narrower than the original "before high-stakes FGC use" trigger.
 
 **Trigger to revisit:** Before FGC concentration is used for
 high-stakes decisions (e.g., before any beta release where a user
@@ -781,6 +802,16 @@ This is accepted behaviour, not a planned fix.
 **Why deferred:** Quality/polish pass, not a feature. Best done as one focused sweep rather than ad hoc.
 
 **Trigger to revisit:** Before beta release to non-developer users, where unclear errors become real support burden. Pairs naturally with B37 (i18n) — reviewing message text and translating it touch the same strings.
+
+**As-built (2026-06-09, commit 26d3410):** The user-facing UI tier shipped —
+dialog titles/bodies and status text in `ui/main.py` (split the shared
+"Export failed" title by cause; stripped `{text!r}` repr leak from the two
+rate-input validators; made the startup database-error dialog actionable).
+Deliberately OUT of scope: the ~87 exception messages in
+domain/engine/importers/persistence, which are test-pinned behaviour
+contracts (each reword would need lockstep `match=` test edits) and are
+developer-facing with low user value. B36's high-value tier is therefore
+done; the exception-text tier is deferred, not abandoned, and pairs with B37.
 
 ### B37. Translate the app to Brazilian Portuguese (i18n)
 
