@@ -180,6 +180,10 @@ class ParsedBTGRow:
     `coupon_frequency` is always CouponFrequency.NONE. BTG rows carry no
     coupon hint in observed data; the first coupon-paying BTG instrument
     forces a revisit of this layer.
+
+    `broker_reported_value` is parsed from `saldo_bruto_text` (BTG "saldo
+    bruto"). A blank or unparseable cell yields None; the row still imports
+    successfully.
     """
 
     product:          ProductType
@@ -191,6 +195,7 @@ class ParsedBTGRow:
     maturity_date:    date          # from vencimento_date_text
     coupon_frequency: CouponFrequency  # always NONE for now
     description:      str           # constructed, not sourced from a field
+    broker_reported_value: Money | None = None
 
 
 def parse_row(row: BTGRow) -> ParsedBTGRow:
@@ -222,6 +227,15 @@ def parse_row(row: BTGRow) -> ParsedBTGRow:
             f"Could not parse BTG row {row.issuer_name!r} / {row.ativo!r}: {e}"
         ) from e
 
+    # Broker value is supplementary — a blank or malformed saldo_bruto_text cell
+    # must not abort the row. Parse independently, swallow failure to None.
+    try:
+        broker_value: Money | None = Money(
+            amount=parse_btg_decimal(row.saldo_bruto_text), currency="BRL"
+        )
+    except ValueError:
+        broker_value = None
+
     return ParsedBTGRow(
         product=product,
         issuer_name=issuer_name,
@@ -232,4 +246,5 @@ def parse_row(row: BTGRow) -> ParsedBTGRow:
         maturity_date=maturity_date,
         coupon_frequency=coupon_frequency,
         description=description,
+        broker_reported_value=broker_value,
     )

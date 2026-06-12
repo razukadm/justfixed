@@ -105,6 +105,8 @@ class InvestmentRow(Base):
     description: Mapped[str] = mapped_column(String, nullable=False, default="")
     source: Mapped[str] = mapped_column(String, nullable=False, default="xp_import")
     custodian: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
+    broker_value_amount:   Mapped[Decimal | None] = mapped_column(Numeric,        nullable=True, default=None)
+    broker_value_currency: Mapped[str | None]     = mapped_column(String,         nullable=True, default=None)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utc_now

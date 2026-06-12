@@ -2005,3 +2005,53 @@ class TestInvestmentsTableAlignment:
             assert fgc_item.foreground().color() == QColor(COLORS.FGC_UNDER)
         finally:
             win.close()
+
+
+# ---------------------------------------------------------------------------
+# Detail panel: broker_reported_value provenance (B10 Slice 1)
+# ---------------------------------------------------------------------------
+
+
+class TestRefreshProjection:
+    """refresh_projection shows broker value with '(broker)' when present,
+    computed value with '(estimated)' otherwise."""
+
+    def _make_self_mock(self, broker_reported_value=None):
+        self_mock = MagicMock()
+
+        inv = MagicMock()
+        inv.broker_reported_value = broker_reported_value
+        self_mock._current_inv = inv
+
+        proj = MagicMock()
+        proj.investment.id = inv.id
+        proj.current_value.to_display.return_value = "R$ 10.200,00"
+        proj.gross_at_maturity.to_display.return_value = "R$ 11.000,00"
+        proj.net_at_maturity.to_display.return_value = "R$ 10.800,00"
+        proj.tax_breakdown.tax_rate = Decimal("0.15")
+        proj.tax_breakdown.gain.to_display.return_value = "R$ 800,00"
+        proj.tax_breakdown.tax_amount.to_display.return_value = "R$ 200,00"
+        proj.as_of = date(2026, 6, 11)
+
+        self_mock._main_window.projection_cache = [proj]
+        return self_mock
+
+    def test_shows_broker_value_with_provenance_when_present(self) -> None:
+        broker_money = Money.from_reais("10500")
+        self_mock = self._make_self_mock(broker_reported_value=broker_money)
+
+        InvestmentDetailPanel.refresh_projection(self_mock)
+
+        text = self_mock._proj_current_lbl.setText.call_args[0][0]
+        assert broker_money.to_display() in text
+        assert "(broker)" in text
+
+    def test_shows_computed_value_unmarked_when_no_broker_value(self) -> None:
+        self_mock = self._make_self_mock(broker_reported_value=None)
+
+        InvestmentDetailPanel.refresh_projection(self_mock)
+
+        text = self_mock._proj_current_lbl.setText.call_args[0][0]
+        assert "R$ 10.200,00" in text
+        assert "(estimated)" not in text
+        assert "(broker)" not in text

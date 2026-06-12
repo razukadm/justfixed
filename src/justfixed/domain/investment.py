@@ -67,6 +67,7 @@ class Investment:
     description: str = ""
     source: InvestmentSource = InvestmentSource.XP_IMPORT
     custodian: str | None = None
+    broker_reported_value: Money | None = None
     id: uuid.UUID = field(default_factory=uuid.uuid4)
 
     def __post_init__(self) -> None:
@@ -151,6 +152,7 @@ class Investment:
         description: str = "",
         source: InvestmentSource = InvestmentSource.XP_IMPORT,
         custodian: str | None = None,
+        broker_reported_value: Money | None = None,
     ) -> Self:
         """Create a new Investment with an auto-generated UUID.
 
@@ -169,6 +171,7 @@ class Investment:
             description=description,
             source=source,
             custodian=custodian,
+            broker_reported_value=broker_reported_value,
         )
 
     @property

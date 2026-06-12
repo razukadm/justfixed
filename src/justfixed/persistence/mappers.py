@@ -141,6 +141,8 @@ def investment_to_row(inv: Investment) -> InvestmentRow:
         description=inv.description,
         source=inv.source.value,
         custodian=inv.custodian,
+        broker_value_amount=inv.broker_reported_value.amount   if inv.broker_reported_value else None,
+        broker_value_currency=inv.broker_reported_value.currency if inv.broker_reported_value else None,
     )
 
 
@@ -169,4 +171,8 @@ def investment_from_row(row: InvestmentRow, issuer: Issuer) -> Investment:
         description=row.description,
         source=InvestmentSource(row.source),
         custodian=row.custodian,
+        broker_reported_value=(
+            Money(row.broker_value_amount, row.broker_value_currency)
+            if row.broker_value_amount is not None else None
+        ),
     )

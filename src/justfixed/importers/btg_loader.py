@@ -106,6 +106,7 @@ def load_btg_statement(
             description=parsed.description,
             source=InvestmentSource.BTG_IMPORT,
             custodian=custodian_for_source(InvestmentSource.BTG_IMPORT),
+            broker_reported_value=parsed.broker_reported_value,
         )
         investment_repo.save(investment)
         inserted += 1

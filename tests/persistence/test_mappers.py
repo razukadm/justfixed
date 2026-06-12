@@ -348,3 +348,36 @@ class TestInvestmentFromRow:
         assert row.custodian is None
         restored = investment_from_row(row, issuer)
         assert restored.custodian is None
+
+    def test_broker_reported_value_set_round_trips(self) -> None:
+        issuer = commercial_bank()
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=issuer,
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            broker_reported_value=Money.from_reais("10500"),
+        )
+        row = investment_to_row(inv)
+        assert row.broker_value_amount == Decimal("10500")
+        assert row.broker_value_currency == "BRL"
+        restored = investment_from_row(row, issuer)
+        assert restored.broker_reported_value == Money.from_reais("10500")
+
+    def test_broker_reported_value_none_round_trips(self) -> None:
+        issuer = commercial_bank()
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=issuer,
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+        )
+        row = investment_to_row(inv)
+        assert row.broker_value_amount is None
+        assert row.broker_value_currency is None
+        restored = investment_from_row(row, issuer)
+        assert restored.broker_reported_value is None

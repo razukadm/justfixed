@@ -92,7 +92,7 @@ class TestFreshDb:
 
         run_migrations(engine)
 
-        assert _user_version(engine) == 1
+        assert _user_version(engine) == 2
         assert "custodian" in _col_names(engine, "investments")
 
     def test_no_rows_no_error(self) -> None:
@@ -126,7 +126,7 @@ class TestLegacyDb:
     def test_user_version_set_to_1(self) -> None:
         engine, *_ = self._make_legacy_engine_with_rows()
         run_migrations(engine)
-        assert _user_version(engine) == 1
+        assert _user_version(engine) == 2
 
     def test_xp_import_backfilled(self) -> None:
         engine, xp_id, *_ = self._make_legacy_engine_with_rows()
@@ -179,11 +179,11 @@ class TestIdempotency:
         engine = _make_fresh_engine()
         Base.metadata.create_all(engine)
         run_migrations(engine)
-        assert _user_version(engine) == 1
+        assert _user_version(engine) == 2
 
         # Second call must not raise and version stays 1.
         run_migrations(engine)
-        assert _user_version(engine) == 1
+        assert _user_version(engine) == 2
 
     def test_values_unchanged_on_second_call(self) -> None:
         engine = _make_fresh_engine()
@@ -223,10 +223,78 @@ class TestCrashRecovery:
 
         run_migrations(engine)  # must not raise
 
-        assert _user_version(engine) == 1
+        assert _user_version(engine) == 2
         with engine.connect() as conn:
             val = conn.execute(
                 text("SELECT custodian FROM investments WHERE id = :id"),
                 {"id": row_id},
             ).scalar()
         assert val == "XP"
+
+
+# ---------------------------------------------------------------------------
+# Test: migration 1 → 2 (broker_value columns, B10 Slice 1)
+# ---------------------------------------------------------------------------
+
+# Schema after migration 0→1 (has custodian, no broker_value columns).
+_V1_INVESTMENTS_DDL = """
+CREATE TABLE investments (
+    id TEXT PRIMARY KEY,
+    product TEXT NOT NULL,
+    issuer_id TEXT NOT NULL,
+    principal_amount NUMERIC NOT NULL,
+    principal_currency TEXT NOT NULL DEFAULT 'BRL',
+    rate_kind TEXT NOT NULL,
+    rate_value NUMERIC NOT NULL,
+    purchase_date TEXT NOT NULL,
+    maturity_date TEXT NOT NULL,
+    issue_date TEXT NOT NULL,
+    coupon_frequency TEXT NOT NULL DEFAULT 'none',
+    description TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'xp_import',
+    custodian VARCHAR,
+    created_at TEXT,
+    updated_at TEXT
+)
+"""
+
+
+def _make_v1_engine():
+    """Engine with an investments table at version-1 schema (no broker_value cols)."""
+    engine = _make_fresh_engine()
+    with engine.begin() as conn:
+        conn.execute(text(_V1_INVESTMENTS_DDL))
+        _insert_row(conn, "xp_import")
+        conn.execute(text("PRAGMA user_version = 1"))
+    return engine
+
+
+class TestMigration1To2:
+    def test_broker_value_columns_added(self) -> None:
+        engine = _make_v1_engine()
+        assert "broker_value_amount" not in _col_names(engine, "investments")
+        assert "broker_value_currency" not in _col_names(engine, "investments")
+        run_migrations(engine)
+        assert "broker_value_amount" in _col_names(engine, "investments")
+        assert "broker_value_currency" in _col_names(engine, "investments")
+
+    def test_user_version_set_to_2(self) -> None:
+        engine = _make_v1_engine()
+        run_migrations(engine)
+        assert _user_version(engine) == 2
+
+    def test_pre_existing_rows_get_null_broker_value(self) -> None:
+        engine = _make_v1_engine()
+        run_migrations(engine)
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT broker_value_amount, broker_value_currency FROM investments")
+            ).fetchall()
+        assert all(r[0] is None and r[1] is None for r in rows)
+
+    def test_idempotent_on_rerun(self) -> None:
+        engine = _make_v1_engine()
+        run_migrations(engine)
+        # Second call must not raise and version stays at 2.
+        run_migrations(engine)
+        assert _user_version(engine) == 2

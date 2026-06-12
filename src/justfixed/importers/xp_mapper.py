@@ -288,6 +288,10 @@ class ParsedXPRow:
     `principal` here is set to the ACQUISITION COST (`valor_aplicado_original`
     on the XP statement), not the current adjusted cost basis. That's the
     right input for our Investment.principal — it's what was paid at purchase.
+
+    `broker_reported_value` is parsed from `market_value` (the XP "Posição a
+    mercado" column). A blank or unparseable cell yields None; the row still
+    imports successfully.
     """
 
     product: ProductType
@@ -298,6 +302,7 @@ class ParsedXPRow:
     maturity_date: date
     coupon_frequency: CouponFrequency
     description: str  # original description preserved for trace/debugging
+    broker_reported_value: Money | None = None
 
 
 def parse_row(row: XPRow) -> ParsedXPRow:
@@ -325,6 +330,13 @@ def parse_row(row: XPRow) -> ParsedXPRow:
             f"Could not parse XP row {row.description!r}: {e}"
         ) from e
 
+    # Broker value is supplementary — a blank or malformed market_value cell
+    # must not abort the row. Parse independently, swallow failure to None.
+    try:
+        broker_value: Money | None = parse_brazilian_money(row.market_value)
+    except ValueError:
+        broker_value = None
+
     return ParsedXPRow(
         product=product,
         issuer_name=issuer_name,
@@ -334,4 +346,5 @@ def parse_row(row: XPRow) -> ParsedXPRow:
         maturity_date=maturity_dt,
         coupon_frequency=coupon,
         description=row.description,
+        broker_reported_value=broker_value,
     )

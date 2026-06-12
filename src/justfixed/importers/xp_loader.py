@@ -106,6 +106,7 @@ def load_xp_statement(
             coupon_frequency=parsed.coupon_frequency,
             source=InvestmentSource.XP_IMPORT,
             custodian=custodian_for_source(InvestmentSource.XP_IMPORT),
+            broker_reported_value=parsed.broker_reported_value,
         )
         investment_repo.save(investment)
         inserted += 1

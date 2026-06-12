@@ -258,3 +258,21 @@ class TestParseRowErrors:
         row = _btg_row(product="CRA")
         with pytest.raises(ValueError, match="LCI-25I04325998"):
             parse_row(row)
+
+
+# ---------- broker_reported_value (B10 Slice 1) ----------
+
+
+class TestBrokerReportedValue:
+    def test_valid_saldo_bruto_yields_money(self) -> None:
+        parsed = parse_row(_btg_row(saldo_bruto_text="46446.72"))
+        assert parsed.broker_reported_value == Money(
+            amount=Decimal("46446.72"), currency="BRL"
+        )
+
+    def test_garbage_saldo_bruto_yields_none_and_row_imports(self) -> None:
+        # Brazilian-formatted numbers fail parse_btg_decimal → broker value None.
+        # The row must still import (principal intact).
+        parsed = parse_row(_btg_row(saldo_bruto_text="R$ 46.446,72"))
+        assert parsed.broker_reported_value is None
+        assert parsed.principal == Money(amount=Decimal("43000"), currency="BRL")

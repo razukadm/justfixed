@@ -1086,7 +1086,15 @@ class InvestmentDetailPanel(QWidget):
             return
         tb = proj.tax_breakdown
         tax_pct = _format_brazilian_percent(tb.tax_rate * Decimal("100"))
-        self._proj_current_lbl.setText(proj.current_value.to_display())
+        # Provenance: prefer broker-reported value when available (B10 Slice 1).
+        # Table cell (_COL_CURRENT) still shows the computed value — Slice-1 boundary.
+        inv = self._current_inv
+        if inv is not None and inv.broker_reported_value is not None:
+            self._proj_current_lbl.setText(
+                f"{inv.broker_reported_value.to_display()} (broker)"
+            )
+        else:
+            self._proj_current_lbl.setText(proj.current_value.to_display())
         self._proj_gross_lbl.setText(proj.gross_at_maturity.to_display())
         self._proj_gain_lbl.setText(tb.gain.to_display())
         self._proj_tax_lbl.setText(f"{tax_pct} — {tb.tax_amount.to_display()}")

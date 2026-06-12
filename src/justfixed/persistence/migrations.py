@@ -56,10 +56,27 @@ def _migrate_0_to_1(conn) -> None:
             )
 
 
+def _migrate_1_to_2(conn) -> None:
+    """Add broker_value_amount and broker_value_currency columns (B10 Slice 1).
+
+    Pre-existing rows correctly get NULL — there is no past broker value to
+    recover. No backfill needed.
+    """
+    existing_cols = {
+        row[1]
+        for row in conn.execute(text("PRAGMA table_info(investments)"))
+    }
+    if "broker_value_amount" not in existing_cols:
+        conn.execute(text("ALTER TABLE investments ADD COLUMN broker_value_amount NUMERIC"))
+    if "broker_value_currency" not in existing_cols:
+        conn.execute(text("ALTER TABLE investments ADD COLUMN broker_value_currency VARCHAR"))
+
+
 # Ordered list of (target_version, migrate_fn). Apply in sequence; skip
 # any step already satisfied by the current user_version.
 _MIGRATIONS: list[tuple[int, Callable]] = [
     (1, _migrate_0_to_1),
+    (2, _migrate_1_to_2),
 ]
 
 

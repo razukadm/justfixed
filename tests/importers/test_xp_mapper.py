@@ -315,17 +315,17 @@ def _xp_row(
     purchase_date_text: str = "02/04/2025",
     maturity_date_text: str = "02/04/2027",
     rate_section: str = "Pós-Fixado",
+    market_value: str = "",
 ) -> XPRow:
     """Build an XPRow with sensible defaults for fields parse_row doesn't use.
 
-    parse_row only touches description, rate_text, valor_original, and the
-    two date fields. The other XPRow fields can be empty strings — the
-    parser doesn't read them at this layer.
+    parse_row only touches description, rate_text, valor_original, the two
+    date fields, and market_value. The other XPRow fields can be empty strings.
     """
     return XPRow(
         rate_section=rate_section,
         description=description,
-        market_value="",
+        market_value=market_value,
         allocation_pct="",
         valor_aplicado="",
         valor_original=valor_original,
@@ -478,3 +478,28 @@ class TestParseRowOnFixture:
             "Prefixed",
             "PostFixedIPCA",
         }
+
+
+# ---------- broker_reported_value (B10 Slice 1) ----------
+
+
+class TestBrokerReportedValue:
+    def test_valid_market_value_yields_money(self) -> None:
+        row = _xp_row(
+            description="LCI CEF - ABR/2027",
+            rate_text="95,50% CDI",
+            market_value="R$ 576.632,89",
+        )
+        parsed = parse_row(row)
+        assert parsed.broker_reported_value == Money.from_reais("576632.89")
+
+    def test_blank_market_value_yields_none_and_row_imports(self) -> None:
+        # Blank market_value must not abort the row; principal must be intact.
+        row = _xp_row(
+            description="LCI CEF - ABR/2027",
+            rate_text="95,50% CDI",
+            market_value="",
+        )
+        parsed = parse_row(row)
+        assert parsed.broker_reported_value is None
+        assert parsed.principal == Money.from_reais("45000")
