@@ -92,7 +92,7 @@ class TestFreshDb:
 
         run_migrations(engine)
 
-        assert _user_version(engine) == 2
+        assert _user_version(engine) == 3
         assert "custodian" in _col_names(engine, "investments")
 
     def test_no_rows_no_error(self) -> None:
@@ -126,7 +126,7 @@ class TestLegacyDb:
     def test_user_version_set_to_1(self) -> None:
         engine, *_ = self._make_legacy_engine_with_rows()
         run_migrations(engine)
-        assert _user_version(engine) == 2
+        assert _user_version(engine) == 3
 
     def test_xp_import_backfilled(self) -> None:
         engine, xp_id, *_ = self._make_legacy_engine_with_rows()
@@ -179,11 +179,11 @@ class TestIdempotency:
         engine = _make_fresh_engine()
         Base.metadata.create_all(engine)
         run_migrations(engine)
-        assert _user_version(engine) == 2
+        assert _user_version(engine) == 3
 
         # Second call must not raise and version stays 1.
         run_migrations(engine)
-        assert _user_version(engine) == 2
+        assert _user_version(engine) == 3
 
     def test_values_unchanged_on_second_call(self) -> None:
         engine = _make_fresh_engine()
@@ -223,7 +223,7 @@ class TestCrashRecovery:
 
         run_migrations(engine)  # must not raise
 
-        assert _user_version(engine) == 2
+        assert _user_version(engine) == 3
         with engine.connect() as conn:
             val = conn.execute(
                 text("SELECT custodian FROM investments WHERE id = :id"),
@@ -281,7 +281,7 @@ class TestMigration1To2:
     def test_user_version_set_to_2(self) -> None:
         engine = _make_v1_engine()
         run_migrations(engine)
-        assert _user_version(engine) == 2
+        assert _user_version(engine) == 3
 
     def test_pre_existing_rows_get_null_broker_value(self) -> None:
         engine = _make_v1_engine()
@@ -295,6 +295,76 @@ class TestMigration1To2:
     def test_idempotent_on_rerun(self) -> None:
         engine = _make_v1_engine()
         run_migrations(engine)
-        # Second call must not raise and version stays at 2.
+        # Second call must not raise and version stays at 3.
         run_migrations(engine)
-        assert _user_version(engine) == 2
+        assert _user_version(engine) == 3
+
+
+# ---------------------------------------------------------------------------
+# Test: migration 2 → 3 (user_value columns, B10 Slice 2)
+# ---------------------------------------------------------------------------
+
+# Schema after migration 1→2 (has custodian + broker_value, no user_value columns).
+_V2_INVESTMENTS_DDL = """
+CREATE TABLE investments (
+    id TEXT PRIMARY KEY,
+    product TEXT NOT NULL,
+    issuer_id TEXT NOT NULL,
+    principal_amount NUMERIC NOT NULL,
+    principal_currency TEXT NOT NULL DEFAULT 'BRL',
+    rate_kind TEXT NOT NULL,
+    rate_value NUMERIC NOT NULL,
+    purchase_date TEXT NOT NULL,
+    maturity_date TEXT NOT NULL,
+    issue_date TEXT NOT NULL,
+    coupon_frequency TEXT NOT NULL DEFAULT 'none',
+    description TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'xp_import',
+    custodian VARCHAR,
+    broker_value_amount NUMERIC,
+    broker_value_currency VARCHAR,
+    created_at TEXT,
+    updated_at TEXT
+)
+"""
+
+
+def _make_v2_engine():
+    """Engine with an investments table at version-2 schema (no user_value cols)."""
+    engine = _make_fresh_engine()
+    with engine.begin() as conn:
+        conn.execute(text(_V2_INVESTMENTS_DDL))
+        _insert_row(conn, "xp_import")
+        conn.execute(text("PRAGMA user_version = 2"))
+    return engine
+
+
+class TestMigration2To3:
+    def test_user_value_columns_added(self) -> None:
+        engine = _make_v2_engine()
+        assert "user_value_amount" not in _col_names(engine, "investments")
+        assert "user_value_currency" not in _col_names(engine, "investments")
+        run_migrations(engine)
+        assert "user_value_amount" in _col_names(engine, "investments")
+        assert "user_value_currency" in _col_names(engine, "investments")
+
+    def test_user_version_set_to_3(self) -> None:
+        engine = _make_v2_engine()
+        run_migrations(engine)
+        assert _user_version(engine) == 3
+
+    def test_pre_existing_rows_get_null_user_value(self) -> None:
+        engine = _make_v2_engine()
+        run_migrations(engine)
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT user_value_amount, user_value_currency FROM investments")
+            ).fetchall()
+        assert all(r[0] is None and r[1] is None for r in rows)
+
+    def test_idempotent_on_rerun(self) -> None:
+        engine = _make_v2_engine()
+        run_migrations(engine)
+        # Second call must not raise and version stays at 3.
+        run_migrations(engine)
+        assert _user_version(engine) == 3

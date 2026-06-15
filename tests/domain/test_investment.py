@@ -157,6 +157,28 @@ class TestBrokerReportedValue:
 
 
 # ------------------------------------------------------------------
+# user_edited_value field (B10 Slice 2)
+# ------------------------------------------------------------------
+
+
+class TestUserEditedValue:
+    def test_default_is_none(self) -> None:
+        assert make_cdb().user_edited_value is None
+
+    def test_set_user_edited_value(self) -> None:
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("110"),
+            purchase_date=date(2024, 1, 15),
+            maturity_date=date(2026, 1, 15),
+            user_edited_value=Money.from_reais("10600"),
+        )
+        assert inv.user_edited_value == Money.from_reais("10600")
+
+
+# ------------------------------------------------------------------
 # Invariant 1: principal must be positive
 # ------------------------------------------------------------------
 

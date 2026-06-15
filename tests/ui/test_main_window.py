@@ -2016,11 +2016,12 @@ class TestRefreshProjection:
     """refresh_projection shows broker value with '(broker)' when present,
     computed value with '(estimated)' otherwise."""
 
-    def _make_self_mock(self, broker_reported_value=None):
+    def _make_self_mock(self, broker_reported_value=None, user_edited_value=None):
         self_mock = MagicMock()
 
         inv = MagicMock()
         inv.broker_reported_value = broker_reported_value
+        inv.user_edited_value = user_edited_value
         self_mock._current_inv = inv
 
         proj = MagicMock()
@@ -2055,3 +2056,45 @@ class TestRefreshProjection:
         assert "R$ 10.200,00" in text
         assert "(estimated)" not in text
         assert "(broker)" not in text
+
+    def test_user_edited_value_takes_priority_over_broker(self) -> None:
+        user_money = Money.from_reais("10600")
+        broker_money = Money.from_reais("10500")
+        self_mock = self._make_self_mock(
+            user_edited_value=user_money,
+            broker_reported_value=broker_money,
+        )
+
+        InvestmentDetailPanel.refresh_projection(self_mock)
+
+        text = self_mock._proj_current_lbl.setText.call_args[0][0]
+        assert user_money.to_display() in text
+        assert "(edited)" in text
+        assert "(broker)" not in text
+
+    def test_shows_user_edited_value_when_broker_absent(self) -> None:
+        user_money = Money.from_reais("10600")
+        self_mock = self._make_self_mock(
+            user_edited_value=user_money,
+            broker_reported_value=None,
+        )
+
+        InvestmentDetailPanel.refresh_projection(self_mock)
+
+        text = self_mock._proj_current_lbl.setText.call_args[0][0]
+        assert user_money.to_display() in text
+        assert "(edited)" in text
+
+    def test_falls_back_to_broker_when_user_edited_cleared(self) -> None:
+        broker_money = Money.from_reais("10500")
+        self_mock = self._make_self_mock(
+            user_edited_value=None,
+            broker_reported_value=broker_money,
+        )
+
+        InvestmentDetailPanel.refresh_projection(self_mock)
+
+        text = self_mock._proj_current_lbl.setText.call_args[0][0]
+        assert broker_money.to_display() in text
+        assert "(broker)" in text
+        assert "(edited)" not in text

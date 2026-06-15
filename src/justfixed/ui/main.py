@@ -667,6 +667,10 @@ class _EditableField(QWidget):
             self._editor.setText(
                 self._raw_value.to_display() if self._raw_value is not None else ""
             )
+        elif self._key == "user_edited_value":
+            self._editor.setText(
+                self._raw_value.to_display() if self._raw_value is not None else ""
+            )
         else:
             self._editor.setText(self._raw_value or "")
 
@@ -709,6 +713,9 @@ class _EditableField(QWidget):
             return self._editor.get_rate()
         if self._key == "principal":
             return parse_brazilian_money(self._editor.text().strip())
+        if self._key == "user_edited_value":
+            t = self._editor.text().strip()
+            return parse_brazilian_money(t) if t else None
         return self._editor.text()
 
 
@@ -861,14 +868,16 @@ class InvestmentDetailPanel(QWidget):
         ("Maturity date", "maturity_date"),
         ("Coupon",        "coupon_frequency"),
         ("Description",   "description"),
+        ("Current value", "user_edited_value"),
     ]
 
     _EDITABLE_FOR_MANUAL = frozenset({
         "principal", "rate", "purchase_date", "issue_date",
         "maturity_date", "coupon_frequency", "description",
         "custodian",                           # B42
+        "user_edited_value",
     })
-    _EDITABLE_FOR_IMPORT = frozenset({"description"})
+    _EDITABLE_FOR_IMPORT = frozenset({"description", "user_edited_value"})
     _MONO_FIELD_KEYS = frozenset({"rate", "purchase_date", "issue_date", "maturity_date", "principal"})
 
     def __init__(self, session_factory, main_window, parent=None) -> None:
@@ -957,7 +966,7 @@ class InvestmentDetailPanel(QWidget):
             product_name = rules_for(inv.product).display_name
             self._identity_label.setText(f"{inv.issuer.name} — {product_name}")
             if inv.source != InvestmentSource.MANUAL:
-                self._source_banner.setText("Imported — only description is editable.")
+                self._source_banner.setText("Imported — only description and current value are editable.")
                 self._source_banner.show()
             else:
                 self._source_banner.hide()
@@ -970,7 +979,7 @@ class InvestmentDetailPanel(QWidget):
         self._identity_label.setText(f"{inv.issuer.name} — {product_name}")
 
         if inv.source != InvestmentSource.MANUAL:
-            self._source_banner.setText("Imported — only description is editable.")
+            self._source_banner.setText("Imported — only description and current value are editable.")
             self._source_banner.show()
         else:
             self._source_banner.hide()
@@ -1001,6 +1010,8 @@ class InvestmentDetailPanel(QWidget):
         f["maturity_date"].set_value(inv.maturity_date, _fmt_date(inv.maturity_date), editable="maturity_date" in editable_keys)
         f["coupon_frequency"].set_value(inv.coupon_frequency, inv.coupon_frequency.to_display(), editable="coupon_frequency" in editable_keys)
         f["description"].set_value(inv.description or "", inv.description or "—", editable="description" in editable_keys)
+        user_edited_display = inv.user_edited_value.to_display() if inv.user_edited_value is not None else "—"
+        f["user_edited_value"].set_value(inv.user_edited_value, user_edited_display, editable="user_edited_value" in editable_keys)
         self.refresh_projection()
 
     def clear(self) -> None:
@@ -1086,10 +1097,14 @@ class InvestmentDetailPanel(QWidget):
             return
         tb = proj.tax_breakdown
         tax_pct = _format_brazilian_percent(tb.tax_rate * Decimal("100"))
-        # Provenance: prefer broker-reported value when available (B10 Slice 1).
-        # Table cell (_COL_CURRENT) still shows the computed value — Slice-1 boundary.
+        # Provenance: user-edited > broker-reported > computed (B10 Slice 2).
+        # Table cell (_COL_CURRENT) still shows the computed value — Slice-2 boundary.
         inv = self._current_inv
-        if inv is not None and inv.broker_reported_value is not None:
+        if inv is not None and inv.user_edited_value is not None:
+            self._proj_current_lbl.setText(
+                f"{inv.user_edited_value.to_display()} (edited)"
+            )
+        elif inv is not None and inv.broker_reported_value is not None:
             self._proj_current_lbl.setText(
                 f"{inv.broker_reported_value.to_display()} (broker)"
             )
@@ -1159,6 +1174,9 @@ class InvestmentDetailPanel(QWidget):
             return inv.description or "—"
         if key == "custodian":
             return inv.custodian if inv.custodian is not None else "—"
+        if key == "user_edited_value":
+            v = inv.user_edited_value
+            return v.to_display() if v is not None else "—"
         return ""
 
     def _set_error(self, message: str | None) -> None:

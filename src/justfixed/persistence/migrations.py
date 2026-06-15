@@ -72,11 +72,28 @@ def _migrate_1_to_2(conn) -> None:
         conn.execute(text("ALTER TABLE investments ADD COLUMN broker_value_currency VARCHAR"))
 
 
+def _migrate_2_to_3(conn) -> None:
+    """Add user_value_amount and user_value_currency columns (B10 Slice 2).
+
+    Pre-existing rows correctly get NULL — there is no past user-edited value
+    to recover. No backfill needed.
+    """
+    existing_cols = {
+        row[1]
+        for row in conn.execute(text("PRAGMA table_info(investments)"))
+    }
+    if "user_value_amount" not in existing_cols:
+        conn.execute(text("ALTER TABLE investments ADD COLUMN user_value_amount NUMERIC"))
+    if "user_value_currency" not in existing_cols:
+        conn.execute(text("ALTER TABLE investments ADD COLUMN user_value_currency VARCHAR"))
+
+
 # Ordered list of (target_version, migrate_fn). Apply in sequence; skip
 # any step already satisfied by the current user_version.
 _MIGRATIONS: list[tuple[int, Callable]] = [
     (1, _migrate_0_to_1),
     (2, _migrate_1_to_2),
+    (3, _migrate_2_to_3),
 ]
 
 

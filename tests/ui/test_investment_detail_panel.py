@@ -54,7 +54,9 @@ def _mock_inv(**overrides):
     inv.maturity_date = date(2026, 1, 15)
     inv.coupon_frequency = CouponFrequency.NONE
     inv.description = ""
-    inv.custodian = None      # B42 — explicit None so QLabel.setText receives a str ("—")
+    inv.custodian = None           # B42 — explicit None so QLabel.setText receives a str ("—")
+    inv.broker_reported_value = None
+    inv.user_edited_value = None   # B10 Slice 2 — explicit None so to_display() is never called on a Mock
     inv.source = InvestmentSource.XP_IMPORT
     for k, v in overrides.items():
         setattr(inv, k, v)
@@ -325,7 +327,7 @@ class TestInvestmentDetailPanelSave:
         panel.clear()
         assert panel._error_label.isHidden()
 
-    def test_manual_investment_has_eight_editable_fields(self, qapp) -> None:
+    def test_manual_investment_has_nine_editable_fields(self, qapp) -> None:
         panel = InvestmentDetailPanel(MagicMock(), MagicMock())
         inv = _make_real_inv(source=InvestmentSource.MANUAL)
         panel.show_investment(inv)
@@ -333,7 +335,8 @@ class TestInvestmentDetailPanelSave:
         expected_editable = {
             "principal", "rate", "purchase_date", "issue_date",
             "maturity_date", "coupon_frequency", "description",
-            "custodian",   # B42
+            "custodian",          # B42
+            "user_edited_value",  # B10 Slice 2
         }
         for key, field in panel._field_values.items():
             if key in expected_editable:
@@ -341,25 +344,27 @@ class TestInvestmentDetailPanelSave:
             else:
                 assert not field._editable, f"Expected {key!r} to be non-editable for MANUAL"
 
-    def test_xp_import_exposes_only_description(self, qapp) -> None:
+    def test_xp_import_exposes_description_and_user_edited_value(self, qapp) -> None:
         panel = InvestmentDetailPanel(MagicMock(), MagicMock())
         inv = _make_real_inv(source=InvestmentSource.XP_IMPORT)
         panel.show_investment(inv)
 
+        editable_for_import = {"description", "user_edited_value"}
         for key, field in panel._field_values.items():
-            if key == "description":
-                assert field._editable, "description should be editable for XP_IMPORT"
+            if key in editable_for_import:
+                assert field._editable, f"{key!r} should be editable for XP_IMPORT"
             else:
                 assert not field._editable, f"{key!r} should not be editable for XP_IMPORT"
 
-    def test_btg_import_exposes_only_description(self, qapp) -> None:
+    def test_btg_import_exposes_description_and_user_edited_value(self, qapp) -> None:
         panel = InvestmentDetailPanel(MagicMock(), MagicMock())
         inv = _make_real_inv(source=InvestmentSource.BTG_IMPORT)
         panel.show_investment(inv)
 
+        editable_for_import = {"description", "user_edited_value"}
         for key, field in panel._field_values.items():
-            if key == "description":
-                assert field._editable, "description should be editable for BTG_IMPORT"
+            if key in editable_for_import:
+                assert field._editable, f"{key!r} should be editable for BTG_IMPORT"
             else:
                 assert not field._editable, f"{key!r} should not be editable for BTG_IMPORT"
 
@@ -467,6 +472,48 @@ class TestInvestmentDetailPanelSave:
         # intermediate object _save_field set — confirms same-id-distinct-object
         # adoption, not a trivial is-identity pass.
         assert panel._current_inv is distinct_inv_holder[0]
+
+
+# ── user_edited_value field tests (B10 Slice 2) ───────────────────────────────
+
+class TestUserEditedValueField:
+    def test_field_shows_dash_when_none(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        panel.show_investment(_mock_inv(user_edited_value=None))
+        assert panel._field_values["user_edited_value"].text() == "—"
+
+    def test_field_shows_value_when_set(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        panel.show_investment(_mock_inv(user_edited_value=Money.from_reais("10600")))
+        assert panel._field_values["user_edited_value"].text() == Money.from_reais("10600").to_display()
+
+    def test_field_editable_for_imported_investment(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        inv = _make_real_inv(source=InvestmentSource.XP_IMPORT)
+        panel.show_investment(inv)
+        assert panel._field_values["user_edited_value"]._editable
+
+    def test_save_valid_amount_updates_panel(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        inv = _make_real_inv(source=InvestmentSource.XP_IMPORT)
+        panel.show_investment(inv)
+
+        with patch("justfixed.ui.main.InvestmentRepository"):
+            result = panel._save_field("user_edited_value", Money.from_reais("10600"))
+
+        assert result == Money.from_reais("10600").to_display()
+        assert panel._current_inv.user_edited_value == Money.from_reais("10600")
+
+    def test_save_none_clears_override(self, qapp) -> None:
+        panel = InvestmentDetailPanel(MagicMock(), MagicMock())
+        inv = _make_real_inv(source=InvestmentSource.XP_IMPORT, user_edited_value=Money.from_reais("10600"))
+        panel.show_investment(inv)
+
+        with patch("justfixed.ui.main.InvestmentRepository"):
+            result = panel._save_field("user_edited_value", None)
+
+        assert result == "—"
+        assert panel._current_inv.user_edited_value is None
 
 
 # ── Delete tests ─────────────────────────────────────────────────────────────
