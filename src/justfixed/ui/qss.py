@@ -116,6 +116,12 @@ QLabel[role="subLabel"] {{
     color: {c.INK_3};
 }}
 
+/* ── Hint labels (field row inline hints) ───────────────────────── */
+QLabel[role="hint"] {{
+    color: {c.INK_3};
+    font-size: 10px;
+}}
+
 /* ── FGC badge colours ──────────────────────────────────────────── */
 QLabel[fgcStatus="under"]       {{ color: {c.FGC_UNDER}; }}
 QLabel[fgcStatus="approaching"] {{ color: {c.WARN}; }}

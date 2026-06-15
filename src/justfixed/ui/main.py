@@ -1047,7 +1047,7 @@ class InvestmentDetailPanel(QWidget):
             h.setSpacing(8)
             k_lbl = QLabel(label_text)
             k_lbl.setMinimumWidth(160)
-            k_lbl.setStyleSheet(f"color: {COLORS.INK_2};")
+            k_lbl.setProperty("role", "fieldLabel")
             h.addWidget(k_lbl)
             h.addWidget(v_widget)
             h.addStretch(1)
@@ -1734,13 +1734,13 @@ class _CalculatorTab(QWidget):
             h.setSpacing(8)
             k_lbl = QLabel(k)
             k_lbl.setMinimumWidth(180)
-            k_lbl.setStyleSheet(f"color: {COLORS.INK_2};")
+            k_lbl.setProperty("role", "fieldLabel")
             h.addWidget(k_lbl)
             h.addWidget(v_widget)
             if hint:
                 hint_lbl = QLabel(hint)
                 hint_lbl.setWordWrap(True)
-                hint_lbl.setStyleSheet(f"color: {COLORS.INK_3}; font-size: 10px;")
+                hint_lbl.setProperty("role", "hint")
                 h.addWidget(hint_lbl, 1)
             else:
                 h.addStretch(1)
@@ -1951,13 +1951,13 @@ class _CalculatorTab(QWidget):
             h.setSpacing(8)
             k_lbl = QLabel(k)
             k_lbl.setMinimumWidth(180)
-            k_lbl.setStyleSheet(f"color: {COLORS.INK_2};")
+            k_lbl.setProperty("role", "fieldLabel")
             h.addWidget(k_lbl)
             h.addWidget(v_widget)
             if hint:
                 hint_lbl = QLabel(hint)
                 hint_lbl.setWordWrap(True)
-                hint_lbl.setStyleSheet(f"color: {COLORS.INK_3}; font-size: 10px;")
+                hint_lbl.setProperty("role", "hint")
                 h.addWidget(hint_lbl, 1)
             else:
                 h.addStretch(1)
@@ -3499,6 +3499,7 @@ class MainWindow(QMainWindow):
 
         def _step_label(text: str) -> QLabel:
             lbl = QLabel(text)
+            # dev-tab only, single-use — kept inline
             lbl.setStyleSheet("font-weight: bold; margin-top: 4px;")
             return lbl
 
@@ -3519,6 +3520,7 @@ class MainWindow(QMainWindow):
             display = QPlainTextEdit(cmd_text)
             display.setReadOnly(True)
             display.setFont(QFont(FONTS.MONO_FAMILY, FONTS.MONO_SIZE))
+            # dev-tab code block — inline per qss.py CODE_BLOCK_BG convention
             display.setStyleSheet(
                 f"QPlainTextEdit {{"
                 f" background: {COLORS.CODE_BLOCK_BG};"
@@ -3609,6 +3611,7 @@ class MainWindow(QMainWindow):
         root.addWidget(anbima_lbl)
 
         warn_frame = QFrame()
+        # dev-tab only, single-use — kept inline
         warn_frame.setStyleSheet(
             f"QFrame {{"
             f" background: {COLORS.SOURCE_BANNER_BG};"
@@ -3625,6 +3628,7 @@ class MainWindow(QMainWindow):
             "whose CDI and IPCA sections silently disagree."
         )
         warn_msg.setWordWrap(True)
+        # dev-tab only, single-use — kept inline
         warn_msg.setStyleSheet(f"color: {COLORS.SOURCE_BANNER_FG};")
         warn_inner.addWidget(warn_msg)
         root.addWidget(warn_frame)
