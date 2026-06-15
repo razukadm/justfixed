@@ -844,6 +844,22 @@ contracts (each reword would need lockstep `match=` test edits) and are
 developer-facing with low user value. B36's high-value tier is therefore
 done; the exception-text tier is deferred, not abandoned, and pairs with B37.
 
+**Exception-text tier closed by inspection (2026-06-11):** Audited all ~50
+distinct `raise` sites across domain/engine/importers/persistence. Verdict: no
+rewrite needed — the messages are already well-written. Most name the field,
+show the offending value, and many give a fix example (e.g. money.py "Use
+Decimal or string instead, e.g. Money.from_reais('100.50')"; accrual.py
+"requires assumed_cdi parameter (e.g. Decimal('0.12') for 12% annual CDI)";
+detection.py names the expected fingerprints and file types). The terse
+"Unknown X: {...}" exhaustion guards fire only on programmer error, never user
+input, so terseness is correct. The `{text!r}` repr in importer parse errors
+(xp_mapper / btg_mapper / _parsing_utils) was considered for stripping to match
+the UI tier, but kept: unlike a short UI field value, `text` here is a
+spreadsheet cell, and the repr makes whitespace/encoding visible, which aids
+debugging real broker files. B36 is therefore COMPLETE — UI tier reworded
+(26d3410), exception tier verified adequate by audit. Any future polish belongs
+to B37 (i18n), which will revisit these strings for translation regardless.
+
 ### B37. Translate the app to Brazilian Portuguese (i18n)
 
 **Source:** Session 2026-05-21.
