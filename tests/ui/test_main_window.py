@@ -2013,8 +2013,8 @@ class TestInvestmentsTableAlignment:
 
 
 class TestRefreshProjection:
-    """refresh_projection shows broker value with '(broker)' when present,
-    computed value with '(estimated)' otherwise."""
+    """refresh_projection current-value provenance: user-edited "(edited)" >
+    broker-reported "(broker)" > computed (unmarked)."""
 
     def _make_self_mock(self, broker_reported_value=None, user_edited_value=None):
         self_mock = MagicMock()

@@ -315,6 +315,37 @@ is an additive display-only `market_value` field, leaving `current_value`
 
 ### B10. Multi-source current value (broker / user-edited / computed)
 
+**Shipped (2026-06, Slices 1 + 2 — two of three sources):**
+- **Slice 1 (broker-reported)** — commit f81b997. Carries the broker's
+  present value (XP "Posição a mercado" / BTG "saldo bruto") from importer
+  layer 1 through mapper → domain (`Investment.broker_reported_value`) →
+  persistence (`broker_value_amount`/`_currency`, migration 1→2) →
+  detail-panel display with a "(broker)" marker.
+- **Slice 2 (user-edited)** — commit 1082886. Adds
+  `Investment.user_edited_value` (separate field, coexists with broker),
+  editable via the detail-panel "Current value" field even on imported
+  investments; empty clears the override. Persistence
+  `user_value_amount`/`_currency`, migration 2→3. Displayed with an
+  "(edited)" marker. Selection precedence is **user-edited → broker-reported
+  → computed**.
+- Both stored values are display-only: FGC concentration and back-solve
+  continue to consume the computed `current_value` (a user/broker figure must
+  not change the FGC verdict, which keys on contracted balance).
+- **Slice 3 (historical-computed) — DEFERRED.** The original B10 scope (fetch
+  real CDI/IPCA history to replace the `_ASSUMED_*` constants) was deferred by
+  decision: Slices 1+2 deliver the two *authoritative* sources for every
+  holding, while Slice 3 only improves the *estimate* shown when neither
+  exists, and it carries the external-API dependency plus the eight-site
+  constant refactor. External verification done: **BCB SGS** chosen for both
+  CDI (series 12) and IPCA (series 433) — one simple client, same `{data,
+  valor}` JSON shape, no auth — rather than the heavier IBGE SIDRA the
+  original plan named. Endpoints still need a live primary-source check before
+  coding. Revisit when the computed fallback proves to show often enough to be
+  worth the work.
+
+The sections below describe the original three-source plan; they remain
+accurate for the deferred Slice 3.
+
 **Source:** Phase 2 list in `ARCHITECTURE.md`; reframed 2026-05-21 after two scoping investigations.
 
 **What it is:** Give each investment a current value drawn from up to three sources, showing the freshest available one with a visible provenance indicator (colour or symbol marking which source the displayed value came from). The three sources:
