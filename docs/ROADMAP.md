@@ -1082,12 +1082,23 @@ was built on this infrastructure: role/property QSS selectors,
 `SELECTION_BG` and other new tokens, the `investmentsTable` and
 `totalsStrip` objectName rules, tab and form-input chrome.
 
-**Remaining scope:**
-3. Full audit of `main.py` inline `setStyleSheet` calls — the visual
-   pass addressed the primary surfaces but scattered inline styles
-   remain in the detail panel, dev tab, and curve inspector.
-6. Remove now-redundant dev-tab curve summaries once the consolidation
-   is considered complete.
+**Remaining scope — RESOLVED (2026-06-11):**
+3. ~~Inline `setStyleSheet` audit~~ DONE (commit 8e6d2cc). Audited all
+   10 calls in `main.py`. Migrated 5: three field labels to
+   `role="fieldLabel"` (unified to the canonical #666666 per a design
+   decision) and two field-row hints to a new `role="hint"` selector.
+   The other 5 stay inline by design (the global app stylesheet; dev-tab
+   single-use chrome and the QPlainTextEdit code block per qss.py's
+   documented CODE_BLOCK_BG convention) and now carry a clarifying comment.
+6. ~~Remove redundant dev-tab curve summaries~~ CLOSED, no action. The
+   summaries (`_dev_cdi_label` / `_pre` / `_ipca` via `_summary()`) show
+   curve-load provenance — fetch source, anchor, vertex count, fetch time,
+   first/last vertex rates — which the Curve Inspector does NOT surface.
+   They are not redundant; the "now-redundant" premise was incorrect.
+
+With these resolved, B43 is COMPLETE: infrastructure (steps 1, 2, 5),
+the visual pass (step 4), the inline-style audit (step 3), and the
+dev-summary question (step 6) are all closed.
 
 **Scope reference (original):**
 1. ~~`theme.py` — tokens~~ SHIPPED
