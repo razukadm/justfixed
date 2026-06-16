@@ -206,14 +206,21 @@ def _format_rate_short(rate: Rate) -> str:
     return rate.to_display()
 
 
-def _format_rate(rate: Rate, cdi_curve: Curve | None, maturity_date: date) -> str:
+def _format_rate(
+    rate: Rate,
+    cdi_curve: Curve | None,
+    maturity_date: date,
+    *,
+    assumed_cdi: Decimal = _ASSUMED_CDI,
+    assumed_ipca: Decimal = _ASSUMED_IPCA,
+) -> str:
     if isinstance(rate, Prefixed):
         return _format_brazilian_percent(rate.annual_rate * 100)
     configured = rate.to_display()
     cdi = (
         cdi_curve.rate_at(maturity_date)
         if (cdi_curve is not None and cdi_curve.vertices)
-        else _ASSUMED_CDI
+        else assumed_cdi
     )
     match rate:
         case PostFixedCDI(cdi_percentage=p):
@@ -221,7 +228,7 @@ def _format_rate(rate: Rate, cdi_curve: Curve | None, maturity_date: date) -> st
         case PostFixedCDIPlusSpread(spread=s):
             effective = cdi + s + (cdi * s)
         case PostFixedIPCA(spread=s):
-            effective = _ASSUMED_IPCA + s + (_ASSUMED_IPCA * s)
+            effective = assumed_ipca + s + (assumed_ipca * s)
         case _:
             return configured
     return f"{configured} ({_format_brazilian_percent(effective * 100)})"
@@ -511,10 +518,19 @@ class _ProjectWorker(QThread):
     finished = Signal(object)  # list[ProjectionResult]
     error    = Signal(str)
 
-    def __init__(self, investments: list, *, cdi_curve: Curve | None = None) -> None:
+    def __init__(
+        self,
+        investments: list,
+        *,
+        cdi_curve: Curve | None = None,
+        assumed_cdi: Decimal = _ASSUMED_CDI,
+        assumed_ipca: Decimal = _ASSUMED_IPCA,
+    ) -> None:
         super().__init__()
         self._investments = investments
         self._cdi_curve = cdi_curve
+        self._assumed_cdi = assumed_cdi
+        self._assumed_ipca = assumed_ipca
 
     def run(self) -> None:
         try:
@@ -523,8 +539,8 @@ class _ProjectWorker(QThread):
                 project(
                     inv,
                     as_of=today,
-                    assumed_cdi=_ASSUMED_CDI,
-                    assumed_ipca=_ASSUMED_IPCA,
+                    assumed_cdi=self._assumed_cdi,
+                    assumed_ipca=self._assumed_ipca,
                     cdi_curve=self._cdi_curve,
                 )
                 for inv in self._investments
@@ -1195,6 +1211,7 @@ class _CalculatorTab(QWidget):
 
     def __init__(self, session_factory, parent=None) -> None:
         super().__init__(parent)
+        self._main_window = parent
         self._session_factory = session_factory
 
         outer = QHBoxLayout(self)
@@ -1309,6 +1326,18 @@ class _CalculatorTab(QWidget):
 
         # Seed defaults
         self.reset()
+
+    @property
+    def _assumed_cdi(self) -> Decimal:
+        """Read live from the owning MainWindow — single source of truth.
+        Falls back to the module default when unowned (e.g. in tests)."""
+        return getattr(self._main_window, "_assumed_cdi", _ASSUMED_CDI)
+
+    @property
+    def _assumed_ipca(self) -> Decimal:
+        """Read live from the owning MainWindow — single source of truth.
+        Falls back to the module default when unowned (e.g. in tests)."""
+        return getattr(self._main_window, "_assumed_ipca", _ASSUMED_IPCA)
 
     # ── Public ────────────────────────────────────────────────────────────────
 
@@ -1489,8 +1518,8 @@ class _CalculatorTab(QWidget):
         projection = project(
             synth_inv,
             as_of=maturity_date,
-            assumed_cdi=_ASSUMED_CDI,
-            assumed_ipca=_ASSUMED_IPCA,
+            assumed_cdi=self._assumed_cdi,
+            assumed_ipca=self._assumed_ipca,
         )
 
         is_treasury = issuer.kind == IssuerKind.TREASURY
@@ -1504,8 +1533,8 @@ class _CalculatorTab(QWidget):
             report = fgc_concentration_report(
                 existing + [synth_inv],
                 as_of=maturity_date,
-                assumed_cdi=_ASSUMED_CDI,
-                assumed_ipca=_ASSUMED_IPCA,
+                assumed_cdi=self._assumed_cdi,
+                assumed_ipca=self._assumed_ipca,
             )
             cong_exposure = next(
                 (c for c in report.conglomerates
@@ -1613,8 +1642,8 @@ class _CalculatorTab(QWidget):
             purchase_date=purchase_date,
             maturity_date=maturity_date,
             existing_holdings=existing,
-            assumed_cdi=_ASSUMED_CDI,
-            assumed_ipca=_ASSUMED_IPCA,
+            assumed_cdi=self._assumed_cdi,
+            assumed_ipca=self._assumed_ipca,
         )
 
         pu = result.peak_utilization
@@ -1694,8 +1723,8 @@ class _CalculatorTab(QWidget):
             solve_projection = project(
                 solve_synth,
                 as_of=maturity_date,
-                assumed_cdi=_ASSUMED_CDI,
-                assumed_ipca=_ASSUMED_IPCA,
+                assumed_cdi=self._assumed_cdi,
+                assumed_ipca=self._assumed_ipca,
             )
             if main_win is not None and hasattr(main_win, "set_active_mock"):
                 main_win.set_active_mock(solve_synth, solve_projection)
@@ -1814,7 +1843,7 @@ class _CalculatorTab(QWidget):
         for inv in relevant:
             proj = project(
                 inv, as_of=inv.maturity_date,
-                assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA,
+                assumed_cdi=self._assumed_cdi, assumed_ipca=self._assumed_ipca,
             )
             existing_data.append((
                 inv.maturity_date, inv.issuer.name, inv.product,
@@ -2506,6 +2535,8 @@ class MainWindow(QMainWindow):
         # to the currently visible set on each render.
         self.projection_cache: list[ProjectionResult] | None = None
         self._cdi_curve: Curve | None = None
+        self._assumed_cdi: Decimal = _ASSUMED_CDI
+        self._assumed_ipca: Decimal = _ASSUMED_IPCA
         self._pre_curve: Curve | None = None
         self._ipca_curve: Curve | None = None
         self._fetch_result: FetchResult | None = None
@@ -3165,7 +3196,7 @@ class MainWindow(QMainWindow):
 
         self._cell(row, _COL_PRODUCT, rules_for(inv.product).display_name)
         self._cell(row, _COL_TYPE, _format_type(inv.rate))
-        self._cell(row, _COL_RATE, _format_rate(inv.rate, self._cdi_curve, inv.maturity_date), mono=True)
+        self._cell(row, _COL_RATE, _format_rate(inv.rate, self._cdi_curve, inv.maturity_date, assumed_cdi=self._assumed_cdi, assumed_ipca=self._assumed_ipca), mono=True)
         self._cell(row, _COL_PRINCIPAL, inv.principal.to_display(), mono=True)
 
         d = inv.maturity_date
@@ -3732,6 +3763,8 @@ class MainWindow(QMainWindow):
         self._worker = _ProjectWorker(
             self.visible_investments(apply_filter=False),
             cdi_curve=self._cdi_curve,
+            assumed_cdi=self._assumed_cdi,
+            assumed_ipca=self._assumed_ipca,
         )
         self._worker.finished.connect(self._on_project_done)
         self._worker.error.connect(self._on_project_error)
@@ -3763,7 +3796,7 @@ class MainWindow(QMainWindow):
             return
         try:
             ics = export_maturity_calendar(
-                self.visible_investments(), as_of=date.today(), assumed_cdi=_ASSUMED_CDI, assumed_ipca=_ASSUMED_IPCA
+                self.visible_investments(), as_of=date.today(), assumed_cdi=self._assumed_cdi, assumed_ipca=self._assumed_ipca
             )
             Path(path_str).write_bytes(ics)
             self.statusBar().showMessage(f"Calendar exported to {path_str}.", 8000)

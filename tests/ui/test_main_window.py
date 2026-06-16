@@ -30,7 +30,8 @@ from PySide6.QtWidgets import QPlainTextEdit, QScrollArea
 from PySide6.QtCore import Qt
 
 from justfixed.ui.main import (
-    _ActiveMock, _AddInvestmentPanel, _COL_FGC, _COL_PRINCIPAL, _CUSTODIAN_UNSET,
+    _ActiveMock, _AddInvestmentPanel, _CalculatorTab, _COL_FGC, _COL_PRINCIPAL,
+    _ASSUMED_IPCA, _CUSTODIAN_UNSET,
     ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow,
     compute_totals, _format_type, _format_rate, _is_matured,
 )
@@ -1162,6 +1163,16 @@ class TestFormatRate:
         without_curve = _format_rate(rate, None, self._MATURITY)
         assert with_curve == without_curve
 
+    def test_format_rate_honors_assumed_ipca_kwarg(self) -> None:
+        # assumed_ipca=0.08 (8%) with spread=6%:
+        # effective = 0.08 + 0.06 + (0.08 × 0.06) = 0.1448 → 14,48%
+        # default (0.0414) gives 10,39% — the two must differ.
+        rate = PostFixedIPCA.from_percent("6")
+        result_alt = _format_rate(rate, None, self._MATURITY, assumed_ipca=Decimal("0.08"))
+        result_default = _format_rate(rate, None, self._MATURITY)
+        assert result_alt != result_default
+        assert result_alt == "IPCA + 6,00% (14,48%)"
+
 
 # ── Startup tab selection ─────────────────────────────────────────────────────
 
@@ -1710,6 +1721,43 @@ class TestDevTabRunbook:
         all_text = "\n---\n".join(d.toPlainText() for d in displays)
         assert "justfixed-data push" in all_text
         assert "status -sb" in all_text
+
+
+# ── _CalculatorTab assumption delegation ──────────────────────────────────────
+
+class TestCalculatorTabAssumptionDelegation:
+    """_assumed_cdi/_assumed_ipca must read live from the owning MainWindow,
+    even after QTabWidget.addTab reparents the widget away from that window."""
+
+    @pytest.fixture
+    def session_factory(self):
+        from justfixed.persistence.database import Base, make_engine, make_session_factory
+        engine = make_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        return make_session_factory(engine)
+
+    def test_reads_from_owner_after_reparenting(self, qapp, session_factory) -> None:
+        from PySide6.QtWidgets import QTabWidget, QWidget
+        # Simulate the production scenario: a stub "MainWindow" carries the
+        # assumptions; addTab forces Qt to reparent the widget, so self.parent()
+        # no longer points at the stub.
+        parent = QWidget()
+        parent._assumed_ipca = Decimal("0.20")  # type: ignore[attr-defined]
+        calc = _CalculatorTab(session_factory=session_factory, parent=parent)
+
+        tabs = QTabWidget()
+        tabs.addTab(calc, "Calc")  # reparents calc — self.parent() now ≠ parent
+
+        # The stored _main_window reference must still resolve correctly.
+        assert calc._assumed_ipca == Decimal("0.20")
+
+        # Mutation is reflected live — not a captured copy.
+        parent._assumed_ipca = Decimal("0.05")  # type: ignore[attr-defined]
+        assert calc._assumed_ipca == Decimal("0.05")
+
+    def test_falls_back_to_module_default_when_unowned(self, qapp, session_factory) -> None:
+        calc = _CalculatorTab(session_factory=session_factory, parent=None)
+        assert calc._assumed_ipca == _ASSUMED_IPCA
 
 
 # ── Investments table smoke (commit 2 of global styling) ─────────────────────
