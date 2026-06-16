@@ -653,12 +653,17 @@ commit `745bc4e`): two File-menu actions ("Export investments to Excel…",
   `justfixed-conglomerates-{YYYY-MM-DD}.xlsx`; user can override in the save
   dialog.
 
-**Known follow-up (not yet done):** the Investments export's Type and Rate
-columns emit English labels ("Prefixed", "CDI%") and the rate's raw
-`to_display()`, not the table's pt-BR ("Pré", "Pós"). Byte-faithful Type/Rate
-needs `_format_type`/`_format_rate` extracted out of `ui/main.py` into a
-shared non-UI location first (an exports→ui import is forbidden by the layer
-rules). Pairs naturally with B37 (i18n).
+**Follow-up resolved (2026-06-16, commit 2ad8bf9):** the Investments export's
+Type column now emits the table's pt-BR labels ("Pré"/"Pós"/"Pós+"/"IPCA+")
+via a shared `rate_type_label()` in `domain/rates.py`. Both the table
+(`_format_type` delegates to it) and the export call it, so the two cannot
+diverge. The Rate column deliberately still emits only the configured rate via
+`to_display()` and does NOT add the effective-annualized parenthetical the
+table shows — that figure is assumption-derived (`_ASSUMED_IPCA`, CDI curve /
+fallback), and baking a drifting estimate into a saved spreadsheet was judged
+undesirable (option a). `_format_rate` was therefore not extracted; only the
+type label moved to the shared location. Full Rate parity / `_format_rate`
+extraction remains available if ever wanted, and still pairs with B37 (i18n).
 
 ### B29. Dev view: XLSX curve export
 
