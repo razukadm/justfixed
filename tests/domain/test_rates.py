@@ -10,6 +10,7 @@ from justfixed.domain.rates import (
     PostFixedIPCA,
     Prefixed,
     Rate,
+    rate_type_label,
 )
 
 
@@ -216,3 +217,18 @@ class TestPostFixedCDIPlusSpread:
     def test_is_a_rate(self) -> None:
         rate = PostFixedCDIPlusSpread.from_percent("2.05")
         assert isinstance(rate, Rate)
+
+
+# ---------- rate_type_label ----------
+class TestRateTypeLabel:
+    def test_prefixed(self) -> None:
+        assert rate_type_label(Prefixed.from_percent("12")) == "Pré"
+
+    def test_post_fixed_cdi(self) -> None:
+        assert rate_type_label(PostFixedCDI.from_percent("112")) == "Pós"
+
+    def test_post_fixed_cdi_plus_spread(self) -> None:
+        assert rate_type_label(PostFixedCDIPlusSpread.from_percent("2.05")) == "Pós+"
+
+    def test_post_fixed_ipca(self) -> None:
+        assert rate_type_label(PostFixedIPCA.from_percent("5.5")) == "IPCA+"

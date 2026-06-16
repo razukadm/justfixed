@@ -17,7 +17,13 @@ from justfixed.domain.investment import Investment
 from justfixed.domain.issuer import Issuer, IssuerKind
 from justfixed.domain.money import Money
 from justfixed.domain.product import ProductType
-from justfixed.domain.rates import Prefixed
+from justfixed.domain.rates import (
+    PostFixedCDI,
+    PostFixedCDIPlusSpread,
+    PostFixedIPCA,
+    Prefixed,
+    rate_type_label,
+)
 from justfixed.engine.conglomerate_report import (
     ConglomerateDetailRow,
     ConglomerateReport,
@@ -437,3 +443,48 @@ def test_both_exports_load_as_valid_xlsx() -> None:
     report = build_conglomerate_report([inv], as_of=AS_OF, assumed_cdi=ASSUMED_CDI)
     cong_data = export_conglomerates_xlsx(report)
     openpyxl.load_workbook(BytesIO(cong_data))
+
+
+# ── Type column: pt-BR labels ─────────────────────────────────────────────────
+
+def test_investments_type_column_ptbr_labels() -> None:
+    """Type column must emit pt-BR labels for all four rate kinds, not English."""
+    issuer = _bank("Banco Inter")
+    maturity = date(2027, 6, 1)
+
+    rates = [
+        Prefixed.from_percent("12"),
+        PostFixedCDI.from_percent("112"),
+        PostFixedCDIPlusSpread.from_percent("2.05"),
+        PostFixedIPCA.from_percent("5.5"),
+    ]
+    investments = [
+        Investment.create(
+            product=ProductType.CDB,
+            issuer=issuer,
+            principal=Money.from_reais("10000"),
+            rate=r,
+            purchase_date=PURCHASE,
+            maturity_date=maturity,
+        )
+        for r in rates
+    ]
+
+    data = export_investments_xlsx(
+        investments, projection_cache=None, fgc_status_by_id={}, as_of=AS_OF
+    )
+    ws = _ws(data)
+
+    # Each Type cell must match rate_type_label (canonical source of truth).
+    for row_idx, rate in enumerate(rates, start=2):
+        cell = ws.cell(row=row_idx, column=5).value
+        assert cell == rate_type_label(rate), (
+            f"row {row_idx}: expected {rate_type_label(rate)!r}, got {cell!r}"
+        )
+
+    # Explicit pt-BR label assertions — guards against accidentally restoring
+    # the old English labels ("Prefixed", "CDI%", "CDI+").
+    assert ws.cell(row=2, column=5).value == "Pré"
+    assert ws.cell(row=3, column=5).value == "Pós"
+    assert ws.cell(row=4, column=5).value == "Pós+"
+    assert ws.cell(row=5, column=5).value == "IPCA+"

@@ -67,6 +67,7 @@ from justfixed.domain.rates import (
     PostFixedIPCA,
     Rate,
     _format_brazilian_percent,
+    rate_type_label,
 )
 from justfixed.engine.curve import Curve
 from justfixed.engine.fetcher import (
@@ -189,12 +190,7 @@ _MATURED_COLOR = QColor(COLORS.INK_3)   # whole-row demote + PAID text color
 
 
 def _format_type(rate: Rate) -> str:
-    match rate:
-        case Prefixed():               return "Pré"
-        case PostFixedCDI():           return "Pós"
-        case PostFixedCDIPlusSpread(): return "Pós+"
-        case PostFixedIPCA():          return "IPCA+"
-    return "?"
+    return rate_type_label(rate)
 
 
 def _format_rate_short(rate: Rate) -> str:

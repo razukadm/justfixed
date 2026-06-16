@@ -10,12 +10,7 @@ import openpyxl
 
 from justfixed.domain.investment import Investment
 from justfixed.domain.issuer import IssuerKind
-from justfixed.domain.rates import (
-    PostFixedCDI,
-    PostFixedCDIPlusSpread,
-    PostFixedIPCA,
-    Prefixed,
-)
+from justfixed.domain.rates import rate_type_label
 from justfixed.engine.conglomerate_report import ConglomerateReport
 from justfixed.engine.fgc import ExposureStatus
 from justfixed.engine.projection import ProjectionResult
@@ -31,18 +26,6 @@ _CONGLOMERATES_HEADER = [
     "Next maturity", "FGC",
 ]
 
-
-def _rate_type(inv: Investment) -> str:
-    rate = inv.rate
-    if isinstance(rate, Prefixed):
-        return "Prefixed"
-    if isinstance(rate, PostFixedCDI):
-        return "CDI%"
-    if isinstance(rate, PostFixedCDIPlusSpread):
-        return "CDI+"
-    if isinstance(rate, PostFixedIPCA):
-        return "IPCA+"
-    return ""
 
 
 def _fgc_cell(
@@ -90,7 +73,7 @@ def export_investments_xlsx(
             inv.issuer.conglomerate,
             inv.custodian,
             inv.product.value,
-            _rate_type(inv),
+            rate_type_label(inv.rate),
             inv.rate.to_display(),
             float(inv.principal.amount),
             inv.maturity_date,

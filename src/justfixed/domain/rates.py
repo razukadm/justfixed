@@ -183,3 +183,17 @@ class PostFixedCDIPlusSpread(Rate):
 
     def to_display(self) -> str:
         return f"CDI + {_format_brazilian_percent(self.spread_percent)}"
+
+
+def rate_type_label(rate: Rate) -> str:
+    """Canonical short type label for a rate, in pt-BR.
+
+    Single source of truth for the Investments-table "Type" column and the
+    XLSX export's "Type" column, so the two cannot diverge.
+    """
+    match rate:
+        case Prefixed():               return "Pré"
+        case PostFixedCDI():           return "Pós"
+        case PostFixedCDIPlusSpread(): return "Pós+"
+        case PostFixedIPCA():          return "IPCA+"
+    return "?"
