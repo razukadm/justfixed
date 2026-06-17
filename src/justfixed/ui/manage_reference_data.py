@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QHeaderView,
     QInputDialog,
-    QLabel,
     QMessageBox,
     QPushButton,
     QTableWidget,
@@ -54,25 +53,15 @@ class ManageReferenceDataDialog(QDialog):
         self._tabs = QTabWidget()
         self._tabs.addTab(self._build_issuers_tab(), "Issuers")
         self._tabs.addTab(self._build_conglomerates_tab(), "Conglomerates")
-        self._tabs.addTab(self._build_placeholder_tab(), "Custodians")
+        self._tabs.addTab(self._build_custodians_tab(), "Custodians")
         root.addWidget(self._tabs, stretch=1)
 
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         button_box.rejected.connect(self.reject)
         root.addWidget(button_box)
 
-        # Both tables now exist — safe to populate in one pass.
+        # All three tables now exist — safe to populate in one pass.
         self._refresh_all()
-
-    def _build_placeholder_tab(self) -> QWidget:
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label = QLabel("Coming soon")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setStyleSheet("color: #888888;")
-        layout.addWidget(label)
-        return widget
 
     def _build_issuers_tab(self) -> QWidget:
         widget = QWidget()
@@ -132,15 +121,47 @@ class ManageReferenceDataDialog(QDialog):
             QTableWidget.SelectionBehavior.SelectRows
         )
         layout.addWidget(self._conglomerates_table)
-        # Populate deferred — _build_ui calls _refresh_all after both tables exist.
+        # Populate deferred — _build_ui calls _refresh_all after all tables exist.
+        return widget
+
+    def _build_custodians_tab(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(4, 4, 4, 4)
+
+        self._custodians_table = QTableWidget()
+        self._custodians_table.setColumnCount(4)
+        self._custodians_table.setHorizontalHeaderLabels(
+            ["Custodian", "# Investments", "Rename", "Clear"]
+        )
+        hh = self._custodians_table.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        self._custodians_table.setColumnWidth(2, 80)
+        self._custodians_table.setColumnWidth(3, 80)
+        self._custodians_table.verticalHeader().setVisible(False)
+        self._custodians_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+        self._custodians_table.setSelectionMode(
+            QTableWidget.SelectionMode.SingleSelection
+        )
+        self._custodians_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        layout.addWidget(self._custodians_table)
+        # Populate deferred — _build_ui calls _refresh_all after all tables exist.
         return widget
 
     # ── Data population ───────────────────────────────────────────────────────
 
     def _refresh_all(self) -> None:
-        """Repopulate both live tabs. Called after any mutation."""
+        """Repopulate all live tabs. Called after any mutation."""
         self._populate_issuers_table()
         self._populate_conglomerates_table()
+        self._populate_custodians_table()
 
     def _populate_issuers_table(self) -> None:
         counts: Counter = Counter(
@@ -218,6 +239,62 @@ class ManageReferenceDataDialog(QDialog):
             )
             self._conglomerates_table.setCellWidget(row, 4, dissolve_btn)
 
+    def _populate_custodians_table(self) -> None:
+        investments = self._investment_repo.list_all()
+
+        counts: dict[str, int] = defaultdict(int)
+        unset_count = 0
+        for inv in investments:
+            if inv.custodian is None:
+                unset_count += 1
+            else:
+                counts[inv.custodian] += 1
+
+        custodians = sorted(counts.keys())
+        total_rows = len(custodians) + (1 if unset_count > 0 else 0)
+        self._custodians_table.setRowCount(total_rows)
+
+        for row, cust in enumerate(custodians):
+            self._custodians_table.setItem(row, 0, QTableWidgetItem(cust))
+
+            count_item = QTableWidgetItem(str(counts[cust]))
+            count_item.setTextAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
+            self._custodians_table.setItem(row, 1, count_item)
+
+            rename_btn = QPushButton("Rename")
+            rename_btn.clicked.connect(
+                lambda checked=False, c=cust: self._on_rename_custodian(c)
+            )
+            self._custodians_table.setCellWidget(row, 2, rename_btn)
+
+            clear_btn = QPushButton("Clear")
+            clear_btn.clicked.connect(
+                lambda checked=False, c=cust: self._on_clear_custodian(c)
+            )
+            self._custodians_table.setCellWidget(row, 3, clear_btn)
+
+        if unset_count > 0:
+            row = len(custodians)
+            self._custodians_table.setItem(row, 0, QTableWidgetItem("—"))
+
+            count_item = QTableWidgetItem(str(unset_count))
+            count_item.setTextAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
+            self._custodians_table.setItem(row, 1, count_item)
+
+            rename_btn = QPushButton("Rename")
+            rename_btn.setEnabled(False)
+            rename_btn.setToolTip("No custodian to rename.")
+            self._custodians_table.setCellWidget(row, 2, rename_btn)
+
+            clear_btn = QPushButton("Clear")
+            clear_btn.setEnabled(False)
+            clear_btn.setToolTip("Already unset.")
+            self._custodians_table.setCellWidget(row, 3, clear_btn)
+
     # ── Actions ───────────────────────────────────────────────────────────────
 
     def _on_delete_issuer(self, issuer) -> None:
@@ -276,4 +353,49 @@ class ManageReferenceDataDialog(QDialog):
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._issuer_repo.dissolve_conglomerate(name)
+        self._refresh_all()
+
+    def _on_rename_custodian(self, old: str) -> None:
+        text, ok = QInputDialog.getText(
+            self, "Rename Custodian", f"New name for '{old}':", text=old
+        )
+        if not ok:
+            return
+        text = text.strip()
+        if not text:
+            QMessageBox.warning(self, "Rename Custodian", "Name can't be blank.")
+            return
+        if text == old:
+            return
+        investments = self._investment_repo.list_all()
+        existing = {inv.custodian for inv in investments if inv.custodian is not None}
+        if text in existing:
+            old_count = sum(1 for inv in investments if inv.custodian == old)
+            reply = QMessageBox.question(
+                self,
+                "Merge Custodians",
+                f"'{text}' already exists. Merge the {old_count} investment(s) from "
+                f"'{old}' into '{text}'?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        self._investment_repo.rename_custodian(old, text)
+        self._refresh_all()
+
+    def _on_clear_custodian(self, name: str) -> None:
+        investments = self._investment_repo.list_all()
+        count = sum(1 for inv in investments if inv.custodian == name)
+        reply = QMessageBox.question(
+            self,
+            "Clear Custodian",
+            f"Clear custodian '{name}' from its {count} investment(s)? "
+            f"They'll show no custodian.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self._investment_repo.clear_custodian(name)
         self._refresh_all()

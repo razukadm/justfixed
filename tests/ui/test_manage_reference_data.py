@@ -17,7 +17,6 @@ import pytest
 from PySide6.QtWidgets import (
     QApplication,
     QInputDialog,
-    QLabel,
     QMessageBox,
     QPushButton,
     QTableWidget,
@@ -69,7 +68,8 @@ def _make_issuer(name: str, conglomerate: str = "Some Group") -> Issuer:
 
 
 def _make_investment(issuer: Issuer, *, purchase_date=date(2024, 1, 1),
-                     maturity_date=date(2026, 1, 1)) -> Investment:
+                     maturity_date=date(2026, 1, 1),
+                     custodian: str | None = None) -> Investment:
     return Investment.create(
         product=ProductType.CDB,
         issuer=issuer,
@@ -77,6 +77,7 @@ def _make_investment(issuer: Issuer, *, purchase_date=date(2024, 1, 1),
         rate=PostFixedCDI.from_percent("110"),
         purchase_date=purchase_date,
         maturity_date=maturity_date,
+        custodian=custodian,
     )
 
 
@@ -101,14 +102,11 @@ class TestDialogTabStructure:
         dlg = _make_dialog(issuer_repo, investment_repo, qapp)
         assert isinstance(dlg._conglomerates_table, QTableWidget)
 
-    def test_custodians_tab_has_placeholder_label(
+    def test_custodians_tab_has_table(
         self, qapp, issuer_repo, investment_repo
     ) -> None:
         dlg = _make_dialog(issuer_repo, investment_repo, qapp)
-        widget = dlg._tabs.widget(2)
-        labels = widget.findChildren(QLabel)
-        assert any("soon" in lbl.text().lower() or "coming" in lbl.text().lower()
-                   for lbl in labels)
+        assert isinstance(dlg._custodians_table, QTableWidget)
 
 
 # ── Issuers table content ─────────────────────────────────────────────────────
@@ -511,3 +509,269 @@ class TestCrossTabConsistency:
                 assert table.item(r, 1).text() == "New Group"
                 return
         pytest.fail("Banco Alpha not found in issuers table after rename")
+
+
+# ── Custodians tab content ─────────────────────────────────────────────────────
+
+
+class TestCustodiansTabContent:
+    def test_lists_custodians_with_correct_counts(
+        self, qapp, issuer_repo, investment_repo
+    ) -> None:
+        iss = _make_issuer("Banco Alpha")
+        issuer_repo.save(iss)
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 1, 1),
+                             maturity_date=date(2026, 1, 1), custodian="XP")
+        )
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 2, 1),
+                             maturity_date=date(2026, 2, 1), custodian="XP")
+        )
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 3, 1),
+                             maturity_date=date(2026, 3, 1), custodian="BTG")
+        )
+
+        dlg = _make_dialog(issuer_repo, investment_repo, qapp)
+        table = dlg._custodians_table
+
+        data: dict[str, str] = {}
+        for r in range(table.rowCount()):
+            data[table.item(r, 0).text()] = table.item(r, 1).text()
+
+        assert data["XP"] == "2"
+        assert data["BTG"] == "1"
+
+    def test_unset_row_appears_as_dash_when_some_none(
+        self, qapp, issuer_repo, investment_repo
+    ) -> None:
+        iss = _make_issuer("Banco Alpha")
+        issuer_repo.save(iss)
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 1, 1),
+                             maturity_date=date(2026, 1, 1), custodian="XP")
+        )
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 2, 1),
+                             maturity_date=date(2026, 2, 1), custodian=None)
+        )
+
+        dlg = _make_dialog(issuer_repo, investment_repo, qapp)
+        table = dlg._custodians_table
+        names = {table.item(r, 0).text() for r in range(table.rowCount())}
+        assert "—" in names
+
+    def test_unset_row_buttons_disabled_with_tooltips(
+        self, qapp, issuer_repo, investment_repo
+    ) -> None:
+        iss = _make_issuer("Banco Alpha")
+        issuer_repo.save(iss)
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 1, 1),
+                             maturity_date=date(2026, 1, 1), custodian=None)
+        )
+
+        dlg = _make_dialog(issuer_repo, investment_repo, qapp)
+        table = dlg._custodians_table
+        for r in range(table.rowCount()):
+            if table.item(r, 0).text() == "—":
+                rename_btn = table.cellWidget(r, 2)
+                clear_btn = table.cellWidget(r, 3)
+                assert isinstance(rename_btn, QPushButton)
+                assert isinstance(clear_btn, QPushButton)
+                assert not rename_btn.isEnabled()
+                assert not clear_btn.isEnabled()
+                assert rename_btn.toolTip() != ""
+                assert clear_btn.toolTip() != ""
+                return
+        pytest.fail("Unset '—' row not found in custodians table")
+
+    def test_no_unset_row_when_all_have_custodian(
+        self, qapp, issuer_repo, investment_repo
+    ) -> None:
+        iss = _make_issuer("Banco Alpha")
+        issuer_repo.save(iss)
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 1, 1),
+                             maturity_date=date(2026, 1, 1), custodian="XP")
+        )
+
+        dlg = _make_dialog(issuer_repo, investment_repo, qapp)
+        table = dlg._custodians_table
+        names = {table.item(r, 0).text() for r in range(table.rowCount())}
+        assert "—" not in names
+
+
+# ── Rename custodian ───────────────────────────────────────────────────────────
+
+
+class TestRenameCustodian:
+    def test_rename_to_new_name_calls_repo_and_refreshes(
+        self, qapp, issuer_repo, investment_repo
+    ) -> None:
+        iss = _make_issuer("Banco Alpha")
+        issuer_repo.save(iss)
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 1, 1),
+                             maturity_date=date(2026, 1, 1), custodian="OldBroker")
+        )
+
+        dlg = _make_dialog(issuer_repo, investment_repo, qapp)
+
+        with patch.object(QInputDialog, "getText", return_value=("NewBroker", True)):
+            dlg._on_rename_custodian("OldBroker")
+
+        names = {
+            dlg._custodians_table.item(r, 0).text()
+            for r in range(dlg._custodians_table.rowCount())
+        }
+        assert "OldBroker" not in names
+        assert "NewBroker" in names
+        assert all(inv.custodian == "NewBroker" for inv in investment_repo.list_all())
+
+    def test_rename_onto_existing_confirms_merge_on_yes(
+        self, qapp, issuer_repo, investment_repo
+    ) -> None:
+        iss = _make_issuer("Banco Alpha")
+        issuer_repo.save(iss)
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 1, 1),
+                             maturity_date=date(2026, 1, 1), custodian="XP")
+        )
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 2, 1),
+                             maturity_date=date(2026, 2, 1), custodian="BTG")
+        )
+
+        dlg = _make_dialog(issuer_repo, investment_repo, qapp)
+
+        with patch.object(QInputDialog, "getText", return_value=("BTG", True)):
+            with patch.object(
+                QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes
+            ):
+                dlg._on_rename_custodian("XP")
+
+        assert dlg._custodians_table.rowCount() == 1
+        assert dlg._custodians_table.item(0, 0).text() == "BTG"
+
+    def test_rename_onto_existing_on_no_does_not_rename(
+        self, qapp, issuer_repo, investment_repo
+    ) -> None:
+        iss = _make_issuer("Banco Alpha")
+        issuer_repo.save(iss)
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 1, 1),
+                             maturity_date=date(2026, 1, 1), custodian="XP")
+        )
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 2, 1),
+                             maturity_date=date(2026, 2, 1), custodian="BTG")
+        )
+
+        dlg = _make_dialog(issuer_repo, investment_repo, qapp)
+
+        with patch.object(QInputDialog, "getText", return_value=("BTG", True)):
+            with patch.object(
+                QMessageBox, "question", return_value=QMessageBox.StandardButton.No
+            ):
+                dlg._on_rename_custodian("XP")
+
+        assert dlg._custodians_table.rowCount() == 2
+
+    def test_rename_to_blank_warning_no_backend(
+        self, qapp, issuer_repo, investment_repo
+    ) -> None:
+        iss = _make_issuer("Banco Alpha")
+        issuer_repo.save(iss)
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 1, 1),
+                             maturity_date=date(2026, 1, 1), custodian="XP")
+        )
+
+        dlg = _make_dialog(issuer_repo, investment_repo, qapp)
+
+        with patch.object(QInputDialog, "getText", return_value=("", True)):
+            with patch.object(QMessageBox, "warning") as mock_warn:
+                dlg._on_rename_custodian("XP")
+
+        mock_warn.assert_called_once()
+        names = {
+            dlg._custodians_table.item(r, 0).text()
+            for r in range(dlg._custodians_table.rowCount())
+        }
+        assert "XP" in names
+
+    def test_cancel_does_not_rename(
+        self, qapp, issuer_repo, investment_repo
+    ) -> None:
+        iss = _make_issuer("Banco Alpha")
+        issuer_repo.save(iss)
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 1, 1),
+                             maturity_date=date(2026, 1, 1), custodian="XP")
+        )
+
+        dlg = _make_dialog(issuer_repo, investment_repo, qapp)
+
+        with patch.object(QInputDialog, "getText", return_value=("NewName", False)):
+            dlg._on_rename_custodian("XP")
+
+        names = {
+            dlg._custodians_table.item(r, 0).text()
+            for r in range(dlg._custodians_table.rowCount())
+        }
+        assert "XP" in names
+
+
+# ── Clear custodian ────────────────────────────────────────────────────────────
+
+
+class TestClearCustodian:
+    def test_clear_confirmed_calls_repo_and_row_reflects_it(
+        self, qapp, issuer_repo, investment_repo
+    ) -> None:
+        iss = _make_issuer("Banco Alpha")
+        issuer_repo.save(iss)
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 1, 1),
+                             maturity_date=date(2026, 1, 1), custodian="XP")
+        )
+
+        dlg = _make_dialog(issuer_repo, investment_repo, qapp)
+        assert dlg._custodians_table.rowCount() == 1
+
+        with patch.object(
+            QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes
+        ):
+            dlg._on_clear_custodian("XP")
+
+        names = {
+            dlg._custodians_table.item(r, 0).text()
+            for r in range(dlg._custodians_table.rowCount())
+        }
+        assert "XP" not in names
+        assert "—" in names
+
+    def test_clear_declined_does_not_call_repo(
+        self, qapp, issuer_repo, investment_repo
+    ) -> None:
+        iss = _make_issuer("Banco Alpha")
+        issuer_repo.save(iss)
+        investment_repo.save(
+            _make_investment(iss, purchase_date=date(2024, 1, 1),
+                             maturity_date=date(2026, 1, 1), custodian="XP")
+        )
+
+        dlg = _make_dialog(issuer_repo, investment_repo, qapp)
+
+        with patch.object(
+            QMessageBox, "question", return_value=QMessageBox.StandardButton.No
+        ):
+            dlg._on_clear_custodian("XP")
+
+        names = {
+            dlg._custodians_table.item(r, 0).text()
+            for r in range(dlg._custodians_table.rowCount())
+        }
+        assert "XP" in names
