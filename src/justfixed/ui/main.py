@@ -1355,7 +1355,7 @@ class _CalculatorTab(QWidget):
         self._value_edit.setEnabled(True)
         self._clear_errors()
         self._reset_result_area()
-        main_win = self.parent()
+        main_win = self._main_window
         if main_win is not None and hasattr(main_win, "clear_active_mock"):
             main_win.clear_active_mock()
 
@@ -1598,7 +1598,7 @@ class _CalculatorTab(QWidget):
                 f"Projected as of {maturity_date.strftime('%d/%m/%Y')}"
                 f" · {issuer.name} · FGC {status_text}"
             )
-        main_win = self.parent()
+        main_win = self._main_window
         if main_win is not None and hasattr(main_win, "statusBar"):
             main_win.statusBar().showMessage(msg)
         if main_win is not None and hasattr(main_win, "set_active_mock"):
@@ -1707,7 +1707,7 @@ class _CalculatorTab(QWidget):
         else:
             peak_str = result.peak_date.strftime("%d/%m/%Y")
             msg = f"Solved for max principal under FGC · cap binds {peak_str}"
-        main_win = self.parent()
+        main_win = self._main_window
         if main_win is not None and hasattr(main_win, "statusBar"):
             main_win.statusBar().showMessage(msg)
         is_treasury = issuer.kind == IssuerKind.TREASURY

@@ -1759,6 +1759,26 @@ class TestCalculatorTabAssumptionDelegation:
         calc = _CalculatorTab(session_factory=session_factory, parent=None)
         assert calc._assumed_ipca == _ASSUMED_IPCA
 
+    def test_reset_reaches_owner_after_reparenting(self, qapp, session_factory) -> None:
+        from PySide6.QtWidgets import QTabWidget, QWidget
+
+        class _StubWin(QWidget):
+            def __init__(self) -> None:
+                super().__init__()
+                self.cleared = 0
+            def clear_active_mock(self) -> None:
+                self.cleared += 1
+
+        stub = _StubWin()
+        calc = _CalculatorTab(session_factory=session_factory, parent=stub)
+        tabs = QTabWidget()
+        tabs.addTab(calc, "Calc")          # reparents calc; self.parent() != stub now
+        before = stub.cleared
+        calc.reset()
+        # With the old self.parent(), reset() hits the stacked widget and never
+        # calls clear_active_mock; the stored _main_window reference fixes that.
+        assert stub.cleared == before + 1
+
 
 # ── Projection assumption editor (Dev tab) ────────────────────────────────────
 
