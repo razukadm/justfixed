@@ -2289,3 +2289,52 @@ class TestProjectionCacheRepair:
 
         assert len(self_mock.projection_cache) == 1
         assert self_mock.projection_cache[0].investment is inv2
+
+
+class TestExportCurvesXlsx:
+    def _make_self_mock(self) -> MagicMock:
+        self_mock = MagicMock(spec=MainWindow)
+        self_mock._cdi_curve = MagicMock()
+        self_mock._pre_curve = MagicMock()
+        self_mock._ipca_curve = MagicMock()
+        return self_mock
+
+    def test_exports_curves_and_writes_file(self, tmp_path) -> None:
+        self_mock = self._make_self_mock()
+        out = tmp_path / "curves.xlsx"
+
+        with patch("justfixed.ui.main.QFileDialog.getSaveFileName",
+                   return_value=(str(out), "")), \
+             patch("justfixed.ui.main.export_curves_xlsx",
+                   return_value=b"data") as mock_export, \
+             patch("justfixed.ui.main.Path.write_bytes") as mock_write:
+            MainWindow._on_export_curves_xlsx(self_mock)
+
+        mock_export.assert_called_once_with(
+            self_mock._cdi_curve, self_mock._pre_curve, self_mock._ipca_curve
+        )
+        mock_write.assert_called_once_with(b"data")
+        self_mock.statusBar().showMessage.assert_called_once()
+
+    def test_cancel_does_not_export(self) -> None:
+        self_mock = self._make_self_mock()
+
+        with patch("justfixed.ui.main.QFileDialog.getSaveFileName",
+                   return_value=("", "")), \
+             patch("justfixed.ui.main.export_curves_xlsx") as mock_export:
+            MainWindow._on_export_curves_xlsx(self_mock)
+
+        mock_export.assert_not_called()
+
+    def test_exception_shows_critical_dialog(self) -> None:
+        self_mock = self._make_self_mock()
+
+        with patch("justfixed.ui.main.QFileDialog.getSaveFileName",
+                   return_value=("/some/path.xlsx", "")), \
+             patch("justfixed.ui.main.export_curves_xlsx",
+                   side_effect=RuntimeError("boom")), \
+             patch("justfixed.ui.main.QMessageBox.critical") as mock_crit:
+            MainWindow._on_export_curves_xlsx(self_mock)
+
+        mock_crit.assert_called_once()
+        assert "boom" in mock_crit.call_args.args[2]

@@ -99,6 +99,7 @@ from justfixed.engine.projection import ProjectionResult, project
 from justfixed.exports.calendar import export_maturity_calendar
 from justfixed.exports.xlsx import (
     export_conglomerates_xlsx,
+    export_curves_xlsx,
     export_investments_xlsx,
 )
 from justfixed.importers.detection import Broker, load_statement
@@ -3666,6 +3667,10 @@ class MainWindow(QMainWindow):
         load_btn.clicked.connect(self._on_load_curve_from_file_clicked)
         root.addWidget(load_btn)
 
+        export_curves_btn = QPushButton("Export curve data as XLSX…")
+        export_curves_btn.clicked.connect(self._on_export_curves_xlsx)
+        root.addWidget(export_curves_btn)
+
         root.addWidget(_sep())
 
         # ── Publishing curves runbook (B35) ──────────────────────────────────────
@@ -3926,6 +3931,23 @@ class MainWindow(QMainWindow):
             data = export_conglomerates_xlsx(report)
             Path(path_str).write_bytes(data)
             self.statusBar().showMessage(f"Conglomerates exported to {path_str}.", 8000)
+        except Exception as exc:
+            QMessageBox.critical(self, "Excel export failed", str(exc))
+
+    def _on_export_curves_xlsx(self) -> None:
+        path_str, _ = QFileDialog.getSaveFileName(
+            self, "Export curve data",
+            f"justfixed-curves-{date.today().isoformat()}.xlsx",
+            "Excel files (*.xlsx)",
+        )
+        if not path_str:
+            return
+        try:
+            data = export_curves_xlsx(
+                self._cdi_curve, self._pre_curve, self._ipca_curve
+            )
+            Path(path_str).write_bytes(data)
+            self.statusBar().showMessage(f"Curve data exported to {path_str}.", 8000)
         except Exception as exc:
             QMessageBox.critical(self, "Excel export failed", str(exc))
 
