@@ -30,7 +30,7 @@ from sqlalchemy import exists
 from sqlalchemy.orm import Session, sessionmaker
 
 from justfixed.domain.investment import Investment
-from justfixed.domain.issuer import Issuer
+from justfixed.domain.issuer import Issuer, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import ProductType
 from justfixed.persistence.database import session_scope
@@ -108,6 +108,62 @@ class IssuerRepository:
             row = session.get(IssuerRow, issuer_id)
             if row is not None:
                 session.delete(row)
+
+    def rename_conglomerate(self, old: str, new: str) -> int:
+        """Rename all issuers in conglomerate `old` to `new`.
+
+        Also upserts curation memory for every affected issuer so future
+        imports of those issuers default to the new name.
+
+        Returns the number of issuers updated. Raises ValueError if `new`
+        is blank after stripping.
+        """
+        old = old.strip()
+        new = new.strip()
+        if not new:
+            raise ValueError("new conglomerate name must not be blank")
+        with session_scope(self._factory) as session:
+            rows = (
+                session.query(IssuerRow)
+                .filter(IssuerRow.conglomerate == old)
+                .all()
+            )
+            for row in rows:
+                row.conglomerate = new
+                session.merge(
+                    CurationMemoryRow(
+                        normalized_issuer_name=row.normalized_name,
+                        conglomerate=new,
+                    )
+                )
+        return len(rows)
+
+    def dissolve_conglomerate(self, old: str) -> int:
+        """Dissolve the conglomerate `old`, reverting each member to
+        ``[unverified] <name>``.
+
+        Also deletes curation memory entries for every affected issuer so
+        future imports won't re-apply the old conglomerate name.
+
+        Returns the number of issuers updated.
+        """
+        old = old.strip()
+        with session_scope(self._factory) as session:
+            rows = (
+                session.query(IssuerRow)
+                .filter(IssuerRow.conglomerate == old)
+                .all()
+            )
+            for row in rows:
+                row.conglomerate = f"{UNVERIFIED_CONGLOMERATE_PREFIX}{row.name}"
+                (
+                    session.query(CurationMemoryRow)
+                    .filter(
+                        CurationMemoryRow.normalized_issuer_name == row.normalized_name
+                    )
+                    .delete()
+                )
+        return len(rows)
 
 
 class InvestmentRepository:
@@ -212,6 +268,38 @@ class InvestmentRepository:
             row = session.get(InvestmentRow, investment_id)
             if row is not None:
                 session.delete(row)
+
+    def rename_custodian(self, old: str, new: str) -> int:
+        """Rename all investments with custodian `old` to `new`.
+
+        Returns the number of investments updated. Raises ValueError if
+        `new` is blank after stripping.
+        """
+        old = old.strip()
+        new = new.strip()
+        if not new:
+            raise ValueError("new custodian name must not be blank")
+        with session_scope(self._factory) as session:
+            count = (
+                session.query(InvestmentRow)
+                .filter(InvestmentRow.custodian == old)
+                .update({"custodian": new}, synchronize_session=False)
+            )
+        return count
+
+    def clear_custodian(self, old: str) -> int:
+        """Set custodian to NULL for all investments with custodian `old`.
+
+        Returns the number of investments updated.
+        """
+        old = old.strip()
+        with session_scope(self._factory) as session:
+            count = (
+                session.query(InvestmentRow)
+                .filter(InvestmentRow.custodian == old)
+                .update({"custodian": None}, synchronize_session=False)
+            )
+        return count
 
     def delete_all(self) -> tuple[int, int]:
         """Delete every investment and any issuers left orphaned.

@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from justfixed.domain.investment import Investment
-from justfixed.domain.issuer import Issuer, IssuerKind
+from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType
 from justfixed.domain.rates import PostFixedCDI, PostFixedIPCA, Prefixed
@@ -680,3 +680,254 @@ class TestCurationMemoryRepository:
         curation_repo.delete("BANCO INTER")
         result = curation_repo.list_all()
         assert result == {"ITAU": "Itaú Unibanco Holding"}
+
+
+# ---------- IssuerRepository.rename_conglomerate ----------
+
+
+class TestRenameConglomerate:
+    def test_renames_all_members_and_returns_count(
+        self, issuer_repo, curation_repo
+    ) -> None:
+        a = Issuer.create("Banco Alpha", "Old Group", IssuerKind.COMMERCIAL_BANK)
+        b = Issuer.create("Banco Beta", "Old Group", IssuerKind.COMMERCIAL_BANK)
+        issuer_repo.save(a)
+        issuer_repo.save(b)
+
+        count = issuer_repo.rename_conglomerate("Old Group", "New Group")
+
+        assert count == 2
+        assert issuer_repo.find_by_id(a.id).conglomerate == "New Group"
+        assert issuer_repo.find_by_id(b.id).conglomerate == "New Group"
+
+    def test_curation_memory_upserted_for_each_member(
+        self, issuer_repo, curation_repo
+    ) -> None:
+        a = Issuer.create("Banco Alpha", "Old Group", IssuerKind.COMMERCIAL_BANK)
+        b = Issuer.create("Banco Beta", "Old Group", IssuerKind.COMMERCIAL_BANK)
+        issuer_repo.save(a)
+        issuer_repo.save(b)
+
+        issuer_repo.rename_conglomerate("Old Group", "New Group")
+
+        assert curation_repo.get(Issuer.normalize_name("Banco Alpha")) == "New Group"
+        assert curation_repo.get(Issuer.normalize_name("Banco Beta")) == "New Group"
+
+    def test_merge_onto_existing_conglomerate_leaves_others_untouched(
+        self, issuer_repo
+    ) -> None:
+        a = Issuer.create("Banco Alpha", "Group A", IssuerKind.COMMERCIAL_BANK)
+        b = Issuer.create("Banco Beta", "Group B", IssuerKind.COMMERCIAL_BANK)
+        issuer_repo.save(a)
+        issuer_repo.save(b)
+
+        # Rename Group A → Group B (merge).
+        count = issuer_repo.rename_conglomerate("Group A", "Group B")
+
+        assert count == 1
+        assert issuer_repo.find_by_id(a.id).conglomerate == "Group B"
+        assert issuer_repo.find_by_id(b.id).conglomerate == "Group B"  # unchanged
+
+    def test_no_match_returns_zero(self, issuer_repo) -> None:
+        issuer_repo.save(Issuer.create("Banco Alpha", "Existing", IssuerKind.COMMERCIAL_BANK))
+        assert issuer_repo.rename_conglomerate("Nonexistent", "Whatever") == 0
+
+    def test_empty_new_raises_value_error(self, issuer_repo) -> None:
+        with pytest.raises(ValueError):
+            issuer_repo.rename_conglomerate("Old", "")
+
+    def test_whitespace_only_new_raises_value_error(self, issuer_repo) -> None:
+        with pytest.raises(ValueError):
+            issuer_repo.rename_conglomerate("Old", "   ")
+
+    def test_old_is_stripped_for_matching(self, issuer_repo) -> None:
+        a = Issuer.create("Banco Alpha", "Old Group", IssuerKind.COMMERCIAL_BANK)
+        issuer_repo.save(a)
+        count = issuer_repo.rename_conglomerate("  Old Group  ", "New Group")
+        assert count == 1
+        assert issuer_repo.find_by_id(a.id).conglomerate == "New Group"
+
+
+# ---------- IssuerRepository.dissolve_conglomerate ----------
+
+
+class TestDissolveConglomerate:
+    def test_each_member_gets_own_unverified_prefix(
+        self, issuer_repo, curation_repo
+    ) -> None:
+        a = Issuer.create("Banco Alpha", "Shared Group", IssuerKind.COMMERCIAL_BANK)
+        b = Issuer.create("Banco Beta", "Shared Group", IssuerKind.COMMERCIAL_BANK)
+        issuer_repo.save(a)
+        issuer_repo.save(b)
+
+        count = issuer_repo.dissolve_conglomerate("Shared Group")
+
+        assert count == 2
+        assert issuer_repo.find_by_id(a.id).conglomerate == (
+            f"{UNVERIFIED_CONGLOMERATE_PREFIX}Banco Alpha"
+        )
+        assert issuer_repo.find_by_id(b.id).conglomerate == (
+            f"{UNVERIFIED_CONGLOMERATE_PREFIX}Banco Beta"
+        )
+
+    def test_curation_entries_deleted_for_affected_members(
+        self, issuer_repo, curation_repo
+    ) -> None:
+        a = Issuer.create("Banco Alpha", "Shared Group", IssuerKind.COMMERCIAL_BANK)
+        b = Issuer.create("Banco Beta", "Shared Group", IssuerKind.COMMERCIAL_BANK)
+        issuer_repo.save(a)
+        issuer_repo.save(b)
+        # Seed curation memory as if a prior rename had been done.
+        curation_repo.set(Issuer.normalize_name("Banco Alpha"), "Shared Group")
+        curation_repo.set(Issuer.normalize_name("Banco Beta"), "Shared Group")
+
+        issuer_repo.dissolve_conglomerate("Shared Group")
+
+        assert curation_repo.get(Issuer.normalize_name("Banco Alpha")) is None
+        assert curation_repo.get(Issuer.normalize_name("Banco Beta")) is None
+
+    def test_other_conglomerates_untouched(self, issuer_repo) -> None:
+        a = Issuer.create("Banco Alpha", "Group A", IssuerKind.COMMERCIAL_BANK)
+        b = Issuer.create("Banco Beta", "Group B", IssuerKind.COMMERCIAL_BANK)
+        issuer_repo.save(a)
+        issuer_repo.save(b)
+
+        issuer_repo.dissolve_conglomerate("Group A")
+
+        assert issuer_repo.find_by_id(b.id).conglomerate == "Group B"
+
+    def test_no_match_returns_zero(self, issuer_repo) -> None:
+        issuer_repo.save(Issuer.create("Banco Alpha", "Existing", IssuerKind.COMMERCIAL_BANK))
+        assert issuer_repo.dissolve_conglomerate("Nonexistent") == 0
+
+
+# ---------- InvestmentRepository.rename_custodian ----------
+
+
+class TestRenameCustodian:
+    def test_renames_all_matches_and_returns_count(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        a = make_investment(issuer, custodian="XP Investimentos",
+                            purchase_date=date(2024, 1, 1), maturity_date=date(2026, 1, 1))
+        b = make_investment(issuer, custodian="XP Investimentos",
+                            purchase_date=date(2024, 2, 1), maturity_date=date(2026, 2, 1))
+        investment_repo.save(a)
+        investment_repo.save(b)
+
+        count = investment_repo.rename_custodian("XP Investimentos", "XP")
+
+        assert count == 2
+        assert investment_repo.find_by_id(a.id).custodian == "XP"
+        assert investment_repo.find_by_id(b.id).custodian == "XP"
+
+    def test_merge_onto_existing_custodian(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        a = make_investment(issuer, custodian="XP Investimentos",
+                            purchase_date=date(2024, 1, 1), maturity_date=date(2026, 1, 1))
+        b = make_investment(issuer, custodian="XP",
+                            purchase_date=date(2024, 2, 1), maturity_date=date(2026, 2, 1))
+        investment_repo.save(a)
+        investment_repo.save(b)
+
+        count = investment_repo.rename_custodian("XP Investimentos", "XP")
+
+        assert count == 1
+        assert investment_repo.find_by_id(a.id).custodian == "XP"
+        assert investment_repo.find_by_id(b.id).custodian == "XP"
+
+    def test_null_custodian_rows_untouched(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        with_custodian = make_investment(issuer, custodian="XP",
+                                         purchase_date=date(2024, 1, 1),
+                                         maturity_date=date(2026, 1, 1))
+        without_custodian = make_investment(issuer, custodian=None,
+                                             purchase_date=date(2024, 2, 1),
+                                             maturity_date=date(2026, 2, 1))
+        investment_repo.save(with_custodian)
+        investment_repo.save(without_custodian)
+
+        investment_repo.rename_custodian("XP", "XP Investimentos")
+
+        assert investment_repo.find_by_id(without_custodian.id).custodian is None
+
+    def test_no_match_returns_zero(self, issuer_repo, investment_repo) -> None:
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        investment_repo.save(make_investment(issuer, custodian="BTG"))
+        assert investment_repo.rename_custodian("XP", "XP Investimentos") == 0
+
+    def test_empty_new_raises_value_error(self, investment_repo) -> None:
+        with pytest.raises(ValueError):
+            investment_repo.rename_custodian("XP", "")
+
+    def test_whitespace_only_new_raises_value_error(self, investment_repo) -> None:
+        with pytest.raises(ValueError):
+            investment_repo.rename_custodian("XP", "   ")
+
+
+# ---------- InvestmentRepository.clear_custodian ----------
+
+
+class TestClearCustodian:
+    def test_sets_matches_to_null_and_returns_count(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        a = make_investment(issuer, custodian="XP",
+                            purchase_date=date(2024, 1, 1), maturity_date=date(2026, 1, 1))
+        b = make_investment(issuer, custodian="XP",
+                            purchase_date=date(2024, 2, 1), maturity_date=date(2026, 2, 1))
+        investment_repo.save(a)
+        investment_repo.save(b)
+
+        count = investment_repo.clear_custodian("XP")
+
+        assert count == 2
+        assert investment_repo.find_by_id(a.id).custodian is None
+        assert investment_repo.find_by_id(b.id).custodian is None
+
+    def test_other_custodians_untouched(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        xp_inv = make_investment(issuer, custodian="XP",
+                                  purchase_date=date(2024, 1, 1), maturity_date=date(2026, 1, 1))
+        btg_inv = make_investment(issuer, custodian="BTG",
+                                   purchase_date=date(2024, 2, 1), maturity_date=date(2026, 2, 1))
+        investment_repo.save(xp_inv)
+        investment_repo.save(btg_inv)
+
+        investment_repo.clear_custodian("XP")
+
+        assert investment_repo.find_by_id(btg_inv.id).custodian == "BTG"
+
+    def test_already_null_custodian_untouched(
+        self, issuer_repo, investment_repo
+    ) -> None:
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        null_inv = make_investment(issuer, custodian=None,
+                                   purchase_date=date(2024, 1, 1), maturity_date=date(2026, 1, 1))
+        investment_repo.save(null_inv)
+
+        count = investment_repo.clear_custodian("XP")
+
+        assert count == 0
+        assert investment_repo.find_by_id(null_inv.id).custodian is None
+
+    def test_no_match_returns_zero(self, issuer_repo, investment_repo) -> None:
+        issuer = make_issuer()
+        issuer_repo.save(issuer)
+        investment_repo.save(make_investment(issuer, custodian="BTG"))
+        assert investment_repo.clear_custodian("XP") == 0
