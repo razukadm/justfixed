@@ -33,7 +33,12 @@ from justfixed.engine.conglomerate_report import (
 )
 from justfixed.engine.fgc import ExposureStatus, fgc_concentration_report_from_projections
 from justfixed.engine.projection import ProjectionResult, project
-from justfixed.exports.xlsx import export_conglomerates_xlsx, export_investments_xlsx
+from justfixed.engine.curve import Curve, CurveVertex
+from justfixed.exports.xlsx import (
+    export_conglomerates_xlsx,
+    export_curves_xlsx,
+    export_investments_xlsx,
+)
 
 # ── Shared constants ──────────────────────────────────────────────────────────
 
@@ -488,3 +493,115 @@ def test_investments_type_column_ptbr_labels() -> None:
     assert ws.cell(row=3, column=5).value == "Pós"
     assert ws.cell(row=4, column=5).value == "Pós+"
     assert ws.cell(row=5, column=5).value == "IPCA+"
+
+
+# ── Curve export ──────────────────────────────────────────────────────────────
+
+_ANCHOR = date(2026, 1, 2)
+
+
+def _curve(*pairs: tuple[int, str]) -> Curve:
+    return Curve(
+        anchor=_ANCHOR,
+        vertices=tuple(
+            CurveVertex(business_days=bd, rate=Decimal(r))
+            for bd, r in pairs
+        ),
+    )
+
+
+def test_curves_returns_bytes() -> None:
+    data = export_curves_xlsx(None, None, None)
+    assert isinstance(data, bytes)
+
+
+def test_curves_reopens_as_valid_xlsx() -> None:
+    data = export_curves_xlsx(None, None, None)
+    openpyxl.load_workbook(BytesIO(data))
+
+
+def test_curves_three_sheets_in_order_when_all_none() -> None:
+    data = export_curves_xlsx(None, None, None)
+    assert _load(data).sheetnames == ["CDI", "PRE", "IPCA"]
+
+
+def test_curves_three_sheets_in_order_when_all_populated() -> None:
+    cdi = _curve((63, "0.120"), (252, "0.130"))
+    pre = _curve((63, "0.110"))
+    ipca = _curve((252, "0.060"))
+    data = export_curves_xlsx(cdi, pre, ipca)
+    assert _load(data).sheetnames == ["CDI", "PRE", "IPCA"]
+
+
+def test_curves_header_row_on_all_sheets() -> None:
+    data = export_curves_xlsx(None, None, None)
+    wb = _load(data)
+    for title in ("CDI", "PRE", "IPCA"):
+        ws = wb[title]
+        assert ws.cell(row=1, column=1).value == "Business Days"
+        assert ws.cell(row=1, column=2).value == "Rate"
+
+
+def test_curves_vertex_rows_business_days_and_rate() -> None:
+    cdi = _curve((63, "0.120"), (126, "0.125"), (252, "0.130"))
+    data = export_curves_xlsx(cdi, None, None)
+    ws = _load(data)["CDI"]
+    assert ws.max_row == 4  # header + 3 vertices
+    assert ws.cell(row=2, column=1).value == 63
+    assert ws.cell(row=2, column=2).value == float(Decimal("0.120"))
+    assert ws.cell(row=3, column=1).value == 126
+    assert ws.cell(row=3, column=2).value == float(Decimal("0.125"))
+    assert ws.cell(row=4, column=1).value == 252
+    assert ws.cell(row=4, column=2).value == float(Decimal("0.130"))
+
+
+def test_curves_business_days_cell_is_int() -> None:
+    cdi = _curve((252, "0.144"))
+    val = _load(export_curves_xlsx(cdi, None, None))["CDI"].cell(row=2, column=1).value
+    assert isinstance(val, int)
+
+
+def test_curves_rate_cell_is_float_not_string() -> None:
+    cdi = _curve((252, "0.144"))
+    val = _load(export_curves_xlsx(cdi, None, None))["CDI"].cell(row=2, column=2).value
+    assert isinstance(val, float)
+    assert val == float(Decimal("0.144"))
+
+
+def test_curves_vertex_order_preserved() -> None:
+    cdi = _curve((21, "0.110"), (63, "0.120"), (252, "0.130"))
+    ws = _load(export_curves_xlsx(cdi, None, None))["CDI"]
+    assert ws.cell(row=2, column=1).value == 21
+    assert ws.cell(row=3, column=1).value == 63
+    assert ws.cell(row=4, column=1).value == 252
+
+
+def test_curves_none_curve_produces_marker_row() -> None:
+    data = export_curves_xlsx(None, None, None)
+    wb = _load(data)
+    for title in ("CDI", "PRE", "IPCA"):
+        ws = wb[title]
+        assert ws.max_row == 2
+        assert ws.cell(row=2, column=1).value == "(no curve loaded)"
+        assert ws.cell(row=2, column=2).value is None
+
+
+def test_curves_empty_vertices_produces_marker_row() -> None:
+    empty = Curve(anchor=_ANCHOR, vertices=())
+    data = export_curves_xlsx(empty, None, None)
+    ws = _load(data)["CDI"]
+    assert ws.max_row == 2
+    assert ws.cell(row=2, column=1).value == "(no curve loaded)"
+    assert ws.cell(row=2, column=2).value is None
+
+
+def test_curves_mixed_none_and_populated() -> None:
+    cdi = _curve((252, "0.144"))
+    data = export_curves_xlsx(cdi, None, None)
+    wb = _load(data)
+    assert wb["CDI"].max_row == 2  # header + 1 vertex
+    assert wb["PRE"].max_row == 2  # header + marker
+    assert wb["IPCA"].max_row == 2  # header + marker
+    assert wb["CDI"].cell(row=2, column=2).value == float(Decimal("0.144"))
+    assert wb["PRE"].cell(row=2, column=1).value == "(no curve loaded)"
+    assert wb["IPCA"].cell(row=2, column=1).value == "(no curve loaded)"

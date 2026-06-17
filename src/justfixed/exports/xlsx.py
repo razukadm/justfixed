@@ -12,6 +12,7 @@ from justfixed.domain.investment import Investment
 from justfixed.domain.issuer import IssuerKind
 from justfixed.domain.rates import rate_type_label
 from justfixed.engine.conglomerate_report import ConglomerateReport
+from justfixed.engine.curve import Curve
 from justfixed.engine.fgc import ExposureStatus
 from justfixed.engine.projection import ProjectionResult
 
@@ -107,6 +108,36 @@ def export_conglomerates_xlsx(report: ConglomerateReport) -> bytes:
             section.next_maturity,
             section.summary_fgc_status.value,
         ])
+
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+_CURVES_HEADER = ["Business Days", "Rate"]
+
+
+def export_curves_xlsx(
+    cdi: Curve | None,
+    pre: Curve | None,
+    ipca: Curve | None,
+) -> bytes:
+    wb = openpyxl.Workbook()
+
+    for i, (title, curve) in enumerate([("CDI", cdi), ("PRE", pre), ("IPCA", ipca)]):
+        if i == 0:
+            ws = wb.active
+            ws.title = title
+        else:
+            ws = wb.create_sheet(title=title)
+
+        ws.append(_CURVES_HEADER)
+
+        if curve is None or not curve.vertices:
+            ws.append(["(no curve loaded)"])
+        else:
+            for vertex in curve.vertices:
+                ws.append([vertex.business_days, float(vertex.rate)])
 
     buf = BytesIO()
     wb.save(buf)
