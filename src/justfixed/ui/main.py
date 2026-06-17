@@ -3040,6 +3040,13 @@ class MainWindow(QMainWindow):
         _selected_id = self._capture_selected_id()
 
         self._investments = self._repo.list_all()
+        if self.projection_cache is not None:
+            fresh_by_id = {inv.id: inv for inv in self._investments}
+            self.projection_cache = [
+                dataclasses.replace(p, investment=fresh_by_id[p.investment.id])
+                for p in self.projection_cache
+                if p.investment.id in fresh_by_id
+            ]
         self._populate_filter_dropdowns()
         visible = self.visible_investments()
         scroll_y = self._table.verticalScrollBar().value()

@@ -6,13 +6,14 @@ Opened via View ▸ Manage Reference Data….
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from justfixed.domain.issuer import UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.persistence.repositories import InvestmentRepository, IssuerRepository
 
 
@@ -51,13 +53,16 @@ class ManageReferenceDataDialog(QDialog):
 
         self._tabs = QTabWidget()
         self._tabs.addTab(self._build_issuers_tab(), "Issuers")
-        self._tabs.addTab(self._build_placeholder_tab(), "Conglomerates")
+        self._tabs.addTab(self._build_conglomerates_tab(), "Conglomerates")
         self._tabs.addTab(self._build_placeholder_tab(), "Custodians")
         root.addWidget(self._tabs, stretch=1)
 
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         button_box.rejected.connect(self.reject)
         root.addWidget(button_box)
+
+        # Both tables now exist — safe to populate in one pass.
+        self._refresh_all()
 
     def _build_placeholder_tab(self) -> QWidget:
         widget = QWidget()
@@ -95,11 +100,47 @@ class ManageReferenceDataDialog(QDialog):
             QTableWidget.SelectionBehavior.SelectRows
         )
         layout.addWidget(self._issuers_table)
+        # Populate deferred — _build_ui calls _refresh_all after both tables exist.
+        return widget
 
-        self._populate_issuers_table()
+    def _build_conglomerates_tab(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(4, 4, 4, 4)
+
+        self._conglomerates_table = QTableWidget()
+        self._conglomerates_table.setColumnCount(5)
+        self._conglomerates_table.setHorizontalHeaderLabels(
+            ["Conglomerate", "# Issuers", "# Investments", "Rename", "Dissolve"]
+        )
+        hh = self._conglomerates_table.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        hh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        self._conglomerates_table.setColumnWidth(3, 80)
+        self._conglomerates_table.setColumnWidth(4, 80)
+        self._conglomerates_table.verticalHeader().setVisible(False)
+        self._conglomerates_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+        self._conglomerates_table.setSelectionMode(
+            QTableWidget.SelectionMode.SingleSelection
+        )
+        self._conglomerates_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        layout.addWidget(self._conglomerates_table)
+        # Populate deferred — _build_ui calls _refresh_all after both tables exist.
         return widget
 
     # ── Data population ───────────────────────────────────────────────────────
+
+    def _refresh_all(self) -> None:
+        """Repopulate both live tabs. Called after any mutation."""
+        self._populate_issuers_table()
+        self._populate_conglomerates_table()
 
     def _populate_issuers_table(self) -> None:
         counts: Counter = Counter(
@@ -133,6 +174,50 @@ class ManageReferenceDataDialog(QDialog):
                 )
             self._issuers_table.setCellWidget(row, 4, del_btn)
 
+    def _populate_conglomerates_table(self) -> None:
+        issuers = self._issuer_repo.list_all()
+        investments = self._investment_repo.list_all()
+
+        issuer_counts: dict[str, int] = defaultdict(int)
+        for iss in issuers:
+            if not iss.conglomerate.startswith(UNVERIFIED_CONGLOMERATE_PREFIX):
+                issuer_counts[iss.conglomerate] += 1
+
+        inv_counts: dict[str, int] = defaultdict(int)
+        for inv in investments:
+            cong = inv.issuer.conglomerate
+            if not cong.startswith(UNVERIFIED_CONGLOMERATE_PREFIX):
+                inv_counts[cong] += 1
+
+        conglomerates = sorted(issuer_counts.keys())
+        self._conglomerates_table.setRowCount(len(conglomerates))
+        for row, cong in enumerate(conglomerates):
+            self._conglomerates_table.setItem(row, 0, QTableWidgetItem(cong))
+
+            issuer_count_item = QTableWidgetItem(str(issuer_counts[cong]))
+            issuer_count_item.setTextAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
+            self._conglomerates_table.setItem(row, 1, issuer_count_item)
+
+            inv_count_item = QTableWidgetItem(str(inv_counts.get(cong, 0)))
+            inv_count_item.setTextAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
+            self._conglomerates_table.setItem(row, 2, inv_count_item)
+
+            rename_btn = QPushButton("Rename")
+            rename_btn.clicked.connect(
+                lambda checked=False, c=cong: self._on_rename_conglomerate(c)
+            )
+            self._conglomerates_table.setCellWidget(row, 3, rename_btn)
+
+            dissolve_btn = QPushButton("Dissolve")
+            dissolve_btn.clicked.connect(
+                lambda checked=False, c=cong: self._on_dissolve_conglomerate(c)
+            )
+            self._conglomerates_table.setCellWidget(row, 4, dissolve_btn)
+
     # ── Actions ───────────────────────────────────────────────────────────────
 
     def _on_delete_issuer(self, issuer) -> None:
@@ -146,4 +231,49 @@ class ManageReferenceDataDialog(QDialog):
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._issuer_repo.delete(issuer.id)
-        self._populate_issuers_table()
+        self._refresh_all()
+
+    def _on_rename_conglomerate(self, old: str) -> None:
+        text, ok = QInputDialog.getText(
+            self, "Rename Conglomerate", f"New name for '{old}':", text=old
+        )
+        if not ok:
+            return
+        text = text.strip()
+        if not text:
+            QMessageBox.warning(self, "Rename Conglomerate", "Name can't be blank.")
+            return
+        if text == old:
+            return
+        issuers = self._issuer_repo.list_all()
+        all_conglomerates = {iss.conglomerate for iss in issuers}
+        if text in all_conglomerates:
+            old_count = sum(1 for iss in issuers if iss.conglomerate == old)
+            reply = QMessageBox.question(
+                self,
+                "Merge Conglomerates",
+                f"'{text}' already exists. Merge the {old_count} issuer(s) from "
+                f"'{old}' into '{text}'?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        self._issuer_repo.rename_conglomerate(old, text)
+        self._refresh_all()
+
+    def _on_dissolve_conglomerate(self, name: str) -> None:
+        issuers = self._issuer_repo.list_all()
+        count = sum(1 for iss in issuers if iss.conglomerate == name)
+        reply = QMessageBox.question(
+            self,
+            "Dissolve Conglomerate",
+            f"Dissolve '{name}'? Its {count} issuer(s) revert to uncurated and "
+            f"the grouping is removed. This can't be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self._issuer_repo.dissolve_conglomerate(name)
+        self._refresh_all()

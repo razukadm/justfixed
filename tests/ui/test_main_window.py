@@ -25,6 +25,8 @@ from justfixed.domain.money import Money
 from justfixed.domain.rates import Prefixed, PostFixedCDI, PostFixedCDIPlusSpread, PostFixedIPCA
 from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fgc import ExposureStatus
+from justfixed.engine.projection import ProjectionResult
+from justfixed.engine.tax import TaxResult
 from PySide6.QtWidgets import QPlainTextEdit, QScrollArea
 
 from PySide6.QtCore import Qt
@@ -207,13 +209,28 @@ class TestRefreshTableCacheAwareness:
 
         self_mock.visible_investments.return_value = [fake_inv, other_inv]
 
-        fake_proj = MagicMock()
-        fake_proj.investment.id = inv_id
-        fake_proj.current_value = MagicMock(name="current_value")
-        fake_proj.gross_at_maturity = MagicMock(name="gross_at_maturity")
+        _zero = Money.from_reais("0")
+        fake_current = Money.from_reais("10500.00")
+        fake_gross = Money.from_reais("11000.00")
+        fake_proj = ProjectionResult(
+            investment=fake_inv,
+            as_of=date.today(),
+            current_value=fake_current,
+            cash_flows=[],
+            gross_at_maturity=fake_gross,
+            tax_breakdown=TaxResult(
+                gross=fake_gross,
+                gain=_zero,
+                tax_rate=Decimal("0"),
+                tax_amount=_zero,
+                net=fake_gross,
+            ),
+            net_at_maturity=fake_gross,
+        )
 
         fake_report = MagicMock()
         fake_report.conglomerates = []
+        self_mock._repo.list_all.return_value = [fake_inv, other_inv]
         self_mock.projection_cache = [fake_proj]
 
         with patch("justfixed.ui.main.fgc_concentration_report_from_projections",
@@ -223,8 +240,8 @@ class TestRefreshTableCacheAwareness:
         calls = self_mock._populate_row.call_args_list
         assert calls[0] == call(
             0, fake_inv,
-            current_value=fake_proj.current_value,
-            projected_value=fake_proj.gross_at_maturity,
+            current_value=fake_current,
+            projected_value=fake_gross,
             fgc_status=None,
             highlight=False,
         )
@@ -723,13 +740,23 @@ class TestUpdateTotalsMatured:
 
 # ── Integration test helpers ──────────────────────────────────────────────────
 
-def _make_integration_projection(inv: MagicMock, current: Money, gross: Money) -> MagicMock:
-    proj = MagicMock()
-    proj.investment = inv         # same Python reference — mutations propagate
-    proj.as_of = date.today()    # real date required by fgc_concentration_report_from_projections
-    proj.current_value = current
-    proj.gross_at_maturity = gross
-    return proj
+def _make_integration_projection(inv: MagicMock, current: Money, gross: Money) -> ProjectionResult:
+    _zero = Money.from_reais("0")
+    return ProjectionResult(
+        investment=inv,
+        as_of=date.today(),
+        current_value=current,
+        cash_flows=[],
+        gross_at_maturity=gross,
+        tax_breakdown=TaxResult(
+            gross=gross,
+            gain=_zero,
+            tax_rate=Decimal("0"),
+            tax_amount=_zero,
+            net=gross,
+        ),
+        net_at_maturity=gross,
+    )
 
 
 def _make_integration_self_mock(
@@ -2202,3 +2229,63 @@ class TestRefreshProjection:
         assert broker_money.to_display() in text
         assert "(broker)" in text
         assert "(edited)" not in text
+
+
+class TestProjectionCacheRepair:
+    def test_cache_repaired_after_conglomerate_rename(self) -> None:
+        inv = MagicMock()
+        inv.id = uuid.uuid4()
+        inv.issuer.id = uuid.uuid4()
+        inv.issuer.name = "Banco Exemplo"
+        inv.issuer.conglomerate = "Old Group"
+        inv.issuer.kind = IssuerKind.COMMERCIAL_BANK
+        inv.maturity_date = date.today() + timedelta(days=30)
+        inv.purchase_date = date.today() - timedelta(days=30)
+        inv.product = MagicMock()
+        inv.principal = _brl("10000.00")
+
+        proj = _make_integration_projection(inv, _brl("10100.00"), _brl("10500.00"))
+        self_mock = _make_integration_self_mock([inv], projection_cache=[proj])
+
+        inv.issuer.conglomerate = "New Group"
+
+        MainWindow.refresh_table(self_mock)
+
+        assert len(self_mock.projection_cache) == 1
+        repaired = self_mock.projection_cache[0]
+        assert repaired.investment.issuer.conglomerate == "New Group"
+        assert repaired.current_value == _brl("10100.00")
+        assert repaired.gross_at_maturity == _brl("10500.00")
+
+    def test_cache_entry_dropped_when_investment_deleted(self) -> None:
+        inv1 = MagicMock()
+        inv1.id = uuid.uuid4()
+        inv1.issuer.id = uuid.uuid4()
+        inv1.issuer.conglomerate = "Group A"
+        inv1.issuer.kind = IssuerKind.COMMERCIAL_BANK
+        inv1.maturity_date = date.today() + timedelta(days=30)
+        inv1.purchase_date = date.today() - timedelta(days=30)
+        inv1.product = MagicMock()
+        inv1.principal = _brl("10000.00")
+
+        inv2 = MagicMock()
+        inv2.id = uuid.uuid4()
+        inv2.issuer.id = uuid.uuid4()
+        inv2.issuer.conglomerate = "Group B"
+        inv2.issuer.kind = IssuerKind.COMMERCIAL_BANK
+        inv2.maturity_date = date.today() + timedelta(days=60)
+        inv2.purchase_date = date.today() - timedelta(days=60)
+        inv2.product = MagicMock()
+        inv2.principal = _brl("20000.00")
+
+        proj1 = _make_integration_projection(inv1, _brl("10100.00"), _brl("10500.00"))
+        proj2 = _make_integration_projection(inv2, _brl("20200.00"), _brl("21000.00"))
+
+        self_mock = _make_integration_self_mock([inv1, inv2], projection_cache=[proj1, proj2])
+
+        self_mock._repo.list_all.return_value = [inv2]
+
+        MainWindow.refresh_table(self_mock)
+
+        assert len(self_mock.projection_cache) == 1
+        assert self_mock.projection_cache[0].investment is inv2
