@@ -25,7 +25,8 @@ careful pace this project uses (2–4 hours each).
 ### 1. UI — PySide6
 
 **Status:** Milestones A′, A′-plus, B′, B′ companion, B24, B9a, B27,
-C′, B34, B41, B44, B22, and Curve Inspector complete. See `docs/UI_DESIGN.md`
+C′, B34, B41, B44, B22, Curve Inspector, and B19 (partial — delete +
+conglomerate/custodian management) complete. See `docs/UI_DESIGN.md`
 and `docs/ARCHITECTURE.md` for what shipped.
 
 **C′ — projection detail view — COMPLETE.**
@@ -473,38 +474,52 @@ user-facing workflow. At that point, consider a "delete investments
 only, preserve issuers" alternative, or surface the side effect in
 user guidance.
 
-### B19. Issuer edit/delete UI
+### B19. Issuer edit/delete UI (partial — delete + conglomerate/custodian management SHIPPED)
 
 **Source:** `docs/UI_DESIGN.md` § "Deferred from A′ — milestone plan",
 and the B′ design conversation (this chat).
 
-**Why deferred:** B′ delivers conglomerate curation. Editing or
-deleting the issuer itself is a separate workflow. Today, an issuer
-with a typo'd name can't be corrected without going through Clear DB
-+ re-import; an obsolete issuer (no longer exists, e.g., bank failed
-or merged out) has no removal path.
+**SHIPPED (2026-06-17, commits `86212f6` / `e3f5b52` / `9f0e73c` / `9e0d55c`):**
+The **Manage Reference Data** dialog (View ▸ Manage Reference Data,
+`ui/manage_reference_data.py`, `ManageReferenceDataDialog`) ships three tabs:
 
-**What it needs:**
+- **Issuers tab:** delete orphan issuers (FK-guarded; button disabled with
+  tooltip when investments still reference the issuer). Curation-memory is
+  preserved on delete, matching the broader curation-preserve stance.
+- **Conglomerates tab:** rename a conglomerate (with merge-on-collision
+  confirmation), or dissolve it (reverts all members to `[unverified] <name>`
+  and clears their curation-memory entries). Backed by
+  `IssuerRepository.rename_conglomerate` / `dissolve_conglomerate` (bulk,
+  with curation-memory sync).
+- **Custodians tab:** rename a custodian across all its investments (with
+  merge-on-collision confirmation), or clear it (sets custodian to NULL).
+  Backed by `InvestmentRepository.rename_custodian` / `clear_custodian`.
+
+The main window's `refresh_table()` is called on dialog close. A
+projection-cache re-pair (`dataclasses.replace` re-points cached
+`ProjectionResult` objects to freshly-read investments) ensures conglomerate
+label changes are reflected without a manual re-projection.
+
+**What it needs (remaining open work):**
 1. Edit issuer name — must migrate the curation-memory row if the
    natural key changes (open question: key on CNPJ root instead of
-   name to avoid this; see B14).
-2. Delete issuer — only allowed if no investments reference it. The
-   DB schema already enforces this via foreign key, but the UI should
-   surface the constraint clearly ("can't delete; 3 investments still
-   reference this issuer").
-3. Decision: does delete-issuer also remove its curation-memory
-   entry, or preserve it for the case where the issuer is re-imported
-   later? Default to preserve, matching the broader
-   curation-preserve-across-Clear-DB stance.
+   name to avoid this; see B14). *(Still deferred.)*
+2. ~~Delete issuer~~ — shipped above.
+3. ~~Decision: preserve curation-memory on delete~~ — resolved: preserve,
+   per the curation-preserve stance. Shipped above.
 
-**Trigger to revisit:** When the user encounters a real misspelling
-they want to correct, or when an issuer becomes obsolete enough to
-need removing.
+**Why the remaining rename is still deferred:** An issuer name change
+alters the normalized-name natural key. The loader uses that key for
+deduplication and curation-memory lookup; a rename without migrating the
+key can silently recreate a "new" issuer on next import.
+
+**Trigger to revisit:** When the user encounters a real misspelling they
+want to correct.
 
 **Architectural note:** Coupled with B14 (CNPJ/tax_id population).
 If issuers become keyed on a stable CNPJ root rather than name, the
 name-edit case stops needing curation-memory migration entirely.
-Resolving B14 first would simplify B19.
+Resolving B14 first would simplify the remaining B19 work.
 
 ### B20. Pre-seeded issuer/conglomerate table — CLOSED
 

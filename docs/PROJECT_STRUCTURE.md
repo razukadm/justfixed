@@ -97,8 +97,9 @@ PySide6 single-window application.
 
 | File | Purpose | Public symbols |
 |------|---------|----------------|
-| `main.py` | Entire UI — all tabs, panels, workers, MainWindow (~3747 lines; see §3) | see §3 |
+| `main.py` | Entire UI — all tabs, panels, workers, MainWindow (~3954 lines; see §3) | see §3 |
 | `curve_inspector.py` | Pop-up curve viewer with chart + vertices table + cross-check (~533 lines) | `CurveInspectorWindow` |
+| `manage_reference_data.py` | Modal reference-data management dialog (issuers, conglomerates, custodians) | `ManageReferenceDataDialog` |
 | `theme.py` | Design tokens — frozen COLORS and FONTS dataclasses (~119 lines) | `Colors`, `Fonts`, `COLORS`, `FONTS` |
 | `qss.py` | Global stylesheet factory applied once to QApplication (~369 lines) | `make_stylesheet` |
 | `widgets/panel.py` | Reusable titled/bordered content frame | `Panel` |
@@ -108,7 +109,7 @@ PySide6 single-window application.
 
 ## 3. `ui/main.py` — deep map
 
-**File stats:** 3747 lines. The only source of global constants used across the UI is this file's module-level block (lines 1–155).
+**File stats:** 3954 lines. The only source of global constants used across the UI is this file's module-level block (lines 1–155). (§3 symbol line numbers are approximate and drift as the file grows.)
 
 ### 3a. Module-level constants (UI work reference)
 
