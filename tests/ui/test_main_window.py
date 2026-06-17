@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton
+from PySide6.QtWidgets import QApplication, QLabel, QLineEdit, QMessageBox, QPushButton
 
 from justfixed.domain.issuer import IssuerKind
 from justfixed.importers.detection import Broker
@@ -31,7 +31,7 @@ from PySide6.QtCore import Qt
 
 from justfixed.ui.main import (
     _ActiveMock, _AddInvestmentPanel, _CalculatorTab, _COL_FGC, _COL_PRINCIPAL,
-    _ASSUMED_IPCA, _CUSTODIAN_UNSET,
+    _ASSUMED_CDI, _ASSUMED_IPCA, _CUSTODIAN_UNSET,
     ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow,
     compute_totals, _format_type, _format_rate, _is_matured,
 )
@@ -1758,6 +1758,42 @@ class TestCalculatorTabAssumptionDelegation:
     def test_falls_back_to_module_default_when_unowned(self, qapp, session_factory) -> None:
         calc = _CalculatorTab(session_factory=session_factory, parent=None)
         assert calc._assumed_ipca == _ASSUMED_IPCA
+
+
+# ── Projection assumption editor (Dev tab) ────────────────────────────────────
+
+class TestProjectionAssumptionEditor:
+    def _fake(self):
+        m = MagicMock()
+        m._assumed_cdi = _ASSUMED_CDI
+        m._assumed_ipca = _ASSUMED_IPCA
+        m._dev_cdi_input = QLineEdit()
+        m._dev_ipca_input = QLineEdit()
+        return m
+
+    def test_apply_updates_single_source(self, qapp) -> None:
+        m = self._fake()
+        m._dev_cdi_input.setText("20,00")
+        m._dev_ipca_input.setText("8,00")
+        MainWindow._on_apply_assumptions_clicked(m)
+        assert m._assumed_cdi == Decimal("0.20")
+        assert m._assumed_ipca == Decimal("0.08")
+
+    def test_apply_rejects_invalid_input(self, qapp) -> None:
+        m = self._fake()
+        m._dev_cdi_input.setText("1.5")   # period not allowed → ValueError
+        m._dev_ipca_input.setText("8,00")
+        MainWindow._on_apply_assumptions_clicked(m)
+        assert m._assumed_cdi == _ASSUMED_CDI    # unchanged on bad input
+        assert m._assumed_ipca == _ASSUMED_IPCA
+
+    def test_reset_restores_defaults(self, qapp) -> None:
+        m = self._fake()
+        m._assumed_cdi = Decimal("0.30")
+        m._assumed_ipca = Decimal("0.10")
+        MainWindow._on_reset_assumptions_clicked(m)
+        assert m._assumed_cdi == _ASSUMED_CDI
+        assert m._assumed_ipca == _ASSUMED_IPCA
 
 
 # ── Investments table smoke (commit 2 of global styling) ─────────────────────

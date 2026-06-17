@@ -3586,6 +3586,44 @@ class MainWindow(QMainWindow):
 
         root.addWidget(_sep())
 
+        # ── Projection assumptions (session-only) ────────────────────────────────
+        root.addWidget(_title("Projection assumptions (session-only)"))
+        _assum_hint = QLabel(
+            "Used by projection when live curve data is unavailable. The CDI "
+            "value here is a fallback — a loaded CDI curve overrides it for the "
+            "main table. IPCA is always used (not curve-wired). Edits reset on "
+            "restart."
+        )
+        _assum_hint.setWordWrap(True)
+        root.addWidget(_assum_hint)
+        root.addSpacing(4)
+
+        root.addWidget(QLabel("CDI fallback (% a.a.):"))
+        self._dev_cdi_input = QLineEdit()
+        self._dev_cdi_input.setMaximumWidth(160)
+        root.addWidget(self._dev_cdi_input)
+
+        root.addWidget(QLabel("IPCA (% a.a.):"))
+        self._dev_ipca_input = QLineEdit()
+        self._dev_ipca_input.setMaximumWidth(160)
+        root.addWidget(self._dev_ipca_input)
+
+        root.addSpacing(4)
+        _assum_btns = QHBoxLayout()
+        _apply_assum_btn = QPushButton("Apply & re-project")
+        _apply_assum_btn.clicked.connect(self._on_apply_assumptions_clicked)
+        _reset_assum_btn = QPushButton("Reset to defaults")
+        _reset_assum_btn.setProperty("role", "secondary")
+        _reset_assum_btn.clicked.connect(self._on_reset_assumptions_clicked)
+        _assum_btns.addWidget(_apply_assum_btn)
+        _assum_btns.addWidget(_reset_assum_btn)
+        _assum_btns.addStretch()
+        root.addLayout(_assum_btns)
+
+        self._refresh_assumption_inputs()
+
+        root.addWidget(_sep())
+
         # ── Seed status ──────────────────────────────────────────────────────────
         root.addWidget(_title("Seed status"))
         if self._seed_loaded_count > 0:
@@ -3756,6 +3794,33 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_dev_cdi_label"):
             self._refresh_dev_tab_curves()
         self._on_project_clicked()
+
+    def _refresh_assumption_inputs(self) -> None:
+        """Fill the dev-tab assumption fields from the current values (as %)."""
+        self._dev_cdi_input.setText(_pct_to_display(self._assumed_cdi * 100))
+        self._dev_ipca_input.setText(_pct_to_display(self._assumed_ipca * 100))
+
+    def _on_apply_assumptions_clicked(self) -> None:
+        """Parse the dev-tab fields, update the single source, re-project."""
+        try:
+            cdi_pct = _parse_rate_percent(self._dev_cdi_input.text())
+            ipca_pct = _parse_rate_percent(self._dev_ipca_input.text())
+        except ValueError as exc:
+            self.statusBar().showMessage(f"Invalid assumption: {exc}", 8000)
+            return
+        self._assumed_cdi = cdi_pct / Decimal("100")
+        self._assumed_ipca = ipca_pct / Decimal("100")
+        self._refresh_assumption_inputs()
+        self._on_project_clicked()
+        self.statusBar().showMessage("Projection assumptions applied; re-projecting…", 6000)
+
+    def _on_reset_assumptions_clicked(self) -> None:
+        """Restore the default assumptions and re-project."""
+        self._assumed_cdi = _ASSUMED_CDI
+        self._assumed_ipca = _ASSUMED_IPCA
+        self._refresh_assumption_inputs()
+        self._on_project_clicked()
+        self.statusBar().showMessage("Projection assumptions reset to defaults.", 6000)
 
     def _on_project_clicked(self) -> None:
         self._set_busy(True)
