@@ -698,7 +698,13 @@ are using the intended curve.
 
 **Closed:** Absorbed into B9a Phase 5a. Shipped in commit `ca1efbd`.
 
-### B31. Dev view: edit assumed CDI and IPCA constants
+### B31. Dev view: edit assumed CDI and IPCA constants — SHIPPED
+
+**Status:** SHIPPED 2026-06-16. Two commits: `fdbfa5d` (projection assumptions
+made a single MainWindow-owned source, threaded to projection, calculator, and
+export) and `9975be9` (Dev-tab editor: Apply & re-project / Reset). Session-only
+by decision — values reset on restart; persistence not implemented (changing the
+permanent default is a one-line constant edit).
 
 **Source:** User request 2026-05-19 during B27 discussion.
 
@@ -954,6 +960,16 @@ splice the mock into the Conglomerates tab's expanded detail view
 totals, and projection cache unaffected. Session-only: the mock is
 cleared on Reset or app close. See `docs/UI_DESIGN.md` —
 "Calculator tab (B41)" for the full design record.
+
+**Post-ship fix (2026-06-16, commit `e7eeafa`):** the mock splice was silently
+dead in production. `_CalculatorTab` reached MainWindow via `self.parent()`, but
+`QTabWidget.addTab` reparents the tab to the tab widget's internal
+`QStackedWidget`, so the `hasattr`-guarded `set_active_mock` / `clear_active_mock`
+/ `statusBar` calls never fired — the mock never spliced into the Conglomerates
+detail view and calculator status messages never showed. Surfaced during B31.
+Fixed by routing all three through the stored `self._main_window` reference
+(captured at construction, before `addTab`); regression test reparents via
+`addTab` before asserting dispatch reaches the owner.
 
 ---
 
