@@ -56,6 +56,7 @@ from justfixed.ui.curve_inspector import (
     SERIES_IPCA,
     SERIES_PRE,
 )
+from justfixed.ui.manage_reference_data import ManageReferenceDataDialog
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.money import Money
@@ -2782,6 +2783,10 @@ class MainWindow(QMainWindow):
                 lambda checked=False, s=_series: self._open_curve_inspector(s)
             )
             view_menu.addAction(_act)
+        view_menu.addSeparator()
+        _mrd_action = QAction("Manage Reference Data…", self)
+        _mrd_action.triggered.connect(self._open_manage_reference_data)
+        view_menu.addAction(_mrd_action)
         help_menu = menu_bar.addMenu("Help")
         about_action = QAction("About JustFixed", self)
         about_action.triggered.connect(self._on_about_clicked)
@@ -3460,6 +3465,15 @@ class MainWindow(QMainWindow):
         )
         w.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         w.show()
+
+    def _open_manage_reference_data(self) -> None:
+        dlg = ManageReferenceDataDialog(
+            IssuerRepository(self._session_factory),
+            InvestmentRepository(self._session_factory),
+            parent=self,
+        )
+        dlg.exec()
+        self.refresh_table()
 
     # ── Project ───────────────────────────────────────────────────────────────
 
