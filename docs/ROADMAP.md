@@ -680,10 +680,15 @@ undesirable (option a). `_format_rate` was therefore not extracted; only the
 type label moved to the shared location. Full Rate parity / `_format_rate`
 extraction remains available if ever wanted, and still pairs with B37 (i18n).
 
-### B29. Dev view: XLSX curve export
+### B29. Dev view: XLSX curve export — SHIPPED
 
 **Source:** User request 2026-05-17. Paired with B28 but distinct in
 scope: this is diagnostic / validation tooling, not user-facing.
+
+**Shipped:** 2026-06-17, commits `23c54ac` (export_curves_xlsx in
+exports/xlsx.py) and `8961d3f` (dev-tab button). One sheet per curve
+(CDI/PRE/IPCA), Business Days / Rate columns, active in-memory curves; a
+missing curve writes a (no curve loaded) marker sheet.
 
 **Note:** The "currently active curves" display (CDI/PRE/IPCA status:
 source, anchor date, vertex count, fetch timestamp) was delivered as
@@ -706,8 +711,6 @@ are using the intended curve.
 
 **Effort:** ~1 calibrated session. Dev view scaffolding and openpyxl
 (via B28) are already in place.
-
-**Trigger to revisit:** Any time after B28 ships (openpyxl dependency).
 
 ### B30. Dev view: load curve from file — CLOSED
 

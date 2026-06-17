@@ -14,12 +14,12 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 | Persistence | Complete | 112 |
 | Engine | Complete | 194 |
 | Importers | Complete — XP, BTG, and BB pipelines all three layers done | 278 |
-| UI (PySide6) | A′, A′-plus, B′, B′ companion, B24, B9a, B27, C′, B34, B41, B44, B22, B10, Curve Inspector, and Manage Reference Data complete | 541 |
-| Exports (calendar / ICS, XLSX) | Complete | 27 |
+| UI (PySide6) | A′, A′-plus, B′, B′ companion, B24, B9a, B27, C′, B34, B41, B44, B22, B10, Curve Inspector, Manage Reference Data, and dev curve export complete | 544 |
+| Exports (calendar / ICS, XLSX) | Complete | 39 |
 | Tools (admin scripts) | Complete | 71 |
 | Build info | Complete | 3 |
 
-1462 tests pass in ~16 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+1477 tests pass in ~16 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -434,7 +434,7 @@ See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′
 
 ## Test discipline
 
-**1462 tests, ~16 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**1477 tests, ~16 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 
