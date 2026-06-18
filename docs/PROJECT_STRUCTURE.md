@@ -44,6 +44,7 @@ Pure functions over domain types. No I/O except `fetcher.py` (HTTP) and `seed.py
 |------|---------|----------------|
 | `accrual.py` | Day-count accrual for each rate type | `accrue` |
 | `back_solve.py` | Reverse-solve max principal under FGC cap | `BackSolveResult`, `max_principal_under_fgc` |
+| `breakeven.py` | Breakeven inflation curve derived from PRE + IPCA-real (Fisher inverse) | `breakeven_inflation_curve` |
 | `calendar.py` | ANBIMA holiday calendar, business-day arithmetic | `business_days_between`, `is_business_day`, `add_business_days`, `next_business_day` |
 | `cashflow.py` | Coupon schedule generation | `CashFlowKind` (enum), `CashFlow` (dataclass), `coupon_dates`, `schedule` |
 | `conglomerate_report.py` | Build conglomerate aggregation view | `ConglomerateStatus`, `ConglomerateDetailRow`, `ConglomerateSection`, `ConglomerateReport`, `build_conglomerate_report`, `build_conglomerate_report_from_projections` |

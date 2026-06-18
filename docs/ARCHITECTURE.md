@@ -12,14 +12,14 @@ You are an engineer who knows Python, has used SQLAlchemy and pytest, and has a 
 |---|---|---|
 | Domain | Complete | 215 |
 | Persistence | Complete | 112 |
-| Engine | Complete | 194 |
+| Engine | Complete | 220 |
 | Importers | Complete — XP, BTG, and BB pipelines all three layers done | 278 |
-| UI (PySide6) | A′, A′-plus, B′, B′ companion, B24, B9a, B27, C′, B34, B41, B44, B22, B10, Curve Inspector, Manage Reference Data, and dev curve export complete | 544 |
+| UI (PySide6) | A′, A′-plus, B′, B′ companion, B24, B9a, B27, C′, B34, B41, B44, B22, B10, Curve Inspector, Manage Reference Data, and dev curve export complete | 554 |
 | Exports (calendar / ICS, XLSX) | Complete | 39 |
 | Tools (admin scripts) | Complete | 71 |
 | Build info | Complete | 3 |
 
-1477 tests pass in ~16 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
+1513 tests pass in ~16 seconds. If any test fails on a fresh checkout, treat that as the first bug to fix.
 
 ## Architectural shape
 
@@ -237,6 +237,10 @@ Behavior at edges:
 
 **Documented simplification:** for coupon products, IR is computed on the *total gain* using the holding-period bracket. The real Brazilian rule withholds per coupon at its own date (early coupons get worse brackets). The current behavior produces slightly more favorable numbers; refining is a future enhancement.
 
+### `breakeven.py`
+
+Derives a market-implied breakeven inflation curve from the PRE (nominal) and IPCA-real curves via the Fisher inverse `(1+nominal)/(1+real)-1`, computed on the sorted union of both curves' business-day vertices. Returns `None` when either input is absent or empty, or when their anchor dates differ (mixing curves from different publish dates is invalid). `project()`, `schedule()`, and `fgc_concentration_report()` accept an optional `ipca_curve`; for PostFixedIPCA holdings the effective inflation rate is `ipca_curve.rate_at(maturity_tenor)` evaluated at the holding's maturity tenor and applied at every accrual site — including coupon flows. This diverges deliberately from the CDI lookup pattern (which uses each flow's own date); breakeven is a term inflation expectation for the whole instrument, so every flow uses the same maturity-tenor rate. When `ipca_curve` is absent the engine falls back to the flat `assumed_ipca` constant.
+
 ### `fgc.py`
 
 Computes per-conglomerate FGC exposure. Given a list of investments and an as-of date, returns an `FGCReport` listing each conglomerate's current and peak gross exposure with status flags (under, approaching, over the R$250k limit). Treasury holdings are filtered out (FGC doesn't cover sovereign debt). Investments are grouped by `issuer.conglomerate`; issuers whose conglomerate begins with `UNVERIFIED_CONGLOMERATE_PREFIX` are flagged as needing human review. Peak exposure is a deliberate conservative overestimate — each investment's value at its own maturity, summed; simultaneous peaks are physically impossible but the false positive is safe.
@@ -434,7 +438,7 @@ See `docs/UI_DESIGN.md` for the design rationale and milestone specs (A′, B′
 
 ## Test discipline
 
-**1477 tests, ~16 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
+**1513 tests, ~16 second runtime, no skips.** The test suite is the spec; if behavior changes, the test changes first.
 
 ### Test organization mirrors source
 

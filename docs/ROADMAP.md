@@ -269,9 +269,10 @@ of curves and seed data. Admin updates manually via `tools/publish_curves.py`.
   per Option 5b).
 - `Curve` is a frozen dataclass with business-day vertices, linear
   interpolation, flat extension beyond bounds.
-- Three curves are fetched (CDI, PRE, IPCA real). Only CDI is currently
-  wired into projection; PRE and IPCA are stored for future Prefixado /
-  IPCA-linked projection work.
+- Three curves are fetched (CDI, PRE, IPCA real). CDI is wired into projection
+  directly; IPCA-linked holdings use a breakeven inflation curve derived from
+  the PRE and IPCA-real curves (see B45). PRE is also retained for future
+  mark-to-market work (B9b).
 - Seed DB schema is flat (no ConglomerateRow); first-run loader inserts
   IssuerRow records only.
 
@@ -1165,6 +1166,37 @@ the selected investment; real-time refresh via
 `refresh_projection()` called from `show_investment`, `clear`, and
 `MainWindow._on_project_done`. Closes C′. See `docs/UI_DESIGN.md` —
 "Projection detail (B44)" for the full design record.
+
+---
+
+### B45. IPCA-linked projection via market breakeven inflation — SHIPPED
+
+**Shipped:** 2026-06-17, commits `3d4e107` (breakeven_inflation_curve in
+engine/breakeven.py), `2911292` (threaded through project/cashflow),
+`5f5efd1` (forwarded through fgc_concentration_report), `78fea37` (UI: derive
+in MainWindow, wire portfolio + Calculator).
+
+**What it is:** PostFixedIPCA holdings previously projected off a single flat
+assumed-inflation constant (_ASSUMED_IPCA, 4.14%) for every maturity. They now
+use market-implied breakeven inflation, per maturity: breakeven = (1+nominal)/
+(1+real)-1 from the PRE and IPCA-real curves, evaluated at each holding's
+maturity tenor.
+
+**Deliberate convention (do not "fix"):** the breakeven is evaluated at
+rate_at(maturity) at EVERY accrual site, including coupon flows — unlike CDI,
+which uses each flow's own date (bullet→maturity, coupon→coupon_date). This is
+intentional: breakeven is a term inflation expectation for the whole
+instrument, so all of a bond's flows use the maturity-tenor breakeven. A code
+comment marks this at the coupon site; do not harmonize it with CDI.
+
+**Fallback:** breakeven_inflation_curve returns None when PRE or IPCA-real is
+absent/empty or their anchors differ (mixing publish dates is invalid); in
+that case projection falls back to the flat assumed constant. The derived
+curve is cached on MainWindow (self._breakeven_curve), re-derived on each fetch.
+
+**Also closed:** the Calculator now passes both cdi_curve and the breakeven
+curve into its project() and fgc_concentration_report() calls — it previously
+passed no curve at all (flat for both CDI and IPCA).
 
 ---
 
