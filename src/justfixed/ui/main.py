@@ -48,6 +48,7 @@ from PySide6.QtWidgets import (
 
 from justfixed._build_info import BUILD_DATE, EXPIRY_DATE, VERSION, is_expired
 from justfixed.ui.qss import make_stylesheet
+from justfixed.ui.strings import STR
 from justfixed.ui.theme import COLORS, FONTS
 from justfixed.ui.widgets.panel import Panel
 from justfixed.ui.curve_inspector import (
@@ -2606,9 +2607,9 @@ class MainWindow(QMainWindow):
         cong_bottom.addStretch()
         cong_bottom.addWidget(self._cong_project_btn)
         _cong_outer.addLayout(cong_bottom)
-        self._tabs.addTab(self._conglomerates_tab, "Conglomerates")
+        self._tabs.addTab(self._conglomerates_tab, STR.TAB_CONGLOMERATES)
         central = QWidget()
-        self._tabs.addTab(central, "Investments")
+        self._tabs.addTab(central, STR.TAB_INVESTMENTS)
         root = QVBoxLayout(central)
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(6)
@@ -2773,34 +2774,34 @@ class MainWindow(QMainWindow):
 
         # Calculator tab — between Investments and Dev
         self._calculator_tab = _CalculatorTab(self._session_factory, self)
-        self._tabs.addTab(self._calculator_tab, "Calculator")
+        self._tabs.addTab(self._calculator_tab, STR.TAB_CALCULATOR)
 
         # Menu bar — File (Clear DB when JUSTFIXED_DEV set) + View
         menu_bar = self.menuBar()
-        file_menu = menu_bar.addMenu("File")
-        self._export_investments_action = QAction("Export investments to Excel…", self)
+        file_menu = menu_bar.addMenu(STR.MENU_FILE)
+        self._export_investments_action = QAction(STR.ACT_EXPORT_INVESTMENTS, self)
         self._export_investments_action.triggered.connect(self._on_export_investments_xlsx)
         file_menu.addAction(self._export_investments_action)
-        self._export_conglomerates_action = QAction("Export conglomerates to Excel…", self)
+        self._export_conglomerates_action = QAction(STR.ACT_EXPORT_CONGLOMERATES, self)
         self._export_conglomerates_action.triggered.connect(self._on_export_conglomerates_xlsx)
         file_menu.addAction(self._export_conglomerates_action)
         if os.environ.get("JUSTFIXED_DEV"):
-            clear_db_action = QAction("Clear Database…", self)
+            clear_db_action = QAction(STR.ACT_CLEAR_DB, self)
             clear_db_action.triggered.connect(self._on_clear_db_clicked)
             file_menu.addAction(clear_db_action)
             self._dev_tab = self._build_dev_tab()
-            self._tabs.addTab(self._dev_tab, "Dev")
-        view_menu = menu_bar.addMenu("View")
-        self._hide_matured_action = QAction("Hide matured investments", self)
+            self._tabs.addTab(self._dev_tab, STR.TAB_DEV)
+        view_menu = menu_bar.addMenu(STR.MENU_VIEW)
+        self._hide_matured_action = QAction(STR.ACT_HIDE_MATURED, self)
         self._hide_matured_action.setCheckable(True)
         self._hide_matured_action.setChecked(True)
         self._hide_matured_action.triggered.connect(self._on_hide_matured_toggled)
         view_menu.addAction(self._hide_matured_action)
         view_menu.addSeparator()
         for _title, _series in (
-            ("CDI Curve", SERIES_CDI),
-            ("IPCA-real Curve", SERIES_IPCA),
-            ("Prefixado Curve", SERIES_PRE),
+            (STR.ACT_CURVE_CDI, SERIES_CDI),
+            (STR.ACT_CURVE_IPCA, SERIES_IPCA),
+            (STR.ACT_CURVE_PRE, SERIES_PRE),
         ):
             _act = QAction(_title, self)
             _act.triggered.connect(
@@ -2808,11 +2809,11 @@ class MainWindow(QMainWindow):
             )
             view_menu.addAction(_act)
         view_menu.addSeparator()
-        _mrd_action = QAction("Manage Reference Data…", self)
+        _mrd_action = QAction(STR.ACT_MANAGE_REF_DATA, self)
         _mrd_action.triggered.connect(self._open_manage_reference_data)
         view_menu.addAction(_mrd_action)
-        help_menu = menu_bar.addMenu("Help")
-        about_action = QAction("About JustFixed", self)
+        help_menu = menu_bar.addMenu(STR.MENU_HELP)
+        about_action = QAction(STR.ACT_ABOUT, self)
         about_action.triggered.connect(self._on_about_clicked)
         help_menu.addAction(about_action)
 
@@ -3018,10 +3019,10 @@ class MainWindow(QMainWindow):
     def _on_about_clicked(self) -> None:
         QMessageBox.about(
             self,
-            "About JustFixed",
-            f"Version: {VERSION}\n"
-            f"Build date: {BUILD_DATE:%Y-%m-%d}\n"
-            f"Expires: {EXPIRY_DATE:%Y-%m-%d}",
+            STR.ABOUT_TITLE,
+            f"{STR.ABOUT_VERSION} {VERSION}\n"
+            f"{STR.ABOUT_BUILD_DATE} {BUILD_DATE:%Y-%m-%d}\n"
+            f"{STR.ABOUT_EXPIRES} {EXPIRY_DATE:%Y-%m-%d}",
         )
 
     # ── Busy state ────────────────────────────────────────────────────────────
