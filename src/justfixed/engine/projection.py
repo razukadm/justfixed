@@ -63,6 +63,7 @@ def project(
     assumed_cdi: Decimal | None = None,
     assumed_ipca: Decimal | None = None,
     cdi_curve: Curve | None = None,
+    ipca_curve: Curve | None = None,
 ) -> ProjectionResult:
     """Project an investment's value as of a given date and at maturity.
 
@@ -89,6 +90,7 @@ def project(
         assumed_cdi=assumed_cdi,
         assumed_ipca=assumed_ipca,
         cdi_curve=cdi_curve,
+        ipca_curve=ipca_curve,
     )
 
     # ----- 2. Cash flow schedule -----
@@ -97,6 +99,7 @@ def project(
         assumed_cdi=assumed_cdi,
         assumed_ipca=assumed_ipca,
         cdi_curve=cdi_curve,
+        ipca_curve=ipca_curve,
     )
 
     # ----- 3. Gross at maturity (sum of all cash flows) -----
@@ -132,6 +135,7 @@ def _compute_current_value(
     assumed_cdi: Decimal | None,
     assumed_ipca: Decimal | None,
     cdi_curve: Curve | None = None,
+    ipca_curve: Curve | None = None,
 ) -> Money:
     """Accrual from purchase_date to as_of, capped at maturity_date."""
     if as_of <= investment.purchase_date:
@@ -146,12 +150,17 @@ def _compute_current_value(
         if (cdi_curve is not None and cdi_curve.vertices)
         else assumed_cdi
     )
+    effective_ipca = (
+        ipca_curve.rate_at(investment.maturity_date)
+        if (ipca_curve is not None and ipca_curve.vertices)
+        else assumed_ipca
+    )
     return accrue(
         investment.principal,
         investment.rate,
         bizdays,
         assumed_cdi=effective_cdi,
-        assumed_ipca=assumed_ipca,
+        assumed_ipca=effective_ipca,
     )
 
 

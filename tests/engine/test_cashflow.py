@@ -12,11 +12,13 @@ from justfixed.domain.issuer import Issuer, IssuerKind
 from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType
 from justfixed.domain.rates import PostFixedCDI, PostFixedIPCA, Prefixed
+from justfixed.engine.calendar import add_business_days
 from justfixed.engine.cashflow import (
     CashFlowKind,
     coupon_dates,
     schedule,
 )
+from justfixed.engine.curve import Curve, CurveVertex
 
 
 # ---------- Fixtures ----------
@@ -295,3 +297,123 @@ class TestRealisticScenarios:
         bullet_total = bullet_flows[0].amount
 
         assert inv.principal < total < bullet_total
+
+
+# ---------- ipca_curve threading ----------
+
+
+class TestIpcaCurveSchedule:
+    """schedule() ipca_curve: all accrual uses rate_at(maturity), not rate_at(coupon_date)."""
+
+    _PURCHASE = date(2026, 1, 2)
+
+    def _semi_annual_ipca_cdb(self, purchase: date, maturity: date) -> Investment:
+        return Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedIPCA.from_percent("5"),
+            purchase_date=purchase,
+            maturity_date=maturity,
+            coupon_frequency=CouponFrequency.SEMI_ANNUAL,
+        )
+
+    def test_coupon_uses_maturity_rate_not_coupon_date_rate(self) -> None:
+        # Bond: ~1.5-year CDB IPCA+ semi-annual, 378 biz days to maturity.
+        # Breakeven curve:
+        #   bd < 252 → flat at 0.02 (all coupon dates fall here)
+        #   bd = 378 → 0.06 (maturity, flat-extension to the right)
+        # Correct: ALL accrue calls use rate_at(maturity)=0.06.
+        # Wrong: coupon dates would give 0.02; final period gives 0.06 by coincidence.
+        # Test: flows match schedule(flat_assumed=0.06), NOT schedule(flat_assumed=0.02).
+        purchase = self._PURCHASE
+        maturity = add_business_days(purchase, 378)
+        inv = self._semi_annual_ipca_cdb(purchase, maturity)
+
+        ipca_curve = Curve(
+            anchor=purchase,
+            vertices=(
+                CurveVertex(business_days=252, rate=Decimal("0.02")),
+                CurveVertex(business_days=378, rate=Decimal("0.06")),
+            ),
+        )
+
+        first_coupon_date = coupon_dates(inv)[0]
+        rate_at_maturity = ipca_curve.rate_at(inv.maturity_date)
+        rate_at_first_coupon = ipca_curve.rate_at(first_coupon_date)
+
+        # Verify test setup: the two rates must differ for the test to be meaningful.
+        assert rate_at_maturity != rate_at_first_coupon
+
+        flows_actual = schedule(inv, assumed_ipca=Decimal("0.04"), ipca_curve=ipca_curve)
+        # Reference: flat assumed = maturity breakeven (what every flow should use)
+        flows_maturity_rate = schedule(inv, assumed_ipca=rate_at_maturity)
+        # Counter-reference: flat assumed = coupon-date breakeven (wrong path)
+        flows_coupon_rate = schedule(inv, assumed_ipca=rate_at_first_coupon)
+
+        # Every cash flow matches the maturity-rate reference.
+        assert len(flows_actual) == len(flows_maturity_rate)
+        for fa, fm in zip(flows_actual, flows_maturity_rate):
+            assert fa.amount == fm.amount, (
+                f"{fa.kind}: {fa.amount} != {fm.amount} (expected maturity rate)"
+            )
+
+        # First intermediate coupon must differ from what the coupon-date rate would give.
+        # This proves the implementation uses rate_at(maturity), not rate_at(coupon_date).
+        intermediate = [(fa, fc) for fa, fc in zip(flows_actual, flows_coupon_rate)
+                        if fa.kind == CashFlowKind.COUPON]
+        assert len(intermediate) > 0, "Test requires at least one intermediate coupon"
+        first_actual, first_coupon_wrong = intermediate[0]
+        assert first_actual.amount != first_coupon_wrong.amount
+
+    def test_bullet_ipca_curve_exact_value(self) -> None:
+        # Bullet, 252 biz days, spread=5%, breakeven at maturity=0.06.
+        # effective=0.113, gross=10000×1.1130=11130.00 (exact, exponent=1).
+        purchase = self._PURCHASE
+        maturity = add_business_days(purchase, 252)
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedIPCA.from_percent("5"),
+            purchase_date=purchase,
+            maturity_date=maturity,
+        )
+        ipca_curve = Curve(
+            anchor=purchase,
+            vertices=(CurveVertex(business_days=252, rate=Decimal("0.06")),),
+        )
+        flows = schedule(inv, assumed_ipca=Decimal("0.04"), ipca_curve=ipca_curve)
+        assert len(flows) == 1
+        assert flows[0].amount == Money.from_reais("11130")
+
+    def test_fallback_when_ipca_curve_is_none(self) -> None:
+        purchase = self._PURCHASE
+        maturity = add_business_days(purchase, 252)
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedIPCA.from_percent("5"),
+            purchase_date=purchase,
+            maturity_date=maturity,
+        )
+        flows_no_param = schedule(inv, assumed_ipca=Decimal("0.04"))
+        flows_none = schedule(inv, assumed_ipca=Decimal("0.04"), ipca_curve=None)
+        assert flows_none[0].amount == flows_no_param[0].amount
+
+    def test_fallback_when_ipca_curve_empty_vertices(self) -> None:
+        purchase = self._PURCHASE
+        maturity = add_business_days(purchase, 252)
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=commercial_bank(),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedIPCA.from_percent("5"),
+            purchase_date=purchase,
+            maturity_date=maturity,
+        )
+        empty_curve = Curve(anchor=purchase, vertices=())
+        flows_flat = schedule(inv, assumed_ipca=Decimal("0.04"))
+        flows_empty = schedule(inv, assumed_ipca=Decimal("0.04"), ipca_curve=empty_curve)
+        assert flows_empty[0].amount == flows_flat[0].amount

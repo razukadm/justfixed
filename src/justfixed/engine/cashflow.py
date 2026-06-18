@@ -109,6 +109,7 @@ def schedule(
     assumed_cdi: Decimal | None = None,
     assumed_ipca: Decimal | None = None,
     cdi_curve: Curve | None = None,
+    ipca_curve: Curve | None = None,
 ) -> list[CashFlow]:
     """Generate the full cash flow schedule for an investment.
 
@@ -136,12 +137,17 @@ def schedule(
             if (cdi_curve is not None and cdi_curve.vertices)
             else assumed_cdi
         )
+        effective_ipca = (
+            ipca_curve.rate_at(investment.maturity_date)
+            if (ipca_curve is not None and ipca_curve.vertices)
+            else assumed_ipca
+        )
         gross = accrue(
             investment.principal,
             investment.rate,
             bizdays,
             assumed_cdi=effective_cdi,
-            assumed_ipca=assumed_ipca,
+            assumed_ipca=effective_ipca,
         )
         return [
             CashFlow(
@@ -165,12 +171,19 @@ def schedule(
             if (cdi_curve is not None and cdi_curve.vertices)
             else assumed_cdi
         )
+        # IPCA diverges from CDI here: breakeven is a term expectation for the
+        # whole instrument, so all flows use rate_at(maturity), not rate_at(coupon_date).
+        effective_ipca = (
+            ipca_curve.rate_at(investment.maturity_date)
+            if (ipca_curve is not None and ipca_curve.vertices)
+            else assumed_ipca
+        )
         accrued = accrue(
             investment.principal,
             investment.rate,
             bizdays,
             assumed_cdi=effective_cdi,
-            assumed_ipca=assumed_ipca,
+            assumed_ipca=effective_ipca,
         )
         coupon_amount = accrued - investment.principal
         flows.append(
@@ -189,12 +202,17 @@ def schedule(
         if (cdi_curve is not None and cdi_curve.vertices)
         else assumed_cdi
     )
+    effective_ipca = (
+        ipca_curve.rate_at(investment.maturity_date)
+        if (ipca_curve is not None and ipca_curve.vertices)
+        else assumed_ipca
+    )
     accrued = accrue(
         investment.principal,
         investment.rate,
         bizdays,
         assumed_cdi=effective_cdi,
-        assumed_ipca=assumed_ipca,
+        assumed_ipca=effective_ipca,
     )
     final_coupon = accrued - investment.principal
     final_amount = final_coupon + investment.principal

@@ -12,6 +12,8 @@ from justfixed.domain.issuer import Issuer, IssuerKind
 from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType
 from justfixed.domain.rates import PostFixedCDI, PostFixedIPCA, Prefixed
+from justfixed.engine.calendar import add_business_days
+from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.projection import ProjectionResult, project
 
 
@@ -238,3 +240,111 @@ class TestResultImmutability:
         result = project(make_two_year_cdb(), as_of=date(2025, 1, 15))
         with pytest.raises((AttributeError, TypeError)):
             result.current_value = Money.zero()  # type: ignore[misc]
+
+
+# ---------- ipca_curve threading ----------
+
+
+class TestIpcaCurveProjection:
+    """project() ipca_curve parameter: market-implied breakeven in place of flat assumed."""
+
+    _PURCHASE = date(2026, 1, 2)
+
+    def _ipca_bullet(self, purchase: date, maturity: date, spread_pct: str = "5") -> Investment:
+        return Investment.create(
+            product=ProductType.CDB,
+            issuer=Issuer.create("Banco Test", "Banco Test S.A.", IssuerKind.COMMERCIAL_BANK),
+            principal=Money.from_reais("10000"),
+            rate=PostFixedIPCA.from_percent(spread_pct),
+            purchase_date=purchase,
+            maturity_date=maturity,
+        )
+
+    def test_exact_gross_and_current_change_with_breakeven(self) -> None:
+        # 252 biz days → exponent = 252/252 = 1 → exact Decimal arithmetic.
+        # Baseline (assumed_ipca=0.04, spread=5%):
+        #   effective = 0.04 + 0.05 + 0.04×0.05 = 0.0920
+        #   gross = 10000 × 1.0920 = 10920.00
+        # With ipca_curve breakeven=0.06 at maturity:
+        #   effective = 0.06 + 0.05 + 0.06×0.05 = 0.1130
+        #   gross = 10000 × 1.1130 = 11130.00
+        purchase = self._PURCHASE
+        maturity = add_business_days(purchase, 252)
+        inv = self._ipca_bullet(purchase, maturity)
+
+        result_flat = project(inv, as_of=maturity, assumed_ipca=Decimal("0.04"))
+        assert result_flat.gross_at_maturity == Money.from_reais("10920")
+
+        ipca_curve = Curve(
+            anchor=purchase,
+            vertices=(CurveVertex(business_days=252, rate=Decimal("0.06")),),
+        )
+        result_curve = project(inv, as_of=maturity, assumed_ipca=Decimal("0.04"), ipca_curve=ipca_curve)
+        assert result_curve.gross_at_maturity == Money.from_reais("11130")
+        assert result_curve.current_value == Money.from_reais("11130")
+        assert result_curve.gross_at_maturity != result_flat.gross_at_maturity
+
+    def test_two_bonds_pick_up_their_own_maturity_breakeven(self) -> None:
+        # Short (252 biz): rate_at(maturity)=0.04 → effective=0.092 → gross=10920.00
+        # Long (504 biz): rate_at(maturity)=0.08 → effective=0.134
+        #   exponent=504/252=2 → gross=10000×1.134²=10000×1.285956=12859.56
+        purchase = self._PURCHASE
+        maturity_short = add_business_days(purchase, 252)
+        maturity_long = add_business_days(purchase, 504)
+
+        inv_short = self._ipca_bullet(purchase, maturity_short)
+        inv_long = self._ipca_bullet(purchase, maturity_long)
+
+        ipca_curve = Curve(
+            anchor=purchase,
+            vertices=(
+                CurveVertex(business_days=252, rate=Decimal("0.04")),
+                CurveVertex(business_days=504, rate=Decimal("0.08")),
+            ),
+        )
+
+        proj_short = project(inv_short, as_of=maturity_long, assumed_ipca=Decimal("0.05"), ipca_curve=ipca_curve)
+        proj_long = project(inv_long, as_of=maturity_long, assumed_ipca=Decimal("0.05"), ipca_curve=ipca_curve)
+
+        assert proj_short.gross_at_maturity == Money.from_reais("10920")
+        assert proj_long.gross_at_maturity == Money.from_reais("12859.56")
+        assert proj_short.gross_at_maturity != proj_long.gross_at_maturity
+
+    def test_fallback_when_ipca_curve_is_none(self) -> None:
+        purchase = self._PURCHASE
+        maturity = add_business_days(purchase, 252)
+        inv = self._ipca_bullet(purchase, maturity)
+
+        result_no_param = project(inv, as_of=maturity, assumed_ipca=Decimal("0.04"))
+        result_explicit_none = project(inv, as_of=maturity, assumed_ipca=Decimal("0.04"), ipca_curve=None)
+        assert result_explicit_none.gross_at_maturity == result_no_param.gross_at_maturity
+        assert result_explicit_none.current_value == result_no_param.current_value
+
+    def test_fallback_when_ipca_curve_has_empty_vertices(self) -> None:
+        purchase = self._PURCHASE
+        maturity = add_business_days(purchase, 252)
+        inv = self._ipca_bullet(purchase, maturity)
+        empty_curve = Curve(anchor=purchase, vertices=())
+
+        result_flat = project(inv, as_of=maturity, assumed_ipca=Decimal("0.04"))
+        result_empty = project(inv, as_of=maturity, assumed_ipca=Decimal("0.04"), ipca_curve=empty_curve)
+        assert result_empty.gross_at_maturity == result_flat.gross_at_maturity
+
+    def test_non_ipca_bond_unaffected_by_ipca_curve(self) -> None:
+        purchase = self._PURCHASE
+        maturity = add_business_days(purchase, 252)
+        inv = Investment.create(
+            product=ProductType.CDB,
+            issuer=Issuer.create("Banco Test", "Banco Test S.A.", IssuerKind.COMMERCIAL_BANK),
+            principal=Money.from_reais("10000"),
+            rate=Prefixed.from_percent("12"),
+            purchase_date=purchase,
+            maturity_date=maturity,
+        )
+        ipca_curve = Curve(
+            anchor=purchase,
+            vertices=(CurveVertex(business_days=252, rate=Decimal("0.06")),),
+        )
+        result_no_curve = project(inv, as_of=maturity)
+        result_with_curve = project(inv, as_of=maturity, assumed_ipca=Decimal("0.04"), ipca_curve=ipca_curve)
+        assert result_with_curve.gross_at_maturity == result_no_curve.gross_at_maturity
