@@ -882,18 +882,18 @@ class InvestmentDetailPanel(QWidget):
     investment_deleted = Signal(uuid.UUID)
 
     _FIELD_KEYS = [
-        ("Issuer",        "issuer"),
-        ("Conglomerate",  "conglomerate"),
-        ("Custodian",     "custodian"),       # B42 — adjacent to issuer/conglomerate
-        ("Product",       "product"),
-        ("Principal",     "principal"),
-        ("Rate",          "rate"),
-        ("Purchase date", "purchase_date"),
-        ("Issue date",    "issue_date"),
-        ("Maturity date", "maturity_date"),
-        ("Coupon",        "coupon_frequency"),
-        ("Description",   "description"),
-        ("Current value", "user_edited_value"),
+        (STR.FIELD_ISSUER,        "issuer"),
+        (STR.FIELD_CONGLOMERATE,  "conglomerate"),
+        (STR.FIELD_CUSTODIAN,     "custodian"),       # B42 — adjacent to issuer/conglomerate
+        (STR.FIELD_PRODUCT,       "product"),
+        (STR.FIELD_PRINCIPAL,     "principal"),
+        (STR.FIELD_RATE,          "rate"),
+        (STR.FIELD_PURCHASE_DATE, "purchase_date"),
+        (STR.FIELD_ISSUE_DATE,    "issue_date"),
+        (STR.FIELD_MATURITY_DATE, "maturity_date"),
+        (STR.FIELD_COUPON,        "coupon_frequency"),
+        (STR.FIELD_DESCRIPTION,   "description"),
+        (STR.FIELD_CURRENT_VALUE, "user_edited_value"),
     ]
 
     _EDITABLE_FOR_MANUAL = frozenset({
@@ -916,7 +916,7 @@ class InvestmentDetailPanel(QWidget):
         layout.setSpacing(6)
 
         header = QHBoxLayout()
-        self._identity_label = QLabel("No investment selected.")
+        self._identity_label = QLabel(STR.DETAIL_NO_SELECTION)
         self._identity_label.setProperty("role", "panelTitle")
         self._close_btn = QPushButton("✕")
         self._close_btn.setFixedSize(24, 24)
@@ -973,7 +973,7 @@ class InvestmentDetailPanel(QWidget):
         sep.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(sep)
 
-        self._delete_btn = QPushButton("Delete investment")
+        self._delete_btn = QPushButton(STR.DETAIL_DELETE)
         self._delete_btn.setProperty("role", "danger")
         self._delete_btn.setEnabled(False)
         self._delete_btn.clicked.connect(self._on_delete_clicked)
@@ -991,7 +991,7 @@ class InvestmentDetailPanel(QWidget):
             product_name = rules_for(inv.product).display_name
             self._identity_label.setText(f"{inv.issuer.name} — {product_name}")
             if inv.source != InvestmentSource.MANUAL:
-                self._source_banner.setText("Imported — only description and current value are editable.")
+                self._source_banner.setText(STR.DETAIL_IMPORTED_NOTICE)
                 self._source_banner.show()
             else:
                 self._source_banner.hide()
@@ -1004,7 +1004,7 @@ class InvestmentDetailPanel(QWidget):
         self._identity_label.setText(f"{inv.issuer.name} — {product_name}")
 
         if inv.source != InvestmentSource.MANUAL:
-            self._source_banner.setText("Imported — only description and current value are editable.")
+            self._source_banner.setText(STR.DETAIL_IMPORTED_NOTICE)
             self._source_banner.show()
         else:
             self._source_banner.hide()
@@ -1041,7 +1041,7 @@ class InvestmentDetailPanel(QWidget):
 
     def clear(self) -> None:
         self._current_inv = None
-        self._identity_label.setText("No investment selected.")
+        self._identity_label.setText(STR.DETAIL_NO_SELECTION)
         self._source_banner.hide()
         self._set_error(None)
         self._delete_btn.setEnabled(False)
@@ -1089,16 +1089,16 @@ class InvestmentDetailPanel(QWidget):
         self._proj_tax_lbl       = _mono_lbl()
         self._proj_net_lbl       = _mono_lbl()
 
-        _row("Current value",     self._proj_current_lbl)
-        _row("Gross at maturity", self._proj_gross_lbl)
-        _row("Gain",              self._proj_gain_lbl)
-        _row("IR tax",            self._proj_tax_lbl)
-        _row("Net at maturity",   self._proj_net_lbl)
+        _row(STR.PROJ_CURRENT, self._proj_current_lbl)
+        _row(STR.PROJ_GROSS,   self._proj_gross_lbl)
+        _row(STR.PROJ_GAIN,    self._proj_gain_lbl)
+        _row(STR.PROJ_TAX,     self._proj_tax_lbl)
+        _row(STR.PROJ_NET,     self._proj_net_lbl)
 
         bl.addStretch()
         self._proj_stack.addWidget(body)          # index 1
 
-        self._proj_panel = Panel(title="Projection")
+        self._proj_panel = Panel(title=STR.PROJ_TITLE)
         self._proj_panel.set_content(self._proj_stack)
         return self._proj_panel
 
@@ -1139,7 +1139,7 @@ class InvestmentDetailPanel(QWidget):
         self._proj_gain_lbl.setText(tb.gain.to_display())
         self._proj_tax_lbl.setText(f"{tax_pct} — {tb.tax_amount.to_display()}")
         self._proj_net_lbl.setText(proj.net_at_maturity.to_display())
-        self._proj_panel.set_meta(f"as of {proj.as_of.strftime('%d/%m/%Y')}")
+        self._proj_panel.set_meta(STR.PROJ_AS_OF.format(date=proj.as_of.strftime('%d/%m/%Y')))
         self._proj_stack.setCurrentIndex(1)
 
     # ── Delete ────────────────────────────────────────────────────────────────
@@ -2106,7 +2106,7 @@ class _AddInvestmentPanel(QWidget):
         layout.setSpacing(6)
 
         header = QHBoxLayout()
-        title = QLabel("Add Investment")
+        title = QLabel(STR.ADD_TITLE)
         title.setProperty("role", "panelTitle")
         self._close_btn = QPushButton("✕")
         self._close_btn.setFixedSize(24, 24)
@@ -2136,10 +2136,10 @@ class _AddInvestmentPanel(QWidget):
         layout.addWidget(scroll, stretch=1)
 
         btn_row = QHBoxLayout()
-        self._save_btn = QPushButton("Save investment")
+        self._save_btn = QPushButton(STR.ADD_SAVE)
         self._save_btn.clicked.connect(self._on_save_clicked)
         self._save_btn.setProperty("role", "toolbar")
-        self._cancel_btn = QPushButton("Cancel")
+        self._cancel_btn = QPushButton(STR.ADD_CANCEL)
         self._cancel_btn.clicked.connect(lambda: self.cancelled.emit())
         self._cancel_btn.setProperty("role", "danger")
         btn_row.addWidget(self._cancel_btn)
@@ -2164,7 +2164,7 @@ class _AddInvestmentPanel(QWidget):
         # Issuer combo
         self._issuer_combo = QComboBox()
         self._issuer_combo.currentIndexChanged.connect(self._on_issuer_combo_changed)
-        self._add_form_row("Issuer", self._issuer_combo)
+        self._add_form_row(STR.FIELD_ISSUER, self._issuer_combo)
 
         # New-issuer sub-group — revealed when the sentinel entry is selected
         self._new_issuer_group = QWidget()
@@ -2173,9 +2173,9 @@ class _AddInvestmentPanel(QWidget):
         nig.setSpacing(2)
 
         self._new_name_edit = QLineEdit()
-        self._new_name_edit.setPlaceholderText("Issuer name")
+        self._new_name_edit.setPlaceholderText(STR.PH_ISSUER_NAME)
         name_row = QHBoxLayout()
-        name_lbl = QLabel("Name:")
+        name_lbl = QLabel(STR.ADD_NAME)
         name_lbl.setProperty("role", "subLabel")
         name_lbl.setFixedWidth(96)
         name_row.addWidget(name_lbl)
@@ -2186,7 +2186,7 @@ class _AddInvestmentPanel(QWidget):
         for kind in IssuerKind:
             self._new_kind_combo.addItem(kind.value.replace("_", " ").title(), kind)
         kind_row = QHBoxLayout()
-        kind_lbl = QLabel("Type:")
+        kind_lbl = QLabel(STR.ADD_TYPE)
         kind_lbl.setProperty("role", "subLabel")
         kind_lbl.setFixedWidth(96)
         kind_row.addWidget(kind_lbl)
@@ -2194,11 +2194,9 @@ class _AddInvestmentPanel(QWidget):
         nig.addLayout(kind_row)
 
         self._new_cong_edit = QLineEdit()
-        self._new_cong_edit.setPlaceholderText(
-            "Conglomerate (leave blank to mark as unverified)"
-        )
+        self._new_cong_edit.setPlaceholderText(STR.PH_CONGLOMERATE)
         cong_row = QHBoxLayout()
-        cong_lbl = QLabel("Conglomerate:")
+        cong_lbl = QLabel(STR.FIELD_CONGLOMERATE + ":")
         cong_lbl.setProperty("role", "subLabel")
         cong_lbl.setFixedWidth(96)
         cong_row.addWidget(cong_lbl)
@@ -2210,52 +2208,52 @@ class _AddInvestmentPanel(QWidget):
 
         # Custodian (optional) — adjacent to issuer, consistent with detail panel
         self._custodian_edit = QLineEdit()
-        self._custodian_edit.setPlaceholderText("(optional)")
+        self._custodian_edit.setPlaceholderText(STR.PH_OPTIONAL)
         self._custodian_completer_model = QStringListModel()
         _cust_completer = QCompleter(self._custodian_completer_model, self._custodian_edit)
         _cust_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         _cust_completer.setFilterMode(Qt.MatchFlag.MatchContains)
         self._custodian_edit.setCompleter(_cust_completer)
-        self._add_form_row("Custodian", self._custodian_edit)
+        self._add_form_row(STR.FIELD_CUSTODIAN, self._custodian_edit)
 
         # Product
         self._product_combo = QComboBox()
         for pt in ProductType:
             self._product_combo.addItem(rules_for(pt).display_name, pt)
-        self._add_form_row("Product", self._product_combo)
+        self._add_form_row(STR.FIELD_PRODUCT, self._product_combo)
 
         # Principal
         self._principal_edit = QLineEdit()
-        self._principal_edit.setPlaceholderText("e.g. 10.000,00")
-        self._add_form_row("Principal", self._principal_edit)
+        self._principal_edit.setPlaceholderText(STR.PH_PRINCIPAL_EXAMPLE)
+        self._add_form_row(STR.FIELD_PRINCIPAL, self._principal_edit)
 
         # Rate — reuse _RateEditor directly
         self._rate_editor = _RateEditor()
-        self._add_form_row("Rate", self._rate_editor)
+        self._add_form_row(STR.FIELD_RATE, self._rate_editor)
 
         # Dates
         self._purchase_date_edit = QDateEdit()
         self._purchase_date_edit.setDisplayFormat("dd/MM/yyyy")
-        self._add_form_row("Purchase date", self._purchase_date_edit)
+        self._add_form_row(STR.FIELD_PURCHASE_DATE, self._purchase_date_edit)
 
         self._issue_date_edit = QDateEdit()
         self._issue_date_edit.setDisplayFormat("dd/MM/yyyy")
-        self._add_form_row("Issue date", self._issue_date_edit)
+        self._add_form_row(STR.FIELD_ISSUE_DATE, self._issue_date_edit)
 
         self._maturity_date_edit = QDateEdit()
         self._maturity_date_edit.setDisplayFormat("dd/MM/yyyy")
-        self._add_form_row("Maturity date", self._maturity_date_edit)
+        self._add_form_row(STR.FIELD_MATURITY_DATE, self._maturity_date_edit)
 
         # Coupon frequency
         self._coupon_combo = QComboBox()
         for cf in CouponFrequency:
             self._coupon_combo.addItem(cf.to_display(), cf)
-        self._add_form_row("Coupon", self._coupon_combo)
+        self._add_form_row(STR.FIELD_COUPON, self._coupon_combo)
 
         # Description
         self._description_edit = QLineEdit()
-        self._description_edit.setPlaceholderText("Optional note")
-        self._add_form_row("Description", self._description_edit)
+        self._description_edit.setPlaceholderText(STR.PH_DESCRIPTION)
+        self._add_form_row(STR.FIELD_DESCRIPTION, self._description_edit)
 
     # ── Public API ────────────────────────────────────────────────────────────
 

@@ -1355,7 +1355,7 @@ class TestDetailPanelCustodianConfig:
 
     def test_custodian_label_is_custodian(self) -> None:
         labels = {key: label for label, key in InvestmentDetailPanel._FIELD_KEYS}
-        assert labels["custodian"] == "Custodian"
+        assert labels["custodian"] == STR.FIELD_CUSTODIAN
 
     def test_custodian_editable_for_manual(self) -> None:
         assert "custodian" in InvestmentDetailPanel._EDITABLE_FOR_MANUAL

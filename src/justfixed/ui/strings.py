@@ -79,5 +79,45 @@ class Strings:
     EMPTY_CONG_DISPLAY: str = "Nenhum investimento para exibir."
     PROJ_EMPTY: str = 'Nenhuma projeção ainda. Clique em "{btn}" para calcular.'
 
+    # ── Field labels (detail panel + add panel; colon added at call site) ───────
+    FIELD_ISSUER: str = "Emissor"
+    FIELD_CONGLOMERATE: str = "Conglomerado"
+    FIELD_CUSTODIAN: str = "Custodiante"
+    FIELD_PRODUCT: str = "Produto"
+    FIELD_PRINCIPAL: str = "Principal"
+    FIELD_RATE: str = "Taxa"
+    FIELD_PURCHASE_DATE: str = "Data de compra"
+    FIELD_ISSUE_DATE: str = "Data de emissão"
+    FIELD_MATURITY_DATE: str = "Data de vencimento"
+    FIELD_COUPON: str = "Cupom"
+    FIELD_DESCRIPTION: str = "Descrição"
+    FIELD_CURRENT_VALUE: str = "Valor atual"
+
+    # ── Add-investment panel ────────────────────────────────────────────────────
+    ADD_TITLE: str = "Adicionar investimento"
+    ADD_SAVE: str = "Salvar investimento"
+    ADD_CANCEL: str = "Cancelar"
+    ADD_NAME: str = "Nome:"
+    ADD_TYPE: str = "Tipo:"
+    PH_ISSUER_NAME: str = "Nome do emissor"
+    PH_OPTIONAL: str = "(opcional)"
+    PH_PRINCIPAL_EXAMPLE: str = "ex. 10.000,00"
+    PH_DESCRIPTION: str = "Nota opcional"
+    PH_CONGLOMERATE: str = "Conglomerado (deixe em branco para marcar como não verificado)"
+
+    # ── Detail panel ────────────────────────────────────────────────────────────
+    DETAIL_NO_SELECTION: str = "Nenhum investimento selecionado."
+    DETAIL_DELETE: str = "Excluir investimento"
+    DETAIL_IMPORTED_NOTICE: str = "Importado — apenas descrição e valor atual são editáveis."
+
+    # ── Projection breakdown ─────────────────────────────────────────────────────
+    PROJ_TITLE: str = "Projeção"
+    PROJ_AS_OF: str = "em {date}"
+    PROJ_CURRENT: str = "Valor atual"
+    PROJ_GROSS: str = "Bruto no vencimento"
+    PROJ_GAIN: str = "Rendimento"
+    PROJ_TAX: str = "IR"
+    PROJ_NET: str = "Líquido no vencimento"
+
 
 STR = Strings()

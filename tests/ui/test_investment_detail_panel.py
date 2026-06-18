@@ -25,6 +25,7 @@ from justfixed.domain.rates import PostFixedCDI, PostFixedCDIPlusSpread, PostFix
 from justfixed.engine.projection import ProjectionResult
 from justfixed.engine.tax import TaxResult
 from justfixed.ui.main import InvestmentDetailPanel, _EditableField, _RateEditor
+from justfixed.ui.strings import STR
 
 
 @pytest.fixture(scope="session")
@@ -81,7 +82,7 @@ class TestInvestmentDetailPanelShowInvestment:
         panel = InvestmentDetailPanel(MagicMock(), MagicMock())
         panel.show_investment(_mock_inv())
         panel.clear()
-        assert panel._identity_label.text() == "No investment selected."
+        assert panel._identity_label.text() == STR.DETAIL_NO_SELECTION
 
 
 class TestInvestmentDetailPanelCloseSignal:
@@ -149,7 +150,7 @@ class TestInvestmentDetailPanelSourceBanner:
         panel = InvestmentDetailPanel(MagicMock(), MagicMock())
         panel.show_investment(_mock_inv(source=InvestmentSource.XP_IMPORT))
         assert "XP" not in panel._source_banner.text()
-        assert "Imported" in panel._source_banner.text()
+        assert panel._source_banner.text() == STR.DETAIL_IMPORTED_NOTICE
 
 
 # ── Helpers for real-Investment tests ─────────────────────────────────────────
