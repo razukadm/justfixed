@@ -95,6 +95,7 @@ from justfixed.engine.fgc import (
     fgc_concentration_report,
     fgc_concentration_report_from_projections,
 )
+from justfixed.engine.breakeven import breakeven_inflation_curve
 from justfixed.engine.projection import ProjectionResult, project
 from justfixed.exports.calendar import export_maturity_calendar
 from justfixed.exports.xlsx import (
@@ -215,6 +216,7 @@ def _format_rate(
     *,
     assumed_cdi: Decimal = _ASSUMED_CDI,
     assumed_ipca: Decimal = _ASSUMED_IPCA,
+    ipca_curve: Curve | None = None,
 ) -> str:
     if isinstance(rate, Prefixed):
         return _format_brazilian_percent(rate.annual_rate * 100)
@@ -230,7 +232,12 @@ def _format_rate(
         case PostFixedCDIPlusSpread(spread=s):
             effective = cdi + s + (cdi * s)
         case PostFixedIPCA(spread=s):
-            effective = assumed_ipca + s + (assumed_ipca * s)
+            ipca = (
+                ipca_curve.rate_at(maturity_date)
+                if (ipca_curve is not None and ipca_curve.vertices)
+                else assumed_ipca
+            )
+            effective = ipca + s + (ipca * s)
         case _:
             return configured
     return f"{configured} ({_format_brazilian_percent(effective * 100)})"
@@ -525,12 +532,14 @@ class _ProjectWorker(QThread):
         investments: list,
         *,
         cdi_curve: Curve | None = None,
+        ipca_curve: Curve | None = None,
         assumed_cdi: Decimal = _ASSUMED_CDI,
         assumed_ipca: Decimal = _ASSUMED_IPCA,
     ) -> None:
         super().__init__()
         self._investments = investments
         self._cdi_curve = cdi_curve
+        self._ipca_curve = ipca_curve
         self._assumed_cdi = assumed_cdi
         self._assumed_ipca = assumed_ipca
 
@@ -544,6 +553,7 @@ class _ProjectWorker(QThread):
                     assumed_cdi=self._assumed_cdi,
                     assumed_ipca=self._assumed_ipca,
                     cdi_curve=self._cdi_curve,
+                    ipca_curve=self._ipca_curve,
                 )
                 for inv in self._investments
             ]
@@ -1341,6 +1351,14 @@ class _CalculatorTab(QWidget):
         Falls back to the module default when unowned (e.g. in tests)."""
         return getattr(self._main_window, "_assumed_ipca", _ASSUMED_IPCA)
 
+    @property
+    def _cdi_curve(self) -> Curve | None:
+        return getattr(self._main_window, "_cdi_curve", None)
+
+    @property
+    def _breakeven_curve(self) -> Curve | None:
+        return getattr(self._main_window, "_breakeven_curve", None)
+
     # ── Public ────────────────────────────────────────────────────────────────
 
     def reset(self) -> None:
@@ -1522,6 +1540,8 @@ class _CalculatorTab(QWidget):
             as_of=maturity_date,
             assumed_cdi=self._assumed_cdi,
             assumed_ipca=self._assumed_ipca,
+            cdi_curve=self._cdi_curve,
+            ipca_curve=self._breakeven_curve,
         )
 
         is_treasury = issuer.kind == IssuerKind.TREASURY
@@ -1537,6 +1557,8 @@ class _CalculatorTab(QWidget):
                 as_of=maturity_date,
                 assumed_cdi=self._assumed_cdi,
                 assumed_ipca=self._assumed_ipca,
+                cdi_curve=self._cdi_curve,
+                ipca_curve=self._breakeven_curve,
             )
             cong_exposure = next(
                 (c for c in report.conglomerates
@@ -2541,6 +2563,7 @@ class MainWindow(QMainWindow):
         self._assumed_ipca: Decimal = _ASSUMED_IPCA
         self._pre_curve: Curve | None = None
         self._ipca_curve: Curve | None = None
+        self._breakeven_curve: Curve | None = None
         self._fetch_result: FetchResult | None = None
         self._curve_source: str = "unavailable"
         self._seed_loaded_count: int = _seed_count
@@ -3209,7 +3232,7 @@ class MainWindow(QMainWindow):
 
         self._cell(row, _COL_PRODUCT, rules_for(inv.product).display_name)
         self._cell(row, _COL_TYPE, _format_type(inv.rate))
-        self._cell(row, _COL_RATE, _format_rate(inv.rate, self._cdi_curve, inv.maturity_date, assumed_cdi=self._assumed_cdi, assumed_ipca=self._assumed_ipca), mono=True)
+        self._cell(row, _COL_RATE, _format_rate(inv.rate, self._cdi_curve, inv.maturity_date, assumed_cdi=self._assumed_cdi, assumed_ipca=self._assumed_ipca, ipca_curve=self._breakeven_curve), mono=True)
         self._cell(row, _COL_PRINCIPAL, inv.principal.to_display(), mono=True)
 
         d = inv.maturity_date
@@ -3490,6 +3513,7 @@ class MainWindow(QMainWindow):
         self._cdi_curve = self._fetch_result.curve
         self._pre_curve = self._fetch_result.pre
         self._ipca_curve = self._fetch_result.ipca_real
+        self._breakeven_curve = breakeven_inflation_curve(self._pre_curve, self._ipca_curve)
         self._curve_source = self._fetch_result.source
         self._update_curve_label(self._curve_source, self._cdi_curve)
         if hasattr(self, "_dev_cdi_label"):
@@ -3854,6 +3878,7 @@ class MainWindow(QMainWindow):
         self._worker = _ProjectWorker(
             self.visible_investments(apply_filter=False),
             cdi_curve=self._cdi_curve,
+            ipca_curve=self._breakeven_curve,
             assumed_cdi=self._assumed_cdi,
             assumed_ipca=self._assumed_ipca,
         )

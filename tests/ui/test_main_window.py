@@ -34,7 +34,7 @@ from PySide6.QtCore import Qt
 from justfixed.ui.main import (
     _ActiveMock, _AddInvestmentPanel, _CalculatorTab, _COL_FGC, _COL_PRINCIPAL,
     _ASSUMED_CDI, _ASSUMED_IPCA, _CUSTODIAN_UNSET,
-    ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow,
+    ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow, _ProjectWorker,
     compute_totals, _format_type, _format_rate, _is_matured,
 )
 
@@ -2338,3 +2338,115 @@ class TestExportCurvesXlsx:
 
         mock_crit.assert_called_once()
         assert "boom" in mock_crit.call_args.args[2]
+
+
+# ── Breakeven curve derivation in _fetch_curve ────────────────────────────────
+
+class TestFetchCurveBreakevenDerivation:
+    def test_derives_breakeven_from_pre_and_ipca(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        mock_result = MagicMock()
+        mock_result.curve = MagicMock(spec=Curve)
+        mock_result.pre = MagicMock(spec=Curve)
+        mock_result.ipca_real = MagicMock(spec=Curve)
+        mock_result.source = "live"
+        mock_breakeven = MagicMock(spec=Curve)
+
+        with patch("justfixed.ui.main.fetch_curves", return_value=mock_result), \
+             patch("justfixed.ui.main.breakeven_inflation_curve",
+                   return_value=mock_breakeven) as mock_be:
+            MainWindow._fetch_curve(self_mock)
+
+        mock_be.assert_called_once_with(mock_result.pre, mock_result.ipca_real)
+        assert self_mock._breakeven_curve is mock_breakeven
+
+    def test_stores_none_when_breakeven_returns_none(self) -> None:
+        self_mock = MagicMock(spec=MainWindow)
+        mock_result = MagicMock()
+        mock_result.curve = None
+        mock_result.pre = None
+        mock_result.ipca_real = None
+        mock_result.source = "unavailable"
+
+        with patch("justfixed.ui.main.fetch_curves", return_value=mock_result), \
+             patch("justfixed.ui.main.breakeven_inflation_curve",
+                   return_value=None):
+            MainWindow._fetch_curve(self_mock)
+
+        assert self_mock._breakeven_curve is None
+
+
+# ── _ProjectWorker ipca_curve parameter ──────────────────────────────────────
+
+class TestProjectWorkerIpcaCurve:
+    def test_stores_ipca_curve_kwarg(self) -> None:
+        curve = MagicMock(spec=Curve)
+        worker = _ProjectWorker([], ipca_curve=curve)
+        assert worker._ipca_curve is curve
+
+    def test_ipca_curve_defaults_to_none(self) -> None:
+        worker = _ProjectWorker([])
+        assert worker._ipca_curve is None
+
+
+# ── _format_rate with ipca_curve ─────────────────────────────────────────────
+
+class TestFormatRateIpcaCurve:
+    _MATURITY = date(2027, 5, 15)
+
+    def _make_ipca_curve(self) -> Curve:
+        # single vertex at bd=1 so flat extension returns 0.05 for any future date
+        return Curve(
+            anchor=date(2026, 1, 1),
+            vertices=(CurveVertex(business_days=1, rate=Decimal("0.05")),),
+        )
+
+    def test_ipca_curve_overrides_assumed_ipca(self) -> None:
+        # With ipca_curve rate=0.05 and spread=6%:
+        # effective = 0.05 + 0.06 + (0.05 × 0.06) = 0.113 → 11,30%
+        # Default assumed_ipca (0.0414) would give 10,39% — must differ.
+        rate = PostFixedIPCA.from_percent("6")
+        result = _format_rate(rate, None, self._MATURITY, ipca_curve=self._make_ipca_curve())
+        assert result == "IPCA + 6,00% (11,30%)"
+
+    def test_ipca_curve_none_falls_back_to_assumed(self) -> None:
+        rate = PostFixedIPCA.from_percent("6")
+        with_curve = _format_rate(rate, None, self._MATURITY, ipca_curve=self._make_ipca_curve())
+        without_curve = _format_rate(rate, None, self._MATURITY)
+        assert with_curve != without_curve
+        assert without_curve == "IPCA + 6,00% (10,39%)"
+
+
+# ── _CalculatorTab curve properties ──────────────────────────────────────────
+
+class TestCalculatorTabCurveProperties:
+    @pytest.fixture
+    def session_factory(self):
+        from justfixed.persistence.database import Base, make_engine, make_session_factory
+        engine = make_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        return make_session_factory(engine)
+
+    def test_cdi_curve_reads_from_main_window(self, qapp, session_factory) -> None:
+        from PySide6.QtWidgets import QWidget
+        parent = QWidget()
+        mock_curve = MagicMock(spec=Curve)
+        parent._cdi_curve = mock_curve  # type: ignore[attr-defined]
+        calc = _CalculatorTab(session_factory=session_factory, parent=parent)
+        assert calc._cdi_curve is mock_curve
+
+    def test_cdi_curve_falls_back_to_none(self, qapp, session_factory) -> None:
+        calc = _CalculatorTab(session_factory=session_factory, parent=None)
+        assert calc._cdi_curve is None
+
+    def test_breakeven_curve_reads_from_main_window(self, qapp, session_factory) -> None:
+        from PySide6.QtWidgets import QWidget
+        parent = QWidget()
+        mock_curve = MagicMock(spec=Curve)
+        parent._breakeven_curve = mock_curve  # type: ignore[attr-defined]
+        calc = _CalculatorTab(session_factory=session_factory, parent=parent)
+        assert calc._breakeven_curve is mock_curve
+
+    def test_breakeven_curve_falls_back_to_none(self, qapp, session_factory) -> None:
+        calc = _CalculatorTab(session_factory=session_factory, parent=None)
+        assert calc._breakeven_curve is None
