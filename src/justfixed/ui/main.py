@@ -2635,25 +2635,25 @@ class MainWindow(QMainWindow):
 
         # Filter row — issuer and conglomerate dropdowns
         filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel("Conglomerate:"))
+        filter_row.addWidget(QLabel(STR.FIELD_CONGLOMERATE + ":"))
         self._conglomerate_combo = QComboBox()
-        self._conglomerate_combo.addItem("All")
+        self._conglomerate_combo.addItem(STR.FILTER_ALL)
         self._conglomerate_combo.textActivated.connect(self._on_conglomerate_filter_changed)
         filter_row.addWidget(self._conglomerate_combo)
         filter_row.addSpacing(12)
-        filter_row.addWidget(QLabel("Issuer:"))
+        filter_row.addWidget(QLabel(STR.FIELD_ISSUER + ":"))
         self._issuer_combo = QComboBox()
-        self._issuer_combo.addItem("All")
+        self._issuer_combo.addItem(STR.FILTER_ALL)
         self._issuer_combo.textActivated.connect(self._on_issuer_filter_changed)
         filter_row.addWidget(self._issuer_combo)
         filter_row.addSpacing(12)
-        filter_row.addWidget(QLabel("Custodian:"))
+        filter_row.addWidget(QLabel(STR.FIELD_CUSTODIAN + ":"))
         self._custodian_combo = QComboBox()
-        self._custodian_combo.addItem("All")
+        self._custodian_combo.addItem(STR.FILTER_ALL)
         self._custodian_combo.textActivated.connect(self._on_custodian_filter_changed)
         filter_row.addWidget(self._custodian_combo)
         filter_row.addSpacing(16)
-        self._hide_matured_cb = QCheckBox("Hide matured")
+        self._hide_matured_cb = QCheckBox(STR.CB_HIDE_MATURED)
         self._hide_matured_cb.setChecked(True)
         self._hide_matured_cb.toggled.connect(self._on_hide_matured_toggled)
         filter_row.addWidget(self._hide_matured_cb)
@@ -3148,7 +3148,7 @@ class MainWindow(QMainWindow):
             (self._conglomerate_combo, conglomerate_names, self._filter_conglomerate),
         ):
             combo.clear()
-            combo.addItem("All")
+            combo.addItem(STR.FILTER_ALL)
             for name in names:
                 combo.addItem(name)
             if current is not None and combo.findText(current) != -1:
@@ -3157,32 +3157,32 @@ class MainWindow(QMainWindow):
         # Custodian combo — handled separately: "(unset)" appended only when
         # at least one investment has custodian IS NULL, with a separator.
         self._custodian_combo.clear()
-        self._custodian_combo.addItem("All")
+        self._custodian_combo.addItem(STR.FILTER_ALL)
         for name in self._distinct_custodians():
             self._custodian_combo.addItem(name)
         has_null = any(i.custodian is None for i in self._investments)
         if has_null:
             self._custodian_combo.insertSeparator(self._custodian_combo.count())
-            self._custodian_combo.addItem("(unset)")
+            self._custodian_combo.addItem(STR.FILTER_UNSET)
         if self._filter_custodian is _CUSTODIAN_UNSET:
-            if self._custodian_combo.findText("(unset)") != -1:
-                self._custodian_combo.setCurrentText("(unset)")
+            if self._custodian_combo.findText(STR.FILTER_UNSET) != -1:
+                self._custodian_combo.setCurrentText(STR.FILTER_UNSET)
         elif self._filter_custodian is not None:
             if self._custodian_combo.findText(self._filter_custodian) != -1:
                 self._custodian_combo.setCurrentText(self._filter_custodian)
 
     def _on_issuer_filter_changed(self, text: str) -> None:
-        self._filter_issuer = None if text == "All" else text
+        self._filter_issuer = None if text == STR.FILTER_ALL else text
         self.refresh_table()
 
     def _on_conglomerate_filter_changed(self, text: str) -> None:
-        self._filter_conglomerate = None if text == "All" else text
+        self._filter_conglomerate = None if text == STR.FILTER_ALL else text
         self.refresh_table()
 
     def _on_custodian_filter_changed(self, text: str) -> None:
-        if text == "All":
+        if text == STR.FILTER_ALL:
             self._filter_custodian = None
-        elif text == "(unset)":
+        elif text == STR.FILTER_UNSET:
             self._filter_custodian = _CUSTODIAN_UNSET
         else:
             self._filter_custodian = text

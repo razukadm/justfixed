@@ -457,7 +457,7 @@ class TestFilterHandlers:
         self_mock = MagicMock(spec=MainWindow)
         self_mock._filter_issuer = "Bank A"
 
-        MainWindow._on_issuer_filter_changed(self_mock, "All")
+        MainWindow._on_issuer_filter_changed(self_mock, STR.FILTER_ALL)
 
         assert self_mock._filter_issuer is None
         self_mock.refresh_table.assert_called_once_with()
@@ -475,7 +475,7 @@ class TestFilterHandlers:
         self_mock = MagicMock(spec=MainWindow)
         self_mock._filter_conglomerate = "Group A"
 
-        MainWindow._on_conglomerate_filter_changed(self_mock, "All")
+        MainWindow._on_conglomerate_filter_changed(self_mock, STR.FILTER_ALL)
 
         assert self_mock._filter_conglomerate is None
         self_mock.refresh_table.assert_called_once_with()
@@ -1001,7 +1001,7 @@ class TestFilterTotalsIntegration:
         self_mock._populate_row.reset_mock()
         self_mock._rows_label.reset_mock()
 
-        MainWindow._on_issuer_filter_changed(self_mock, "All")
+        MainWindow._on_issuer_filter_changed(self_mock, STR.FILTER_ALL)
 
         assert self_mock._populate_row.call_count == 2
         self_mock._rows_label.setText.assert_called_with(STR.ROWS_FILTERED.format(n=2, total=4))
@@ -1010,7 +1010,7 @@ class TestFilterTotalsIntegration:
         self_mock._populate_row.reset_mock()
         self_mock._rows_label.reset_mock()
 
-        MainWindow._on_conglomerate_filter_changed(self_mock, "All")
+        MainWindow._on_conglomerate_filter_changed(self_mock, STR.FILTER_ALL)
 
         assert self_mock._populate_row.call_count == 4
         self_mock._rows_label.setText.assert_called_with(STR.ROWS.format(n=4))
@@ -1297,14 +1297,14 @@ class TestCustodianFilterHandler:
     def test_all_clears_filter(self) -> None:
         self_mock = MagicMock(spec=MainWindow)
         self_mock._filter_custodian = "XP"
-        MainWindow._on_custodian_filter_changed(self_mock, "All")
+        MainWindow._on_custodian_filter_changed(self_mock, STR.FILTER_ALL)
         assert self_mock._filter_custodian is None
         self_mock.refresh_table.assert_called_once_with()
 
     def test_unset_text_sets_sentinel(self) -> None:
         self_mock = MagicMock(spec=MainWindow)
         self_mock._filter_custodian = None
-        MainWindow._on_custodian_filter_changed(self_mock, "(unset)")
+        MainWindow._on_custodian_filter_changed(self_mock, STR.FILTER_UNSET)
         assert self_mock._filter_custodian is _CUSTODIAN_UNSET
         self_mock.refresh_table.assert_called_once_with()
 

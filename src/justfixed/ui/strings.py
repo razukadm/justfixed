@@ -119,5 +119,10 @@ class Strings:
     PROJ_TAX: str = "IR"
     PROJ_NET: str = "Líquido no vencimento"
 
+    # ── Filter row ──────────────────────────────────────────────────────────────
+    FILTER_ALL: str = "Todos"
+    FILTER_UNSET: str = "(sem custodiante)"
+    CB_HIDE_MATURED: str = "Ocultar vencidos"
+
 
 STR = Strings()
