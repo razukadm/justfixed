@@ -42,5 +42,42 @@ class Strings:
     ABOUT_BUILD_DATE: str = "Data da build:"
     ABOUT_EXPIRES: str = "Expira em:"
 
+    # ── Investments table headers ──────────────────────────────────────────────
+    COL_ISSUER: str = "Emissor"
+    COL_CONGLOMERATE: str = "Conglomerado"
+    COL_PRODUCT: str = "Produto"
+    COL_TYPE: str = "Tipo"
+    COL_RATE: str = "Taxa"
+    COL_PRINCIPAL: str = "Principal"
+    COL_MATURITY: str = "Vencimento"
+    COL_CURRENT: str = "Atual"
+    COL_PROJECTED: str = "Projetado"
+    COL_FGC: str = "FGC"
+
+    # ── Toolbar buttons ────────────────────────────────────────────────────────
+    BTN_IMPORT: str = "Importar extrato…"
+    BTN_ADD: str = "Adicionar investimento…"
+    BTN_PROJECT: str = "Projetar para hoje"
+    BTN_EXPORT_CAL: str = "Exportar calendário…"
+
+    # ── Status bar ─────────────────────────────────────────────────────────────
+    STATUS_READY: str = "Pronto."
+    STATUS_LOADING: str = "Carregando {name}…"
+    STATUS_LOADED: str = "{total} investimentos carregados ({new} novos, {unchanged} inalterados)."
+    STATUS_DELETED: str = "Investimento excluído."
+
+    # ── Footer summary ─────────────────────────────────────────────────────────
+    SUMMARY_PRINCIPAL: str = "Principal: {value}"
+    SUMMARY_CURRENT: str = "Atual: {value}"
+    SUMMARY_PROJECTED: str = "Projetado: {value}"
+    ROWS: str = "Linhas: {n}"
+    ROWS_FILTERED: str = "Linhas: {n} de {total}"
+    ROWS_ACTIVE_MATURED: str = "{active} ativos · {matured} vencidos"
+
+    # ── Empty states ───────────────────────────────────────────────────────────
+    EMPTY_INVESTMENTS: str = "Nenhum investimento ainda.\nImporte um extrato, ou adicione um investimento manualmente."
+    EMPTY_CONG_DISPLAY: str = "Nenhum investimento para exibir."
+    PROJ_EMPTY: str = 'Nenhuma projeção ainda. Clique em "{btn}" para calcular.'
+
 
 STR = Strings()

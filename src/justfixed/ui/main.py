@@ -146,8 +146,8 @@ _COL_FGC          = 9
 _NCOLS            = 10
 
 _HEADERS = [
-    "Issuer", "Conglomerate", "Product", "Type", "Rate",
-    "Principal", "Maturity", "Current", "Projected", "FGC",
+    STR.COL_ISSUER, STR.COL_CONGLOMERATE, STR.COL_PRODUCT, STR.COL_TYPE, STR.COL_RATE,
+    STR.COL_PRINCIPAL, STR.COL_MATURITY, STR.COL_CURRENT, STR.COL_PROJECTED, STR.COL_FGC,
 ]
 
 _PT_BR = QLocale(QLocale.Language.Portuguese, QLocale.Country.Brazil)
@@ -1055,7 +1055,7 @@ class InvestmentDetailPanel(QWidget):
         """Build the projection Panel widget; stored refs allow refresh_projection() to update it."""
         self._proj_stack = QStackedWidget()
 
-        placeholder = QLabel("No projection yet. Click ‘Project as of today’ to compute.")
+        placeholder = QLabel(STR.PROJ_EMPTY.format(btn=STR.BTN_PROJECT))
         placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         placeholder.setProperty("role", "emptyState")
         placeholder.setWordWrap(True)
@@ -2601,7 +2601,7 @@ class MainWindow(QMainWindow):
         self._cong_scroll.setWidget(self._cong_body)
         _cong_outer.addWidget(self._cong_scroll)
         cong_bottom = QHBoxLayout()
-        self._cong_project_btn = QPushButton("Project as of today")
+        self._cong_project_btn = QPushButton(STR.BTN_PROJECT)
         self._cong_project_btn.clicked.connect(self._on_project_clicked)
         self._cong_project_btn.setProperty("role", "toolbar")
         cong_bottom.addStretch()
@@ -2616,19 +2616,19 @@ class MainWindow(QMainWindow):
 
         # Toolbar — action buttons + status label
         toolbar = QHBoxLayout()
-        self._import_btn = QPushButton("Import Statement…")
+        self._import_btn = QPushButton(STR.BTN_IMPORT)
         self._import_btn.clicked.connect(self._on_import_clicked)
         self._import_btn.setProperty("role", "toolbar")
-        self._add_btn = QPushButton("Add investment…")
+        self._add_btn = QPushButton(STR.BTN_ADD)
         self._add_btn.clicked.connect(self._on_add_investment_clicked)
         self._add_btn.setProperty("role", "toolbar")
-        self._project_btn = QPushButton("Project as of today")
+        self._project_btn = QPushButton(STR.BTN_PROJECT)
         self._project_btn.clicked.connect(self._on_project_clicked)
         self._project_btn.setProperty("role", "toolbar")
-        self._export_btn = QPushButton("Export calendar…")
+        self._export_btn = QPushButton(STR.BTN_EXPORT_CAL)
         self._export_btn.clicked.connect(self._on_export_clicked)
         self._export_btn.setProperty("role", "toolbar")
-        self._status_label = QLabel("Ready.")
+        self._status_label = QLabel(STR.STATUS_READY)
         toolbar.addWidget(self._import_btn)
         toolbar.addWidget(self._add_btn)
         toolbar.addStretch()
@@ -2738,13 +2738,13 @@ class MainWindow(QMainWindow):
         totals_container.setObjectName("totalsStrip")
         totals_row = QHBoxLayout(totals_container)
         totals_row.setContentsMargins(8, 4, 8, 4)
-        self._principal_label = QLabel("Principal: —")
+        self._principal_label = QLabel(STR.SUMMARY_PRINCIPAL.format(value="—"))
         self._principal_label.setFont(_MONO_FONT)
-        self._current_label = QLabel("Current: —")
+        self._current_label = QLabel(STR.SUMMARY_CURRENT.format(value="—"))
         self._current_label.setFont(_MONO_FONT)
-        self._projected_label = QLabel("Projected: —")
+        self._projected_label = QLabel(STR.SUMMARY_PROJECTED.format(value="—"))
         self._projected_label.setFont(_MONO_FONT)
-        self._rows_label = QLabel("Rows: 0")
+        self._rows_label = QLabel(STR.ROWS.format(n=0))
         totals_row.addWidget(self._principal_label)
         totals_row.addSpacing(16)
         totals_row.addWidget(self._current_label)
@@ -2821,17 +2821,14 @@ class MainWindow(QMainWindow):
         self._empty_widget = QWidget()
         _ew_layout = QVBoxLayout(self._empty_widget)
         _ew_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _ew_label = QLabel(
-            "No investments yet.\n"
-            "Import an XP statement, or add an investment manually."
-        )
+        _ew_label = QLabel(STR.EMPTY_INVESTMENTS)
         _ew_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _ew_layout.addWidget(_ew_label)
         _ew_layout.addSpacing(12)
-        self._empty_import_btn = QPushButton("Import Statement…")
+        self._empty_import_btn = QPushButton(STR.BTN_IMPORT)
         self._empty_import_btn.clicked.connect(self._on_import_clicked)
         self._empty_import_btn.setProperty("role", "secondary")
-        self._empty_add_btn = QPushButton("Add investment…")
+        self._empty_add_btn = QPushButton(STR.BTN_ADD)
         self._empty_add_btn.clicked.connect(self._on_add_investment_clicked)
         self._empty_add_btn.setProperty("role", "secondary")
         _ew_layout.addWidget(self._empty_import_btn)
@@ -2992,7 +2989,7 @@ class MainWindow(QMainWindow):
         if self.active_mock is not None:
             projections = projections + [self.active_mock.projection]
         if not projections:
-            empty = QLabel("No investments to display.")
+            empty = QLabel(STR.EMPTY_CONG_DISPLAY)
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._cong_layout.addWidget(empty)
             return
@@ -3121,13 +3118,13 @@ class MainWindow(QMainWindow):
             if totals["projected_total"] is not None else "—"
         )
 
-        self._principal_label.setText(f"Principal: {principal}")
-        self._current_label.setText(f"Current: {current}")
-        self._projected_label.setText(f"Projected: {projected}")
+        self._principal_label.setText(STR.SUMMARY_PRINCIPAL.format(value=principal))
+        self._current_label.setText(STR.SUMMARY_CURRENT.format(value=current))
+        self._projected_label.setText(STR.SUMMARY_PROJECTED.format(value=projected))
 
         if matured:
             # At least one matured row visible (Hide matured toggle is OFF).
-            self._rows_label.setText(f"{len(active)} active · {len(matured)} matured")
+            self._rows_label.setText(STR.ROWS_ACTIVE_MATURED.format(active=len(active), matured=len(matured)))
         else:
             filter_active = (
                 self._filter_issuer is not None or self._filter_conglomerate is not None
@@ -3137,9 +3134,9 @@ class MainWindow(QMainWindow):
                     inv for inv in self.visible_investments(apply_filter=False)
                     if not _is_matured(inv)
                 ]
-                self._rows_label.setText(f"Rows: {len(active)} of {len(unfiltered_active)}")
+                self._rows_label.setText(STR.ROWS_FILTERED.format(n=len(active), total=len(unfiltered_active)))
             else:
-                self._rows_label.setText(f"Rows: {len(active)}")
+                self._rows_label.setText(STR.ROWS.format(n=len(active)))
 
     def _distinct_custodians(self) -> list[str]:
         """Sorted distinct non-NULL custodian strings across all investments."""
@@ -3348,7 +3345,7 @@ class MainWindow(QMainWindow):
                 p for p in self.projection_cache if p.investment.id != investment_id
             ]
         self.refresh_table()
-        self.statusBar().showMessage("Investment deleted.", 4000)
+        self.statusBar().showMessage(STR.STATUS_DELETED, 4000)
 
     def trigger_conglomerate_highlight(self, issuer_id: uuid.UUID) -> None:
         """Highlight all rows for issuer_id for 3 seconds, then snap back.
@@ -3400,7 +3397,7 @@ class MainWindow(QMainWindow):
         self._expanded_conglomerates.clear()
         self._ts_label.setText("")
         self.refresh_table()
-        self._status_label.setText("Ready.")
+        self._status_label.setText(STR.STATUS_READY)
         self.statusBar().showMessage(f"Cleared {deleted_investments} investments.")
 
     def _on_cell_double_clicked(self, row: int, column: int) -> None:
@@ -3422,7 +3419,7 @@ class MainWindow(QMainWindow):
             return
 
         self._set_busy(True)
-        self._status_label.setText(f"Loading {Path(path_str).name}…")
+        self._status_label.setText(STR.STATUS_LOADING.format(name=Path(path_str).name))
 
         self._worker = _ImportWorker(Path(path_str), self._session_factory)
         self._worker.finished.connect(self._on_import_done)
@@ -3441,8 +3438,11 @@ class MainWindow(QMainWindow):
         self._set_busy(False)
         broker_display = self._BROKER_DISPLAY[broker]
         self._status_label.setText(
-            f"Loaded {result.inserted + result.skipped} investments "
-            f"({result.inserted} new, {result.skipped} unchanged)."
+            STR.STATUS_LOADED.format(
+                total=result.inserted + result.skipped,
+                new=result.inserted,
+                unchanged=result.skipped,
+            )
         )
         QMessageBox.information(
             self,
@@ -3458,7 +3458,7 @@ class MainWindow(QMainWindow):
     def _on_import_error(self, message: str) -> None:
         # _investments unchanged — failed import did not reach refresh_table().
         self._set_busy(False)
-        self._status_label.setText("Ready.")
+        self._status_label.setText(STR.STATUS_READY)
         QMessageBox.critical(self, "Import failed", message)
 
     def _on_add_investment_clicked(self) -> None:

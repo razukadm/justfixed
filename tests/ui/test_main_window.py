@@ -37,6 +37,7 @@ from justfixed.ui.main import (
     ConglomerateEditDelegate, InvestmentDetailPanel, MainWindow, _ProjectWorker,
     compute_totals, _format_type, _format_rate, _is_matured,
 )
+from justfixed.ui.strings import STR
 
 
 class TestIsMatured:
@@ -587,10 +588,10 @@ class TestUpdateTotals:
         with patch("justfixed.ui.main.compute_totals", return_value=totals):
             MainWindow._update_totals(self_mock)
 
-        self_mock._principal_label.setText.assert_called_once_with("Principal: R$ 350,00")
-        self_mock._current_label.setText.assert_called_once_with("Current: R$ 370,00")
-        self_mock._projected_label.setText.assert_called_once_with("Projected: R$ 430,00")
-        self_mock._rows_label.setText.assert_called_once_with("Rows: 2")
+        self_mock._principal_label.setText.assert_called_once_with(STR.SUMMARY_PRINCIPAL.format(value="R$ 350,00"))
+        self_mock._current_label.setText.assert_called_once_with(STR.SUMMARY_CURRENT.format(value="R$ 370,00"))
+        self_mock._projected_label.setText.assert_called_once_with(STR.SUMMARY_PROJECTED.format(value="R$ 430,00"))
+        self_mock._rows_label.setText.assert_called_once_with(STR.ROWS.format(n=2))
 
     def test_update_totals_no_cache_shows_dash_for_projected(self) -> None:
         self_mock = self._make_self_mock()
@@ -606,10 +607,10 @@ class TestUpdateTotals:
         with patch("justfixed.ui.main.compute_totals", return_value=totals):
             MainWindow._update_totals(self_mock)
 
-        self_mock._principal_label.setText.assert_called_once_with("Principal: R$ 100,00")
-        self_mock._current_label.setText.assert_called_once_with("Current: —")
-        self_mock._projected_label.setText.assert_called_once_with("Projected: —")
-        self_mock._rows_label.setText.assert_called_once_with("Rows: 1")
+        self_mock._principal_label.setText.assert_called_once_with(STR.SUMMARY_PRINCIPAL.format(value="R$ 100,00"))
+        self_mock._current_label.setText.assert_called_once_with(STR.SUMMARY_CURRENT.format(value="—"))
+        self_mock._projected_label.setText.assert_called_once_with(STR.SUMMARY_PROJECTED.format(value="—"))
+        self_mock._rows_label.setText.assert_called_once_with(STR.ROWS.format(n=1))
 
     def test_update_totals_with_filter_shows_m_of_n(self) -> None:
         self_mock = self._make_self_mock()
@@ -635,7 +636,7 @@ class TestUpdateTotals:
         with patch("justfixed.ui.main.compute_totals", return_value=totals):
             MainWindow._update_totals(self_mock)
 
-        self_mock._rows_label.setText.assert_called_once_with("Rows: 1 of 3")
+        self_mock._rows_label.setText.assert_called_once_with(STR.ROWS_FILTERED.format(n=1, total=3))
 
 
 class TestUpdateTotalsMatured:
@@ -675,7 +676,7 @@ class TestUpdateTotalsMatured:
         }
         with patch("justfixed.ui.main.compute_totals", return_value=totals_stub):
             MainWindow._update_totals(self_mock)
-        self_mock._rows_label.setText.assert_called_once_with("Rows: 1")
+        self_mock._rows_label.setText.assert_called_once_with(STR.ROWS.format(n=1))
 
     def test_toggle_on_compute_totals_receives_only_active(self) -> None:
         self_mock = self._make_self_mock(hide_matured=True)
@@ -722,7 +723,7 @@ class TestUpdateTotalsMatured:
         }
         with patch("justfixed.ui.main.compute_totals", return_value=totals_stub):
             MainWindow._update_totals(self_mock)
-        self_mock._rows_label.setText.assert_called_once_with("2 active · 1 matured")
+        self_mock._rows_label.setText.assert_called_once_with(STR.ROWS_ACTIVE_MATURED.format(active=2, matured=1))
 
     def test_toggle_off_no_matured_pill_shows_n(self) -> None:
         self_mock = self._make_self_mock(hide_matured=False)
@@ -735,7 +736,7 @@ class TestUpdateTotalsMatured:
         }
         with patch("justfixed.ui.main.compute_totals", return_value=totals_stub):
             MainWindow._update_totals(self_mock)
-        self_mock._rows_label.setText.assert_called_once_with("Rows: 1")
+        self_mock._rows_label.setText.assert_called_once_with(STR.ROWS.format(n=1))
 
 
 # ── Integration test helpers ──────────────────────────────────────────────────
@@ -851,7 +852,7 @@ class TestCurationRoundtripIntegration:
 
         expected_principal = inv1.principal + inv2.principal
         self_mock._principal_label.setText.assert_called_with(
-            f"Principal: {expected_principal.to_display()}"
+            STR.SUMMARY_PRINCIPAL.format(value=expected_principal.to_display())
         )
 
         # Phase 2 — delegate save
@@ -884,7 +885,7 @@ class TestCurationRoundtripIntegration:
         assert calls[1].kwargs["fgc_status"] == ExposureStatus.UNDER
 
         self_mock._principal_label.setText.assert_called_with(
-            f"Principal: {expected_principal.to_display()}"
+            STR.SUMMARY_PRINCIPAL.format(value=expected_principal.to_display())
         )
 
 
@@ -952,12 +953,12 @@ class TestFilterTotalsIntegration:
             + proj3.current_value + proj4.current_value
         )
         self_mock._principal_label.setText.assert_called_with(
-            f"Principal: {expected_all_principal.to_display()}"
+            STR.SUMMARY_PRINCIPAL.format(value=expected_all_principal.to_display())
         )
         self_mock._current_label.setText.assert_called_with(
-            f"Current: {expected_all_current.to_display()}"
+            STR.SUMMARY_CURRENT.format(value=expected_all_current.to_display())
         )
-        self_mock._rows_label.setText.assert_called_with("Rows: 4")
+        self_mock._rows_label.setText.assert_called_with(STR.ROWS.format(n=4))
 
         # Phase 2 — issuer filter: Bank A only (inv1 + inv2)
         self_mock._populate_row.reset_mock()
@@ -971,12 +972,12 @@ class TestFilterTotalsIntegration:
         expected_bank_a_principal = inv1.principal + inv2.principal
         expected_bank_a_current = proj1.current_value + proj2.current_value
         self_mock._principal_label.setText.assert_called_with(
-            f"Principal: {expected_bank_a_principal.to_display()}"
+            STR.SUMMARY_PRINCIPAL.format(value=expected_bank_a_principal.to_display())
         )
         self_mock._current_label.setText.assert_called_with(
-            f"Current: {expected_bank_a_current.to_display()}"
+            STR.SUMMARY_CURRENT.format(value=expected_bank_a_current.to_display())
         )
-        self_mock._rows_label.setText.assert_called_with("Rows: 2 of 4")
+        self_mock._rows_label.setText.assert_called_with(STR.ROWS_FILTERED.format(n=2, total=4))
 
         # Phase 3 — AND conglomerate filter: Bank A ∩ Group X = inv1 only
         self_mock._populate_row.reset_mock()
@@ -988,12 +989,12 @@ class TestFilterTotalsIntegration:
 
         assert self_mock._populate_row.call_count == 1
         self_mock._principal_label.setText.assert_called_with(
-            f"Principal: {inv1.principal.to_display()}"
+            STR.SUMMARY_PRINCIPAL.format(value=inv1.principal.to_display())
         )
         self_mock._current_label.setText.assert_called_with(
-            f"Current: {proj1.current_value.to_display()}"
+            STR.SUMMARY_CURRENT.format(value=proj1.current_value.to_display())
         )
-        self_mock._rows_label.setText.assert_called_with("Rows: 1 of 4")
+        self_mock._rows_label.setText.assert_called_with(STR.ROWS_FILTERED.format(n=1, total=4))
 
         # Phase 4 — clear issuer filter; conglomerate "Group X" still active
         # visible = inv1 (Bank A, Group X) + inv3 (Bank B, Group X) = 2
@@ -1003,7 +1004,7 @@ class TestFilterTotalsIntegration:
         MainWindow._on_issuer_filter_changed(self_mock, "All")
 
         assert self_mock._populate_row.call_count == 2
-        self_mock._rows_label.setText.assert_called_with("Rows: 2 of 4")
+        self_mock._rows_label.setText.assert_called_with(STR.ROWS_FILTERED.format(n=2, total=4))
 
         # Phase 5 — clear conglomerate filter; both filters None, all four visible
         self_mock._populate_row.reset_mock()
@@ -1012,7 +1013,7 @@ class TestFilterTotalsIntegration:
         MainWindow._on_conglomerate_filter_changed(self_mock, "All")
 
         assert self_mock._populate_row.call_count == 4
-        self_mock._rows_label.setText.assert_called_with("Rows: 4")
+        self_mock._rows_label.setText.assert_called_with(STR.ROWS.format(n=4))
 
 
 def _make_curve(anchor_str: str = "2026-05-15") -> Curve:
