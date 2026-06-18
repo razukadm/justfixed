@@ -34,6 +34,7 @@ from justfixed.domain.investment import Investment
 from justfixed.domain.issuer import IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import ProductType
+from justfixed.engine.curve import Curve
 from justfixed.engine.projection import ProjectionResult, project
 
 # ── Module-level constants ────────────────────────────────────────────────────
@@ -112,6 +113,8 @@ def fgc_concentration_report(
     as_of: date,
     assumed_cdi: Decimal,
     assumed_ipca: Decimal | None = None,
+    cdi_curve: Curve | None = None,
+    ipca_curve: Curve | None = None,
 ) -> FGCReport:
     """Compute FGC concentration exposure across the portfolio.
 
@@ -147,7 +150,13 @@ def fgc_concentration_report(
     # One call per investment suffices; no second call with as_of=maturity_date
     # is needed because both values live on the same ProjectionResult.
     projections: list[ProjectionResult] = [
-        project(inv, as_of=as_of, assumed_cdi=assumed_cdi, assumed_ipca=assumed_ipca)
+        project(
+            inv, as_of=as_of,
+            assumed_cdi=assumed_cdi,
+            assumed_ipca=assumed_ipca,
+            cdi_curve=cdi_curve,
+            ipca_curve=ipca_curve,
+        )
         for inv in fgc_investments
     ]
 

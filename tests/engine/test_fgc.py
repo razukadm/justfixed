@@ -22,7 +22,9 @@ from justfixed.domain.investment import Investment
 from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.domain.money import Money
 from justfixed.domain.product import ProductType
-from justfixed.domain.rates import PostFixedIPCA, Prefixed
+from justfixed.domain.rates import PostFixedCDI, PostFixedIPCA, Prefixed
+from justfixed.engine.calendar import add_business_days
+from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fgc import (
     ConglomerateExposure,
     ExposureStatus,
@@ -343,3 +345,102 @@ def test_from_projections_mismatched_as_of_raises() -> None:
     proj_b = project(inv, as_of=date(2025, 6, 1), assumed_cdi=ASSUMED_CDI)
     with pytest.raises(ValueError):
         fgc_concentration_report_from_projections([proj_a, proj_b])
+
+
+# ── Group F: Curve forwarding ─────────────────────────────────────────────────
+
+
+class TestFgcCurveForwarding:
+    """fgc_concentration_report forwards cdi_curve / ipca_curve into project()."""
+
+    _PURCHASE = date(2025, 1, 2)
+    _BANK = _bank("Banco Curves", "Banco Curves S.A.")
+
+    def _ipca_cdb(self, purchase: date, maturity: date) -> Investment:
+        return Investment.create(
+            product=ProductType.CDB,
+            issuer=self._BANK,
+            principal=Money.from_reais("10000"),
+            rate=PostFixedIPCA.from_percent("5"),
+            purchase_date=purchase,
+            maturity_date=maturity,
+        )
+
+    def _cdi_cdb(self, purchase: date, maturity: date) -> Investment:
+        return Investment.create(
+            product=ProductType.CDB,
+            issuer=self._BANK,
+            principal=Money.from_reais("10000"),
+            rate=PostFixedCDI.from_percent("100"),
+            purchase_date=purchase,
+            maturity_date=maturity,
+        )
+
+    def test_ipca_curve_changes_peak_exposure(self) -> None:
+        # 252 biz days → exponent = 1 → exact Decimal arithmetic.
+        # Without curve (assumed_ipca=0.04, spread=5%):
+        #   effective = 0.04 + 0.05 + 0.04×0.05 = 0.0920
+        #   peak_exposure = 10000 × 1.0920 = 10920
+        # With ipca_curve breakeven=0.06 at maturity:
+        #   effective = 0.06 + 0.05 + 0.06×0.05 = 0.1130
+        #   peak_exposure = 10000 × 1.1130 = 11130
+        purchase = self._PURCHASE
+        maturity = add_business_days(purchase, 252)
+        inv = self._ipca_cdb(purchase, maturity)
+
+        report_flat = fgc_concentration_report(
+            [inv], as_of=purchase, assumed_cdi=ASSUMED_CDI, assumed_ipca=Decimal("0.04"),
+        )
+        assert report_flat.conglomerates[0].peak_exposure == Money.from_reais("10920")
+
+        ipca_curve = Curve(
+            anchor=purchase,
+            vertices=(CurveVertex(business_days=252, rate=Decimal("0.06")),),
+        )
+        report_curve = fgc_concentration_report(
+            [inv], as_of=purchase, assumed_cdi=ASSUMED_CDI, assumed_ipca=Decimal("0.04"),
+            ipca_curve=ipca_curve,
+        )
+        assert report_curve.conglomerates[0].peak_exposure == Money.from_reais("11130")
+        assert report_curve.conglomerates[0].peak_exposure != report_flat.conglomerates[0].peak_exposure
+
+    def test_cdi_curve_changes_peak_exposure(self) -> None:
+        # 252 biz days → exponent = 1 → exact Decimal arithmetic.
+        # PostFixedCDI 100%: effective = cdi_rate directly.
+        # Without curve (assumed_cdi=0.12): effective=0.12 → peak=11200
+        # With cdi_curve rate_at(maturity)=0.10: effective=0.10 → peak=11000
+        purchase = self._PURCHASE
+        maturity = add_business_days(purchase, 252)
+        inv = self._cdi_cdb(purchase, maturity)
+
+        report_flat = fgc_concentration_report(
+            [inv], as_of=purchase, assumed_cdi=Decimal("0.12"),
+        )
+        assert report_flat.conglomerates[0].peak_exposure == Money.from_reais("11200")
+
+        cdi_curve = Curve(
+            anchor=purchase,
+            vertices=(CurveVertex(business_days=252, rate=Decimal("0.10")),),
+        )
+        report_curve = fgc_concentration_report(
+            [inv], as_of=purchase, assumed_cdi=Decimal("0.12"), cdi_curve=cdi_curve,
+        )
+        assert report_curve.conglomerates[0].peak_exposure == Money.from_reais("11000")
+        assert report_curve.conglomerates[0].peak_exposure != report_flat.conglomerates[0].peak_exposure
+
+    def test_both_curves_none_unchanged(self) -> None:
+        purchase = self._PURCHASE
+        maturity = add_business_days(purchase, 252)
+        inv = self._ipca_cdb(purchase, maturity)
+
+        report_default = fgc_concentration_report(
+            [inv], as_of=purchase, assumed_cdi=ASSUMED_CDI, assumed_ipca=Decimal("0.04"),
+        )
+        report_explicit_none = fgc_concentration_report(
+            [inv], as_of=purchase, assumed_cdi=ASSUMED_CDI, assumed_ipca=Decimal("0.04"),
+            cdi_curve=None, ipca_curve=None,
+        )
+        cong_d = report_default.conglomerates[0]
+        cong_n = report_explicit_none.conglomerates[0]
+        assert cong_n.peak_exposure == cong_d.peak_exposure
+        assert cong_n.current_exposure == cong_d.current_exposure
