@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from justfixed.domain.issuer import UNVERIFIED_CONGLOMERATE_PREFIX, display_issuer_kind
 from justfixed.persistence.repositories import InvestmentRepository, IssuerRepository
+from justfixed.ui.strings import STR
 
 
 class ManageReferenceDataDialog(QDialog):
@@ -39,7 +40,7 @@ class ManageReferenceDataDialog(QDialog):
         super().__init__(parent)
         self._issuer_repo = issuer_repo
         self._investment_repo = investment_repo
-        self.setWindowTitle("Manage Reference Data")
+        self.setWindowTitle(STR.MRD_TITLE)
         self.setMinimumSize(820, 480)
         self._build_ui()
 
@@ -51,9 +52,9 @@ class ManageReferenceDataDialog(QDialog):
         root.setSpacing(8)
 
         self._tabs = QTabWidget()
-        self._tabs.addTab(self._build_issuers_tab(), "Issuers")
-        self._tabs.addTab(self._build_conglomerates_tab(), "Conglomerates")
-        self._tabs.addTab(self._build_custodians_tab(), "Custodians")
+        self._tabs.addTab(self._build_issuers_tab(), STR.MRD_TAB_ISSUERS)
+        self._tabs.addTab(self._build_conglomerates_tab(), STR.MRD_TAB_CONGLOMERATES)
+        self._tabs.addTab(self._build_custodians_tab(), STR.MRD_TAB_CUSTODIANS)
         root.addWidget(self._tabs, stretch=1)
 
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
@@ -71,7 +72,7 @@ class ManageReferenceDataDialog(QDialog):
         self._issuers_table = QTableWidget()
         self._issuers_table.setColumnCount(5)
         self._issuers_table.setHorizontalHeaderLabels(
-            ["Name", "Conglomerate", "Kind", "# Investments", ""]
+            [STR.MRD_COL_NAME, STR.COL_CONGLOMERATE, STR.MRD_COL_KIND, STR.MRD_COL_NUM_INVESTMENTS, ""]
         )
         hh = self._issuers_table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -100,7 +101,7 @@ class ManageReferenceDataDialog(QDialog):
         self._conglomerates_table = QTableWidget()
         self._conglomerates_table.setColumnCount(5)
         self._conglomerates_table.setHorizontalHeaderLabels(
-            ["Conglomerate", "# Issuers", "# Investments", "Rename", "Dissolve"]
+            [STR.COL_CONGLOMERATE, STR.MRD_COL_NUM_ISSUERS, STR.MRD_COL_NUM_INVESTMENTS, STR.MRD_RENAME, STR.MRD_DISSOLVE]
         )
         hh = self._conglomerates_table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -132,7 +133,7 @@ class ManageReferenceDataDialog(QDialog):
         self._custodians_table = QTableWidget()
         self._custodians_table.setColumnCount(4)
         self._custodians_table.setHorizontalHeaderLabels(
-            ["Custodian", "# Investments", "Rename", "Clear"]
+            [STR.FIELD_CUSTODIAN, STR.MRD_COL_NUM_INVESTMENTS, STR.MRD_RENAME, STR.MRD_CLEAR]
         )
         hh = self._custodians_table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -183,12 +184,10 @@ class ManageReferenceDataDialog(QDialog):
             )
             self._issuers_table.setItem(row, 3, count_item)
 
-            del_btn = QPushButton("Delete")
+            del_btn = QPushButton(STR.MRD_DELETE)
             if count > 0:
                 del_btn.setEnabled(False)
-                del_btn.setToolTip(
-                    f"Can't delete: {count} investment(s) still reference this issuer."
-                )
+                del_btn.setToolTip(STR.MRD_TIP_CANT_DELETE.format(count=count))
             else:
                 del_btn.clicked.connect(
                     lambda checked=False, iss=issuer: self._on_delete_issuer(iss)
@@ -227,13 +226,13 @@ class ManageReferenceDataDialog(QDialog):
             )
             self._conglomerates_table.setItem(row, 2, inv_count_item)
 
-            rename_btn = QPushButton("Rename")
+            rename_btn = QPushButton(STR.MRD_RENAME)
             rename_btn.clicked.connect(
                 lambda checked=False, c=cong: self._on_rename_conglomerate(c)
             )
             self._conglomerates_table.setCellWidget(row, 3, rename_btn)
 
-            dissolve_btn = QPushButton("Dissolve")
+            dissolve_btn = QPushButton(STR.MRD_DISSOLVE)
             dissolve_btn.clicked.connect(
                 lambda checked=False, c=cong: self._on_dissolve_conglomerate(c)
             )
@@ -263,13 +262,13 @@ class ManageReferenceDataDialog(QDialog):
             )
             self._custodians_table.setItem(row, 1, count_item)
 
-            rename_btn = QPushButton("Rename")
+            rename_btn = QPushButton(STR.MRD_RENAME)
             rename_btn.clicked.connect(
                 lambda checked=False, c=cust: self._on_rename_custodian(c)
             )
             self._custodians_table.setCellWidget(row, 2, rename_btn)
 
-            clear_btn = QPushButton("Clear")
+            clear_btn = QPushButton(STR.MRD_CLEAR)
             clear_btn.clicked.connect(
                 lambda checked=False, c=cust: self._on_clear_custodian(c)
             )
@@ -285,14 +284,14 @@ class ManageReferenceDataDialog(QDialog):
             )
             self._custodians_table.setItem(row, 1, count_item)
 
-            rename_btn = QPushButton("Rename")
+            rename_btn = QPushButton(STR.MRD_RENAME)
             rename_btn.setEnabled(False)
-            rename_btn.setToolTip("No custodian to rename.")
+            rename_btn.setToolTip(STR.MRD_TIP_NO_CUSTODIAN)
             self._custodians_table.setCellWidget(row, 2, rename_btn)
 
-            clear_btn = QPushButton("Clear")
+            clear_btn = QPushButton(STR.MRD_CLEAR)
             clear_btn.setEnabled(False)
-            clear_btn.setToolTip("Already unset.")
+            clear_btn.setToolTip(STR.MRD_TIP_ALREADY_UNSET)
             self._custodians_table.setCellWidget(row, 3, clear_btn)
 
     # ── Actions ───────────────────────────────────────────────────────────────

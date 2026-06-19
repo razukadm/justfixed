@@ -188,5 +188,22 @@ class Strings:
     CALC_DRAWDOWN_TITLE: str = "Prévia do resgate sequencial — {issuer}"
     CALC_PEAK_AT: str = "em {date}"
 
+    # ── Manage Reference Data (chrome) ──────────────────────────────────────────
+    MRD_TITLE: str = "Gerenciar dados de referência"
+    MRD_TAB_ISSUERS: str = "Emissores"
+    MRD_TAB_CONGLOMERATES: str = "Conglomerados"
+    MRD_TAB_CUSTODIANS: str = "Custodiantes"
+    MRD_COL_NAME: str = "Nome"
+    MRD_COL_KIND: str = "Tipo"
+    MRD_COL_NUM_INVESTMENTS: str = "Nº de investimentos"
+    MRD_COL_NUM_ISSUERS: str = "Nº de emissores"
+    MRD_RENAME: str = "Renomear"
+    MRD_DISSOLVE: str = "Dissolver"
+    MRD_CLEAR: str = "Limpar"
+    MRD_DELETE: str = "Excluir"
+    MRD_TIP_CANT_DELETE: str = "Não é possível excluir: {count} investimento(s) ainda usam este emissor."
+    MRD_TIP_NO_CUSTODIAN: str = "Nenhum custodiante para renomear."
+    MRD_TIP_ALREADY_UNSET: str = "Já está vazio."
+
 
 STR = Strings()

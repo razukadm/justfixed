@@ -31,6 +31,7 @@ from justfixed.persistence.database import Base, make_engine, make_session_facto
 from justfixed.persistence.repositories import InvestmentRepository, IssuerRepository
 from justfixed.ui.main import MainWindow
 from justfixed.ui.manage_reference_data import ManageReferenceDataDialog
+from justfixed.ui.strings import STR
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -92,9 +93,9 @@ class TestDialogTabStructure:
     def test_three_tabs_in_order(self, qapp, issuer_repo, investment_repo) -> None:
         dlg = _make_dialog(issuer_repo, investment_repo, qapp)
         assert dlg._tabs.count() == 3
-        assert dlg._tabs.tabText(0) == "Issuers"
-        assert dlg._tabs.tabText(1) == "Conglomerates"
-        assert dlg._tabs.tabText(2) == "Custodians"
+        assert dlg._tabs.tabText(0) == STR.MRD_TAB_ISSUERS
+        assert dlg._tabs.tabText(1) == STR.MRD_TAB_CONGLOMERATES
+        assert dlg._tabs.tabText(2) == STR.MRD_TAB_CUSTODIANS
 
     def test_conglomerates_tab_has_table(
         self, qapp, issuer_repo, investment_repo
