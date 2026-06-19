@@ -417,12 +417,12 @@ def _make_drawdown_header() -> QWidget:
     ind.setFixedWidth(20)
     h.addWidget(ind)
     for text, width, stretch in [
-        ("Maturity",         100, 0),
-        ("Issuer",             0, 1),
-        ("Product",          100, 0),
-        ("Principal",        110, 0),
-        ("Projected",        110, 0),
-        ("Projected Balance", 200, 0),
+        (STR.COL_MATURITY,          100, 0),
+        (STR.COL_ISSUER,              0, 1),
+        (STR.COL_PRODUCT,           100, 0),
+        (STR.COL_PRINCIPAL,         110, 0),
+        (STR.COL_PROJECTED,         110, 0),
+        (STR.COL_PROJECTED_BALANCE, 200, 0),
     ]:
         lbl = QLabel(text)
         if width:
@@ -1815,7 +1815,7 @@ class _CalculatorTab(QWidget):
         peak_date_str = result.peak_date.strftime("%d/%m/%Y")
         peak_text = (
             f"{Money(peak_exposure).to_display()} / {FGC_PER_CONGLOMERATE_LIMIT.to_display()}"
-            f" at {peak_date_str}"
+            f" {STR.CALC_PEAK_AT.format(date=peak_date_str)}"
         )
         self._res_fgc_util_lbl = QLabel(peak_text)
         _row(STR.CALC_FGC_PEAK_UTIL, self._res_fgc_util_lbl)
@@ -1936,7 +1936,7 @@ class _CalculatorTab(QWidget):
 
         vbox.addStretch()
         panel = Panel(
-            title=f"Drawdown preview — {issuer.conglomerate} sequential",
+            title=STR.CALC_DRAWDOWN_TITLE.format(issuer=display_conglomerate(issuer.conglomerate)),
             meta="mock highlighted",
         )
         panel.set_content(body)

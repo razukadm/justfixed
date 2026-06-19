@@ -184,5 +184,9 @@ class Strings:
     CALC_MSG_SOLVED_AT_CAP: str = "Posições de {conglomerate} já no limite do FGC."
     CALC_MSG_SOLVED: str = "Principal máximo calculado sob o FGC · limite atingido em {date}"
 
+    # ── Calculator drawdown preview ─────────────────────────────────────────────
+    CALC_DRAWDOWN_TITLE: str = "Prévia do resgate sequencial — {issuer}"
+    CALC_PEAK_AT: str = "em {date}"
+
 
 STR = Strings()
