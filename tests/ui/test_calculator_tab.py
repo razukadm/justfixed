@@ -32,6 +32,7 @@ from justfixed.engine.projection import project
 from justfixed.persistence.database import Base, make_engine, make_session_factory
 from justfixed.persistence.repositories import InvestmentRepository, IssuerRepository
 from justfixed.ui.main import _ActiveMock, _CalculatorTab
+from justfixed.ui.strings import STR
 
 
 @pytest.fixture(scope="session")
@@ -121,7 +122,7 @@ class TestCalculatorTabDefaults:
     def test_solve_radio_label_includes_fgc_qualifier(self, qapp) -> None:
         # CA-5: full label "Solve for max under FGC", not the truncated form.
         tab = _make_tab()
-        assert tab._radio_solve.text() == "Solve for max under FGC"
+        assert tab._radio_solve.text() == STR.CALC_MODE_SOLVE
 
     def test_calculate_button_has_toolbar_role(self, qapp) -> None:
         # CA-4: Calculate is the primary commit action → green toolbar accent.

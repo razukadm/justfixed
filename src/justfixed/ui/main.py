@@ -1245,39 +1245,39 @@ class _CalculatorTab(QWidget):
         self._issuer_combo = QComboBox()
         self._issuer_combo.currentIndexChanged.connect(self._on_issuer_changed)
         self._issuer_combo.currentIndexChanged.connect(self._update_calc_btn_state)
-        self._add_form_row("Issuer", self._issuer_combo)
+        self._add_form_row(STR.FIELD_ISSUER, self._issuer_combo)
         self._issuer_err_lbl, self._issuer_err_wrap = self._add_inline_err()
 
         # Conglomerate (read-only, auto-populated)
         self._cong_edit = QLineEdit()
         self._cong_edit.setEnabled(False)
-        self._add_form_row("Conglomerate", self._cong_edit)
+        self._add_form_row(STR.FIELD_CONGLOMERATE, self._cong_edit)
 
         # Product — FGC-covered only
         self._product_combo = QComboBox()
         for pt in ProductType:
             if rules_for(pt).fgc_covered:
                 self._product_combo.addItem(rules_for(pt).display_name, pt)
-        self._add_form_row("Product", self._product_combo)
+        self._add_form_row(STR.FIELD_PRODUCT, self._product_combo)
 
         # Rate
         self._rate_editor = _RateEditor()
-        self._add_form_row("Rate", self._rate_editor)
+        self._add_form_row(STR.FIELD_RATE, self._rate_editor)
 
         # Purchase date
         self._purchase_date_edit = QDateEdit()
         self._purchase_date_edit.setDisplayFormat("dd/MM/yyyy")
-        self._add_form_row("Purchase date", self._purchase_date_edit)
+        self._add_form_row(STR.FIELD_PURCHASE_DATE, self._purchase_date_edit)
 
         # Maturity date
         self._maturity_date_edit = QDateEdit()
         self._maturity_date_edit.setDisplayFormat("dd/MM/yyyy")
-        self._add_form_row("Maturity date", self._maturity_date_edit)
+        self._add_form_row(STR.FIELD_MATURITY_DATE, self._maturity_date_edit)
         self._maturity_err_lbl, self._maturity_err_wrap = self._add_inline_err()
 
         # Principal mode radios
-        self._radio_enter = QRadioButton("Enter value")
-        self._radio_solve = QRadioButton("Solve for max under FGC")
+        self._radio_enter = QRadioButton(STR.CALC_MODE_ENTER)
+        self._radio_solve = QRadioButton(STR.CALC_MODE_SOLVE)
         self._radio_enter.setChecked(True)
         self._mode_group = QButtonGroup(self)
         self._mode_group.addButton(self._radio_enter, 0)
@@ -1290,12 +1290,12 @@ class _CalculatorTab(QWidget):
         mode_row.addWidget(self._radio_enter)
         mode_row.addWidget(self._radio_solve)
         mode_row.addStretch()
-        self._add_form_row("Principal", mode_widget)
+        self._add_form_row(STR.FIELD_PRINCIPAL, mode_widget)
 
         # Value field
         self._value_edit = QLineEdit()
         self._value_edit.setPlaceholderText("e.g. 10.000,00")
-        self._add_form_row("Value", self._value_edit)
+        self._add_form_row(STR.CALC_VALUE, self._value_edit)
         self._value_err_lbl, self._value_err_wrap = self._add_inline_err()
 
         form_layout.addStretch()
@@ -1303,10 +1303,10 @@ class _CalculatorTab(QWidget):
         # Buttons
         btn_row = QHBoxLayout()
         btn_row.setContentsMargins(0, 4, 0, 0)
-        self._reset_btn = QPushButton("Reset")
+        self._reset_btn = QPushButton(STR.CALC_RESET)
         self._reset_btn.clicked.connect(self.reset)
         self._reset_btn.setProperty("role", "danger")
-        self._calc_btn = QPushButton("Calculate")
+        self._calc_btn = QPushButton(STR.CALC_CALCULATE)
         self._calc_btn.setEnabled(False)
         self._calc_btn.clicked.connect(self._on_calculate_clicked)
         self._calc_btn.setProperty("role", "toolbar")
@@ -1318,7 +1318,7 @@ class _CalculatorTab(QWidget):
         outer.addWidget(form_container)
 
         # ── Right: stacked widget (placeholder / result card) ─────────────────
-        self._placeholder = QLabel("Run a calculation to see results.")
+        self._placeholder = QLabel(STR.CALC_PLACEHOLDER)
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._placeholder.setProperty("role", "emptyState")
         self._result_stack = QStackedWidget()
@@ -1483,7 +1483,7 @@ class _CalculatorTab(QWidget):
         issuer = self._issuer_combo.currentData()
         if not isinstance(issuer, Issuer):
             self._set_field_error(
-                None, self._issuer_err_lbl, self._issuer_err_wrap, "Select an issuer."
+                None, self._issuer_err_lbl, self._issuer_err_wrap, STR.CALC_ERR_ISSUER
             )
             ok = False
 
@@ -1494,7 +1494,7 @@ class _CalculatorTab(QWidget):
         if maturity_date <= purchase_date:
             self._set_field_error(
                 None, self._maturity_err_lbl, self._maturity_err_wrap,
-                "Maturity date must be after purchase date.",
+                STR.CALC_ERR_DATES,
             )
             ok = False
 
@@ -1506,7 +1506,7 @@ class _CalculatorTab(QWidget):
         except Exception:
             self._set_field_error(
                 self._value_edit, self._value_err_lbl, self._value_err_wrap,
-                "Enter a positive amount (e.g. 50.000,00).",
+                STR.CALC_ERR_AMOUNT,
             )
             ok = False
 
@@ -1517,7 +1517,7 @@ class _CalculatorTab(QWidget):
             rate = self._rate_editor.get_rate()
         except ValueError as exc:
             self._set_field_error(
-                None, self._value_err_lbl, self._value_err_wrap, f"Rate: {exc}"
+                None, self._value_err_lbl, self._value_err_wrap, f"{STR.FIELD_RATE}: {exc}"
             )
             return
 
@@ -1636,7 +1636,7 @@ class _CalculatorTab(QWidget):
         issuer = self._issuer_combo.currentData()
         if not isinstance(issuer, Issuer):
             self._set_field_error(
-                None, self._issuer_err_lbl, self._issuer_err_wrap, "Select an issuer."
+                None, self._issuer_err_lbl, self._issuer_err_wrap, STR.CALC_ERR_ISSUER
             )
             return
 
@@ -1647,7 +1647,7 @@ class _CalculatorTab(QWidget):
         if maturity_date <= purchase_date:
             self._set_field_error(
                 None, self._maturity_err_lbl, self._maturity_err_wrap,
-                "Maturity date must be after purchase date.",
+                STR.CALC_ERR_DATES,
             )
             return
 
@@ -1655,7 +1655,7 @@ class _CalculatorTab(QWidget):
             rate = self._rate_editor.get_rate()
         except ValueError as exc:
             self._set_field_error(
-                None, self._value_err_lbl, self._value_err_wrap, f"Rate: {exc}"
+                None, self._value_err_lbl, self._value_err_wrap, f"{STR.FIELD_RATE}: {exc}"
             )
             return
 

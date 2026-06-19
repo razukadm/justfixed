@@ -146,5 +146,16 @@ class Strings:
     DLG_CONG_TOO_LONG: str = "Conglomerado muito longo. Insira no máximo 100 caracteres."
     DLG_CONG_RESERVED: str = "O prefixo de não verificado é reservado para uso do sistema. Insira o nome do conglomerado sem ele."
 
+    # ── Calculator inputs ───────────────────────────────────────────────────────
+    CALC_VALUE: str = "Valor"
+    CALC_MODE_ENTER: str = "Inserir valor"
+    CALC_MODE_SOLVE: str = "Calcular máximo sob o FGC"
+    CALC_RESET: str = "Limpar"
+    CALC_CALCULATE: str = "Calcular"
+    CALC_PLACEHOLDER: str = "Execute um cálculo para ver os resultados."
+    CALC_ERR_ISSUER: str = "Selecione um emissor."
+    CALC_ERR_DATES: str = "A data de vencimento deve ser posterior à data de compra."
+    CALC_ERR_AMOUNT: str = "Insira um valor positivo (ex. 50.000,00)."
+
 
 STR = Strings()
