@@ -26,6 +26,7 @@ from justfixed.domain.rates import _format_brazilian_percent
 from justfixed.engine.calendar import add_business_days
 from justfixed.engine.curve import Curve
 from justfixed.engine.fetcher import FetchResult
+from justfixed.ui.strings import STR
 from justfixed.ui.theme import COLORS
 from justfixed.ui.widgets.panel import Panel
 from justfixed.ui.widgets.provenance_callout import ProvenanceCallout
@@ -91,43 +92,43 @@ class CurveInspectorWindow(QWidget):
 
     def _series_title(self) -> str:
         return {
-            SERIES_CDI:  "JustFixed — CDI Curve",
-            SERIES_IPCA: "JustFixed — IPCA-real Curve",
-            SERIES_PRE:  "JustFixed — Prefixado Curve",
+            SERIES_CDI:  STR.CURVE_TITLE_CDI,
+            SERIES_IPCA: STR.CURVE_TITLE_IPCA,
+            SERIES_PRE:  STR.CURVE_TITLE_PRE,
         }[self._series]
 
     def _series_label_html(self) -> str:
         """Rich-text label placed between provenance callout and body."""
         if self._series == SERIES_CDI:
             return (
-                f"<b>CDI curve</b> — DI1 futures "
+                f"<b>Curva CDI</b> — futuros de DI1 "
                 f"<span style='color: {_INK_3}; font-style: italic;'>"
-                f"(interbank deposit rate).</span>"
+                f"(taxa de depósito interbancário).</span>"
             )
         if self._series == SERIES_IPCA:
             return (
-                f"<b>IPCA real-rate curve</b> — corresponds to ANBIMA ETTJ, the "
-                f"<span style='font-family: Consolas, monospace;'>ETTJ IPCA</span> column. "
+                f"<b>Curva de juros reais IPCA</b> — corresponde à ETTJ ANBIMA, coluna "
+                f"<span style='font-family: Consolas, monospace;'>ETTJ IPCA</span>. "
                 f"<span style='color: {_WARN}; font-weight: 600;'>"
-                f"Real-yield term structure</span> "
+                f"Estrutura a termo de juros reais</span> "
                 f"<span style='color: {_INK_3}; font-style: italic;'>"
-                f"— not monthly IPCA inflation.</span>"
+                f"— não a inflação mensal do IPCA.</span>"
             )
         # SERIES_PRE
         return (
-            f"<b>Prefixado curve</b> — corresponds to ANBIMA ETTJ, the "
-            f"<span style='font-family: Consolas, monospace;'>ETTJ PRE</span> column."
+            f"<b>Curva Prefixado</b> — corresponde à ETTJ ANBIMA, coluna "
+            f"<span style='font-family: Consolas, monospace;'>ETTJ PRE</span>."
         )
 
     def _cross_check_links(self) -> list[tuple[str, str, str]]:
         """Returns list of (display_label, qualifier, url) for this series."""
         if self._series == SERIES_CDI:
             return [
-                ("B3 — Taxas Referenciais", "source of record", _B3_REFERENCE_RATES_URL),
-                ("InfoMoney — Juros Futuros DI", "quick visual check", _INFOMONEY_URL),
+                ("B3 — Taxas Referenciais", STR.CURVE_QUAL_SOURCE, _B3_REFERENCE_RATES_URL),
+                ("InfoMoney — Juros Futuros DI", STR.CURVE_QUAL_VISUAL, _INFOMONEY_URL),
             ]
         return [
-            ("ANBIMA — Estrutura a Termo (ETTJ)", "source of record", _ANBIMA_URL),
+            ("ANBIMA — Estrutura a Termo (ETTJ)", STR.CURVE_QUAL_SOURCE, _ANBIMA_URL),
         ]
 
     def _is_available(self) -> bool:
@@ -140,9 +141,9 @@ class CurveInspectorWindow(QWidget):
 
     def _status_bar_text(self) -> str:
         if not (self._curve and self._curve.vertices):
-            return "Curve: unavailable"
+            return STR.CURVE_STATUS_UNAVAIL
         anchor = self._curve.anchor.strftime("%Y-%m-%d")
-        return f"Curve: justfixed-data ({anchor})  ·  {len(self._curve.vertices)} vertices"
+        return STR.CURVE_STATUS.format(anchor=anchor, n=len(self._curve.vertices))
 
     def _table_rows(self) -> list[tuple[str, str]]:
         """Returns [(settle_date, rate_pct), ...] for the curve."""
@@ -333,7 +334,7 @@ class CurveInspectorWindow(QWidget):
 
     def _build_chart_panel(self) -> Panel:
         n = len(self._curve.vertices)
-        return Panel("Curve shape", self._build_chart(), meta=f"{n} vertices")
+        return Panel(STR.CURVE_PANEL_SHAPE, self._build_chart(), meta=STR.CURVE_META_VERTICES.format(n=n))
 
     def _build_chart(self) -> QChartView:
         chart = QChart()
@@ -372,7 +373,7 @@ class CurveInspectorWindow(QWidget):
         dots.hovered.connect(self._on_chart_hover)
 
         x_axis = QDateTimeAxis()
-        x_axis.setTitleText("Settlement date")
+        x_axis.setTitleText(STR.CURVE_AXIS_DATE)
         x_axis.setFormat("MMM yyyy")
         x_axis.setLabelsFont(QFont("Segoe UI", 8))
         x_axis.setTitleFont(QFont("Segoe UI", 9))
@@ -389,7 +390,7 @@ class CurveInspectorWindow(QWidget):
         y_min, y_max = min(ys), max(ys)
         y_margin = max((y_max - y_min) * 0.05, 0.1)
         y_axis = QValueAxis()
-        y_axis.setTitleText("Rate (% a.a.)")
+        y_axis.setTitleText(STR.CURVE_AXIS_RATE)
         y_axis.setLabelFormat("%.2f%%")
         y_axis.setLabelsFont(QFont("Consolas", 8))
         y_axis.setTitleFont(QFont("Segoe UI", 9))
@@ -413,13 +414,13 @@ class CurveInspectorWindow(QWidget):
 
     def _build_table_panel(self) -> Panel:
         n = len(self._curve.vertices)
-        return Panel("Vertices", self._build_table(), meta=f"{n} rows")
+        return Panel(STR.CURVE_PANEL_VERTICES, self._build_table(), meta=STR.CURVE_META_ROWS.format(n=n))
 
     def _build_table(self) -> QTableWidget:
         rows = self._table_rows()
         table = QTableWidget(len(rows), 2)
         table.setObjectName("verticesTable")
-        table.setHorizontalHeaderLabels(["Settles on", "Rate a.a."])
+        table.setHorizontalHeaderLabels([STR.CURVE_COL_SETTLES, STR.CURVE_COL_RATE])
         table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
         table.setColumnWidth(1, 90)
@@ -460,9 +461,7 @@ class CurveInspectorWindow(QWidget):
         layout.setContentsMargins(14, 10, 14, 12)
         layout.setSpacing(4)
 
-        src_lbl = QLabel(
-            "Source: <b>justfixed-data</b>, compiled from ANBIMA / B3 published curves."
-        )
+        src_lbl = QLabel(STR.CURVE_SOURCE_NOTE)
         src_lbl.setTextFormat(Qt.TextFormat.RichText)
         src_lbl.setStyleSheet(f"color: {_INK_2}; font-size: 12px; border: none;")
         layout.addWidget(src_lbl)
@@ -472,7 +471,7 @@ class CurveInspectorWindow(QWidget):
         sep.setStyleSheet(f"background: {_RULE};")
         layout.addWidget(sep)
 
-        verify_lbl = QLabel("Verify this data against the source:")
+        verify_lbl = QLabel(STR.CURVE_VERIFY)
         verify_lbl.setStyleSheet(f"color: {_INK_2}; font-size: 12px; padding-top: 2px; border: none;")
         layout.addWidget(verify_lbl)
 
@@ -513,16 +512,13 @@ class CurveInspectorWindow(QWidget):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setSpacing(8)
 
-        heading = QLabel("Curve data unavailable")
+        heading = QLabel(STR.CURVE_UNAVAIL_HEADING)
         heading.setStyleSheet(
             f"font-size: 15px; font-weight: 600; color: {_INK}; border: none;"
         )
         heading.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        body = QLabel(
-            "Could not fetch or load a cached curve for this series.\n"
-            "The window cannot show vertices until data is available."
-        )
+        body = QLabel(STR.CURVE_UNAVAIL_BODY)
         body.setStyleSheet(f"color: {_INK_2}; font-size: 13px; border: none;")
         body.setAlignment(Qt.AlignmentFlag.AlignCenter)
         body.setWordWrap(True)

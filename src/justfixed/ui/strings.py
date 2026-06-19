@@ -221,5 +221,26 @@ class Strings:
     MRD_DLG_CLEAR_TITLE: str = "Limpar custodiante"
     MRD_DLG_CLEAR_BODY: str = "Limpar o custodiante '{name}' de seus {count} investimento(s)? Eles ficarão sem custodiante."
 
+    # ── Curve Inspector ─────────────────────────────────────────────────────────
+    CURVE_TITLE_CDI: str = "JustFixed — Curva CDI"
+    CURVE_TITLE_IPCA: str = "JustFixed — Curva IPCA-real"
+    CURVE_TITLE_PRE: str = "JustFixed — Curva Prefixado"
+    CURVE_PANEL_SHAPE: str = "Formato da curva"
+    CURVE_PANEL_VERTICES: str = "Vértices"
+    CURVE_META_VERTICES: str = "{n} vértices"
+    CURVE_META_ROWS: str = "{n} linhas"
+    CURVE_AXIS_DATE: str = "Data de liquidação"
+    CURVE_AXIS_RATE: str = "Taxa (% a.a.)"
+    CURVE_COL_SETTLES: str = "Liquida em"
+    CURVE_COL_RATE: str = "Taxa a.a."
+    CURVE_STATUS_UNAVAIL: str = "Curva: indisponível"
+    CURVE_STATUS: str = "Curva: justfixed-data ({anchor})  ·  {n} vértices"
+    CURVE_QUAL_SOURCE: str = "fonte oficial"
+    CURVE_QUAL_VISUAL: str = "verificação visual rápida"
+    CURVE_SOURCE_NOTE: str = "Fonte: <b>justfixed-data</b>, compilado a partir das curvas publicadas pela ANBIMA / B3."
+    CURVE_VERIFY: str = "Verifique estes dados na fonte:"
+    CURVE_UNAVAIL_HEADING: str = "Dados da curva indisponíveis"
+    CURVE_UNAVAIL_BODY: str = "Não foi possível buscar ou carregar uma curva em cache para esta série.\nA janela não pode mostrar vértices até que os dados estejam disponíveis."
+
 
 STR = Strings()

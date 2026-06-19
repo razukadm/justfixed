@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QApplication
 from justfixed.engine.calendar import add_business_days
 from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.engine.fetcher import FetchResult
+from justfixed.ui.strings import STR
 from justfixed.ui.curve_inspector import (
     SERIES_CDI,
     SERIES_IPCA,
@@ -76,13 +77,13 @@ def _mock(
 
 class TestSeriesTitle:
     def test_cdi(self) -> None:
-        assert CurveInspectorWindow._series_title(_mock(SERIES_CDI)) == "JustFixed — CDI Curve"
+        assert CurveInspectorWindow._series_title(_mock(SERIES_CDI)) == STR.CURVE_TITLE_CDI
 
     def test_ipca(self) -> None:
-        assert CurveInspectorWindow._series_title(_mock(SERIES_IPCA)) == "JustFixed — IPCA-real Curve"
+        assert CurveInspectorWindow._series_title(_mock(SERIES_IPCA)) == STR.CURVE_TITLE_IPCA
 
     def test_pre(self) -> None:
-        assert CurveInspectorWindow._series_title(_mock(SERIES_PRE)) == "JustFixed — Prefixado Curve"
+        assert CurveInspectorWindow._series_title(_mock(SERIES_PRE)) == STR.CURVE_TITLE_PRE
 
 
 # ── Series label HTML ─────────────────────────────────────────────────────────
@@ -90,33 +91,33 @@ class TestSeriesTitle:
 class TestSeriesLabelHtml:
     def test_cdi_contains_correct_description(self) -> None:
         html = CurveInspectorWindow._series_label_html(_mock(SERIES_CDI))
-        assert "CDI curve" in html
-        assert "DI1 futures" in html
-        assert "interbank deposit rate" in html
+        assert "Curva CDI" in html
+        assert "futuros de DI1" in html
+        assert "taxa de depósito interbancário" in html
 
     def test_ipca_contains_full_label(self) -> None:
         html = CurveInspectorWindow._series_label_html(_mock(SERIES_IPCA))
-        assert "IPCA real-rate curve" in html
-        assert "ANBIMA ETTJ" in html
+        assert "Curva de juros reais IPCA" in html
+        assert "ETTJ ANBIMA" in html
         assert "ETTJ IPCA" in html
 
     def test_ipca_contains_mandatory_warning_text(self) -> None:
         html = CurveInspectorWindow._series_label_html(_mock(SERIES_IPCA))
-        assert "Real-yield term structure" in html
+        assert "Estrutura a termo de juros reais" in html
 
     def test_ipca_clarifier_present(self) -> None:
         html = CurveInspectorWindow._series_label_html(_mock(SERIES_IPCA))
-        assert "not monthly IPCA inflation" in html
+        assert "não a inflação mensal do IPCA" in html
 
     def test_ipca_warning_uses_warn_color(self) -> None:
         html = CurveInspectorWindow._series_label_html(_mock(SERIES_IPCA))
-        warn_pos = html.index("Real-yield term structure")
+        warn_pos = html.index("Estrutura a termo de juros reais")
         assert _WARN in html[:warn_pos]
 
     def test_pre_contains_correct_description(self) -> None:
         html = CurveInspectorWindow._series_label_html(_mock(SERIES_PRE))
-        assert "Prefixado curve" in html
-        assert "ANBIMA ETTJ" in html
+        assert "Curva Prefixado" in html
+        assert "ETTJ ANBIMA" in html
         assert "ETTJ PRE" in html
 
 
@@ -250,7 +251,7 @@ class TestUnavailableState:
 
     def test_status_bar_shows_unavailable_when_no_curve(self) -> None:
         m = _mock(SERIES_CDI, curve=None)
-        assert CurveInspectorWindow._status_bar_text(m) == "Curve: unavailable"
+        assert CurveInspectorWindow._status_bar_text(m) == STR.CURVE_STATUS_UNAVAIL
 
     def test_cross_check_links_still_present_when_unavailable(self) -> None:
         m = _mock(SERIES_CDI, curve=None)
@@ -271,7 +272,7 @@ class TestProvenanceWithData:
         m = _mock(SERIES_CDI, curve=curve)
         text = CurveInspectorWindow._status_bar_text(m)
         assert "2026-05-20" in text
-        assert "47 vertices" in text
+        assert "47 vértices" in text
         assert "justfixed-data" in text
 
 
