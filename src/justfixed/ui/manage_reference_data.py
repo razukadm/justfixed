@@ -299,8 +299,8 @@ class ManageReferenceDataDialog(QDialog):
     def _on_delete_issuer(self, issuer) -> None:
         reply = QMessageBox.question(
             self,
-            "Delete Issuer",
-            f"Delete issuer '{issuer.name}'? This can't be undone.",
+            STR.MRD_DLG_DELETE_TITLE,
+            STR.MRD_DLG_DELETE_BODY.format(name=issuer.name),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -311,13 +311,13 @@ class ManageReferenceDataDialog(QDialog):
 
     def _on_rename_conglomerate(self, old: str) -> None:
         text, ok = QInputDialog.getText(
-            self, "Rename Conglomerate", f"New name for '{old}':", text=old
+            self, STR.MRD_DLG_RENAME_CONG_TITLE, STR.MRD_DLG_NEW_NAME.format(old=old), text=old
         )
         if not ok:
             return
         text = text.strip()
         if not text:
-            QMessageBox.warning(self, "Rename Conglomerate", "Name can't be blank.")
+            QMessageBox.warning(self, STR.MRD_DLG_RENAME_CONG_TITLE, STR.MRD_DLG_NAME_BLANK)
             return
         if text == old:
             return
@@ -327,9 +327,8 @@ class ManageReferenceDataDialog(QDialog):
             old_count = sum(1 for iss in issuers if iss.conglomerate == old)
             reply = QMessageBox.question(
                 self,
-                "Merge Conglomerates",
-                f"'{text}' already exists. Merge the {old_count} issuer(s) from "
-                f"'{old}' into '{text}'?",
+                STR.MRD_DLG_MERGE_CONG_TITLE,
+                STR.MRD_DLG_MERGE_CONG_BODY.format(text=text, count=old_count, old=old),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
@@ -343,9 +342,8 @@ class ManageReferenceDataDialog(QDialog):
         count = sum(1 for iss in issuers if iss.conglomerate == name)
         reply = QMessageBox.question(
             self,
-            "Dissolve Conglomerate",
-            f"Dissolve '{name}'? Its {count} issuer(s) revert to uncurated and "
-            f"the grouping is removed. This can't be undone.",
+            STR.MRD_DLG_DISSOLVE_TITLE,
+            STR.MRD_DLG_DISSOLVE_BODY.format(name=name, count=count),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -356,13 +354,13 @@ class ManageReferenceDataDialog(QDialog):
 
     def _on_rename_custodian(self, old: str) -> None:
         text, ok = QInputDialog.getText(
-            self, "Rename Custodian", f"New name for '{old}':", text=old
+            self, STR.MRD_DLG_RENAME_CUST_TITLE, STR.MRD_DLG_NEW_NAME.format(old=old), text=old
         )
         if not ok:
             return
         text = text.strip()
         if not text:
-            QMessageBox.warning(self, "Rename Custodian", "Name can't be blank.")
+            QMessageBox.warning(self, STR.MRD_DLG_RENAME_CUST_TITLE, STR.MRD_DLG_NAME_BLANK)
             return
         if text == old:
             return
@@ -372,9 +370,8 @@ class ManageReferenceDataDialog(QDialog):
             old_count = sum(1 for inv in investments if inv.custodian == old)
             reply = QMessageBox.question(
                 self,
-                "Merge Custodians",
-                f"'{text}' already exists. Merge the {old_count} investment(s) from "
-                f"'{old}' into '{text}'?",
+                STR.MRD_DLG_MERGE_CUST_TITLE,
+                STR.MRD_DLG_MERGE_CUST_BODY.format(text=text, count=old_count, old=old),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
@@ -388,9 +385,8 @@ class ManageReferenceDataDialog(QDialog):
         count = sum(1 for inv in investments if inv.custodian == name)
         reply = QMessageBox.question(
             self,
-            "Clear Custodian",
-            f"Clear custodian '{name}' from its {count} investment(s)? "
-            f"They'll show no custodian.",
+            STR.MRD_DLG_CLEAR_TITLE,
+            STR.MRD_DLG_CLEAR_BODY.format(name=name, count=count),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )

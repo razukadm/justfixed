@@ -205,5 +205,21 @@ class Strings:
     MRD_TIP_NO_CUSTODIAN: str = "Nenhum custodiante para renomear."
     MRD_TIP_ALREADY_UNSET: str = "Já está vazio."
 
+    # ── Manage Reference Data (dialogs) ─────────────────────────────────────────
+    MRD_DLG_DELETE_TITLE: str = "Excluir emissor"
+    MRD_DLG_DELETE_BODY: str = "Excluir o emissor '{name}'? Esta ação não pode ser desfeita."
+    MRD_DLG_RENAME_CONG_TITLE: str = "Renomear conglomerado"
+    MRD_DLG_RENAME_CUST_TITLE: str = "Renomear custodiante"
+    MRD_DLG_NEW_NAME: str = "Novo nome para '{old}':"
+    MRD_DLG_NAME_BLANK: str = "O nome não pode ficar vazio."
+    MRD_DLG_MERGE_CONG_TITLE: str = "Mesclar conglomerados"
+    MRD_DLG_MERGE_CONG_BODY: str = "'{text}' já existe. Mesclar os {count} emissor(es) de '{old}' em '{text}'?"
+    MRD_DLG_MERGE_CUST_TITLE: str = "Mesclar custodiantes"
+    MRD_DLG_MERGE_CUST_BODY: str = "'{text}' já existe. Mesclar os {count} investimento(s) de '{old}' em '{text}'?"
+    MRD_DLG_DISSOLVE_TITLE: str = "Dissolver conglomerado"
+    MRD_DLG_DISSOLVE_BODY: str = "Dissolver '{name}'? Seus {count} emissor(es) deixam de ser curados e o agrupamento é removido. Esta ação não pode ser desfeita."
+    MRD_DLG_CLEAR_TITLE: str = "Limpar custodiante"
+    MRD_DLG_CLEAR_BODY: str = "Limpar o custodiante '{name}' de seus {count} investimento(s)? Eles ficarão sem custodiante."
+
 
 STR = Strings()
