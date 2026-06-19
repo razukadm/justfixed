@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QApplication
 
 from justfixed.domain.issuer import Issuer, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.ui.main import ConglomerateEditDelegate
+from justfixed.ui.strings import STR
 
 
 @pytest.fixture(scope="session")
@@ -47,8 +48,8 @@ class TestConglomerateEditDelegateValidation:
         delegate._session_factory.assert_not_called()
         mock_warning.assert_called_once_with(
             delegate._main_window,
-            "Invalid conglomerate",
-            "Conglomerate cannot be empty. Please enter a value.",
+            STR.DLG_INVALID_CONG_TITLE,
+            STR.DLG_CONG_EMPTY,
         )
 
     def test_rejects_over_100_chars(self, delegate) -> None:
@@ -58,8 +59,8 @@ class TestConglomerateEditDelegateValidation:
         delegate._session_factory.assert_not_called()
         mock_warning.assert_called_once_with(
             delegate._main_window,
-            "Invalid conglomerate",
-            "Conglomerate too long. Please enter 100 characters or fewer.",
+            STR.DLG_INVALID_CONG_TITLE,
+            STR.DLG_CONG_TOO_LONG,
         )
 
     def test_rejects_unverified_prefix(self, delegate) -> None:
@@ -73,9 +74,8 @@ class TestConglomerateEditDelegateValidation:
         delegate._session_factory.assert_not_called()
         mock_warning.assert_called_once_with(
             delegate._main_window,
-            "Invalid conglomerate",
-            "The [unverified] prefix is reserved for system use. "
-            "Please enter the conglomerate name without it.",
+            STR.DLG_INVALID_CONG_TITLE,
+            STR.DLG_CONG_RESERVED,
         )
 
     def test_rejects_bare_unverified_prefix(self, delegate) -> None:
@@ -89,9 +89,8 @@ class TestConglomerateEditDelegateValidation:
         delegate._session_factory.assert_not_called()
         mock_warning.assert_called_once_with(
             delegate._main_window,
-            "Invalid conglomerate",
-            "The [unverified] prefix is reserved for system use. "
-            "Please enter the conglomerate name without it.",
+            STR.DLG_INVALID_CONG_TITLE,
+            STR.DLG_CONG_RESERVED,
         )
 
 

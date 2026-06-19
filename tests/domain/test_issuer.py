@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from justfixed.domain.issuer import Issuer, IssuerKind
+from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX, display_conglomerate
 
 
 # ---------- IssuerKind ----------
@@ -238,3 +238,10 @@ class TestTreasuryFactory:
         a = Issuer.treasury()
         b = Issuer.treasury()
         assert a.id != b.id
+
+
+def test_display_conglomerate_swaps_unverified_prefix() -> None:
+    assert display_conglomerate(f"{UNVERIFIED_CONGLOMERATE_PREFIX}Banco X") == "[não verificado] Banco X"
+
+def test_display_conglomerate_noop_for_verified() -> None:
+    assert display_conglomerate("Itaú Unibanco") == "Itaú Unibanco"

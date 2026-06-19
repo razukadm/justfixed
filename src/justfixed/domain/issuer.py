@@ -36,6 +36,20 @@ from typing import Self
 # via a one-line UPDATE.
 UNVERIFIED_CONGLOMERATE_PREFIX = "[unverified] "
 
+_UNVERIFIED_DISPLAY_PREFIX = "[não verificado] "
+
+
+def display_conglomerate(conglomerate: str) -> str:
+    """Render form of a conglomerate string.
+
+    Swaps the stored ``[unverified] `` sentinel prefix for its pt-BR display
+    form. Display-only — the stored value is never changed; no-op for verified
+    (curated) names.
+    """
+    if conglomerate.startswith(UNVERIFIED_CONGLOMERATE_PREFIX):
+        return _UNVERIFIED_DISPLAY_PREFIX + conglomerate[len(UNVERIFIED_CONGLOMERATE_PREFIX):]
+    return conglomerate
+
 
 class IssuerKind(Enum):
     """Categorization of issuers by institution type.

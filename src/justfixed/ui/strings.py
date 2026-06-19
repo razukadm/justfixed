@@ -140,5 +140,11 @@ class Strings:
     # ── Mock marker ─────────────────────────────────────────────────────────────
     MOCK_BADGE: str = "SIMULADO"
 
+    # ── Conglomerate edit-delegate validation ───────────────────────────────────
+    DLG_INVALID_CONG_TITLE: str = "Conglomerado inválido"
+    DLG_CONG_EMPTY: str = "O conglomerado não pode ficar vazio. Insira um valor."
+    DLG_CONG_TOO_LONG: str = "Conglomerado muito longo. Insira no máximo 100 caracteres."
+    DLG_CONG_RESERVED: str = "O prefixo de não verificado é reservado para uso do sistema. Insira o nome do conglomerado sem ele."
+
 
 STR = Strings()

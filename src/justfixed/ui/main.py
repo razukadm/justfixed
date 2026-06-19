@@ -58,7 +58,7 @@ from justfixed.ui.curve_inspector import (
     SERIES_PRE,
 )
 from justfixed.ui.manage_reference_data import ManageReferenceDataDialog
-from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX
+from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX, display_conglomerate
 from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType, rules_for
@@ -1022,7 +1022,7 @@ class InvestmentDetailPanel(QWidget):
 
         f = self._field_values
         f["issuer"].set_value(inv.issuer.name, inv.issuer.name, editable=False)
-        f["conglomerate"].set_value(inv.issuer.conglomerate, inv.issuer.conglomerate, editable=False)
+        f["conglomerate"].set_value(inv.issuer.conglomerate, display_conglomerate(inv.issuer.conglomerate), editable=False)
         # Custodian: refresh completions so newly-added values appear; NULL→"—".
         f["custodian"].update_completions(self._main_window._distinct_custodians())
         custodian_display = inv.custodian if inv.custodian is not None else "—"
@@ -2431,34 +2431,21 @@ class ConglomerateEditDelegate(QStyledItemDelegate):
         return editor
 
     def setEditorData(self, editor, index) -> None:
-        editor.setText(index.data() or "")
+        editor.setText(index.data(Qt.ItemDataRole.EditRole) or "")
 
     def setModelData(self, editor, model, index) -> None:
         text = editor.text().strip()
 
         if not text:
-            QMessageBox.warning(
-                self._main_window,
-                "Invalid conglomerate",
-                "Conglomerate cannot be empty. Please enter a value.",
-            )
+            QMessageBox.warning(self._main_window, STR.DLG_INVALID_CONG_TITLE, STR.DLG_CONG_EMPTY)
             return
 
         if len(text) > 100:
-            QMessageBox.warning(
-                self._main_window,
-                "Invalid conglomerate",
-                "Conglomerate too long. Please enter 100 characters or fewer.",
-            )
+            QMessageBox.warning(self._main_window, STR.DLG_INVALID_CONG_TITLE, STR.DLG_CONG_TOO_LONG)
             return
 
         if text.startswith(UNVERIFIED_CONGLOMERATE_PREFIX.rstrip()):
-            QMessageBox.warning(
-                self._main_window,
-                "Invalid conglomerate",
-                "The [unverified] prefix is reserved for system use. "
-                "Please enter the conglomerate name without it.",
-            )
+            QMessageBox.warning(self._main_window, STR.DLG_INVALID_CONG_TITLE, STR.DLG_CONG_RESERVED)
             return
 
         visible = self._main_window.visible_investments()
@@ -2850,7 +2837,7 @@ class MainWindow(QMainWindow):
         # CG-5: force PlainText so Qt's AutoText heuristic never interprets "&" in
         # conglomerate names (e.g. "J&F") as an HTML entity and bleeds link-palette
         # colour onto sibling labels via the parent widget's resolved palette.
-        name = QLabel(section.conglomerate_name)
+        name = QLabel(display_conglomerate(section.conglomerate_name))
         name.setTextFormat(Qt.TextFormat.PlainText)
         h.addWidget(name, stretch=1)
 
@@ -3218,7 +3205,8 @@ class MainWindow(QMainWindow):
 
         # Conglomerate — gray italic when [unverified]
         cong = inv.issuer.conglomerate
-        cong_item = QTableWidgetItem(cong)
+        cong_item = QTableWidgetItem(display_conglomerate(cong))
+        cong_item.setData(Qt.ItemDataRole.EditRole, cong)
         if cong.startswith(UNVERIFIED_CONGLOMERATE_PREFIX):
             font = cong_item.font()
             font.setItalic(True)
