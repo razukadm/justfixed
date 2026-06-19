@@ -1548,7 +1548,7 @@ class _CalculatorTab(QWidget):
         is_treasury = issuer.kind == IssuerKind.TREASURY
         if is_treasury:
             fgc_status_str = "not_fgc"
-            status_text = "N/A — Tesouro"
+            status_text = STR.FGC_NA_TESOURO
             status_hint = ""
             cong_total: Money | None = None
         else:
@@ -1575,13 +1575,13 @@ class _CalculatorTab(QWidget):
 
             fgc_status_str = exposure_status.value
             if exposure_status == ExposureStatus.OVER:
-                status_text = "OVER"
-                status_hint = "Reduce principal or pick a different issuer to stay under R$ 250k."
+                status_text = STR.FGC_OVER
+                status_hint = STR.CALC_HINT_OVER_ENTER
             elif exposure_status == ExposureStatus.APPROACHING:
-                status_text = "APPROACHING"
-                status_hint = "Close to the R$ 250k FGC limit."
+                status_text = STR.FGC_APPROACHING
+                status_hint = STR.CALC_HINT_APPROACHING
             else:
-                status_text = "UNDER"
+                status_text = STR.FGC_UNDER
                 status_hint = ""
 
         # Effective rate derived from projection output rather than restating
@@ -1614,14 +1614,12 @@ class _CalculatorTab(QWidget):
         self._show_result_card(panel)
 
         if is_treasury:
-            msg = (
-                f"Projected as of {maturity_date.strftime('%d/%m/%Y')}"
-                f" · {issuer.name} · Tesouro (no FGC)"
+            msg = STR.CALC_MSG_ENTER_TESOURO.format(
+                date=maturity_date.strftime("%d/%m/%Y"), name=issuer.name
             )
         else:
-            msg = (
-                f"Projected as of {maturity_date.strftime('%d/%m/%Y')}"
-                f" · {issuer.name} · FGC {status_text}"
+            msg = STR.CALC_MSG_ENTER_FGC.format(
+                date=maturity_date.strftime("%d/%m/%Y"), name=issuer.name, status=status_text
             )
         main_win = self._main_window
         if main_win is not None and hasattr(main_win, "statusBar"):
@@ -1675,19 +1673,19 @@ class _CalculatorTab(QWidget):
         peak_exposure = pu * FGC_PER_CONGLOMERATE_LIMIT.amount
 
         if pu >= Decimal("1"):
-            status_text = "OVER"
+            status_text = STR.FGC_OVER
             fgc_status_str = "over"
-            status_hint = "FGC cap exceeded at peak — reduce tenor or switch issuer."
+            status_hint = STR.CALC_HINT_OVER_SOLVE
         elif pu >= Decimal("0.99"):  # AT CAP: calculator-specific display threshold
-            status_text = "AT CAP"
+            status_text = STR.FGC_AT_CAP
             fgc_status_str = "under"
             status_hint = ""
         elif peak_exposure >= FGC_APPROACHING_THRESHOLD.amount:
-            status_text = "APPROACHING"
+            status_text = STR.FGC_APPROACHING
             fgc_status_str = "approaching"
-            status_hint = "Close to the R$ 250k FGC limit."
+            status_hint = STR.CALC_HINT_APPROACHING
         else:
-            status_text = "UNDER"
+            status_text = STR.FGC_UNDER
             fgc_status_str = "under"
             status_hint = ""
 
@@ -1728,10 +1726,10 @@ class _CalculatorTab(QWidget):
         self._show_solve_panels(solve_panel, drawdown_panel)
 
         if result.max_principal == Decimal("0"):
-            msg = f"Existing {issuer.conglomerate} holdings already at the FGC cap."
+            msg = STR.CALC_MSG_SOLVED_AT_CAP.format(conglomerate=display_conglomerate(issuer.conglomerate))
         else:
             peak_str = result.peak_date.strftime("%d/%m/%Y")
-            msg = f"Solved for max principal under FGC · cap binds {peak_str}"
+            msg = STR.CALC_MSG_SOLVED.format(date=peak_str)
         main_win = self._main_window
         if main_win is not None and hasattr(main_win, "statusBar"):
             main_win.statusBar().showMessage(msg)
@@ -1801,18 +1799,17 @@ class _CalculatorTab(QWidget):
         self._res_principal_lbl.setProperty("calcResultBig", "true")
         if result.max_principal == Decimal("0"):
             _row(
-                "Maximum principal (FGC-capped)",
+                STR.CALC_MAX_PRINCIPAL_CAPPED,
                 self._res_principal_lbl,
-                "Existing holdings already at or above the FGC cap."
-                " No headroom for a new position.",
+                STR.CALC_HINT_CAPPED,
             )
         else:
-            _row("Maximum principal (FGC-capped)", self._res_principal_lbl)
+            _row(STR.CALC_MAX_PRINCIPAL_CAPPED, self._res_principal_lbl)
 
         # Line 2 — Projected at maturity (gross; FGC cap is assessed on gross)
         mat_str = maturity_date.strftime("%d/%m/%Y")
         self._res_projected_lbl = QLabel(Money(result.projected_at_maturity).to_display())
-        _row(f"Projected at maturity ({mat_str})", self._res_projected_lbl, "Gross, pre-tax.")
+        _row(STR.CALC_PROJ_AT.format(date=mat_str), self._res_projected_lbl, STR.CALC_HINT_GROSS)
 
         # Line 3 — FGC peak utilization
         peak_date_str = result.peak_date.strftime("%d/%m/%Y")
@@ -1821,26 +1818,26 @@ class _CalculatorTab(QWidget):
             f" at {peak_date_str}"
         )
         self._res_fgc_util_lbl = QLabel(peak_text)
-        _row("FGC peak utilization", self._res_fgc_util_lbl)
+        _row(STR.CALC_FGC_PEAK_UTIL, self._res_fgc_util_lbl)
 
         # Line 4 — Status pill
         self._res_status_pill = QLabel(status_text)
         self._res_status_pill.setProperty("fgcStatus", fgc_status_str)
-        _row("Status", self._res_status_pill, status_hint)
+        _row(STR.CALC_STATUS_ROW, self._res_status_pill, status_hint)
 
         # Line 5 — Effective rate (gross a.a.; differs from net rate in Enter-value).
         # Omitted when max_principal == 0 (rate is meaningless with zero principal).
         if result.max_principal > Decimal("0"):
             eff_pct = _format_brazilian_percent(effective_aa * Decimal("100"))
             self._res_effective_rate_lbl = QLabel(eff_pct)
-            _row("Effective rate (a.a., gross)", self._res_effective_rate_lbl)
+            _row(STR.CALC_EFF_RATE_GROSS, self._res_effective_rate_lbl)
 
         # Line 6 — Tenor
-        self._res_tenor_lbl = QLabel(f"{tenor_days} days")
-        _row("Tenor", self._res_tenor_lbl)
+        self._res_tenor_lbl = QLabel(STR.CALC_TENOR_DAYS.format(n=tenor_days))
+        _row(STR.CALC_TENOR, self._res_tenor_lbl)
 
         bl.addStretch()
-        panel = Panel(title="Back-solve result", meta=meta)
+        panel = Panel(title=STR.CALC_SOLVE_TITLE, meta=meta)
         panel.set_content(body)
         return panel
 
@@ -2017,9 +2014,9 @@ class _CalculatorTab(QWidget):
         self._res_principal_lbl = QLabel(principal.to_display())
         self._res_principal_lbl.setProperty("calcResultBig", "true")
         _row(
-            "Maximum principal",
+            STR.CALC_MAX_PRINCIPAL,
             self._res_principal_lbl,
-            "As entered. Switch to Solve mode to find the maximum.",
+            STR.CALC_HINT_MAX_PRINCIPAL,
         )
 
         # Line 2 — Projected at maturity
@@ -2029,34 +2026,34 @@ class _CalculatorTab(QWidget):
         # should change everywhere at once, not just here.
         mat_str = maturity_date.strftime("%d/%m/%Y")
         self._res_projected_lbl = QLabel(projection.net_at_maturity.to_display())
-        _row(f"Projected at maturity ({mat_str})", self._res_projected_lbl, "Net of IR tax.")
+        _row(STR.CALC_PROJ_AT.format(date=mat_str), self._res_projected_lbl, STR.CALC_HINT_NET)
 
         # Line 3 — FGC peak utilization
         if is_treasury:
-            util_text = "N/A"
-            util_hint = "Tesouro investments are not FGC-covered."
+            util_text = STR.FGC_NA
+            util_hint = STR.CALC_HINT_TESOURO
         else:
             util_text = f"{cong_total.to_display()} / R$ 250.000,00"  # type: ignore[union-attr]
-            util_hint = "At maturity. Running-balance check arrives in Solve mode."
+            util_hint = STR.CALC_HINT_UTIL
         self._res_fgc_util_lbl = QLabel(util_text)
-        _row("FGC peak utilization", self._res_fgc_util_lbl, util_hint)
+        _row(STR.CALC_FGC_PEAK_UTIL, self._res_fgc_util_lbl, util_hint)
 
         # Line 4 — Status pill
         self._res_status_pill = QLabel(status_text)
         self._res_status_pill.setProperty("fgcStatus", fgc_status_str)
-        _row("Status", self._res_status_pill, status_hint)
+        _row(STR.CALC_STATUS_ROW, self._res_status_pill, status_hint)
 
         # Line 5 — Effective rate (net annualized)
         eff_pct = _format_brazilian_percent(effective_aa * Decimal("100"))
         self._res_effective_rate_lbl = QLabel(eff_pct)
-        _row("Effective rate (a.a.)", self._res_effective_rate_lbl)
+        _row(STR.CALC_EFF_RATE_NET, self._res_effective_rate_lbl)
 
         # Line 6 — Tenor (calendar days — user thinks in calendar days)
-        self._res_tenor_lbl = QLabel(f"{tenor_days} days")
-        _row("Tenor", self._res_tenor_lbl)
+        self._res_tenor_lbl = QLabel(STR.CALC_TENOR_DAYS.format(n=tenor_days))
+        _row(STR.CALC_TENOR, self._res_tenor_lbl)
 
         bl.addStretch()
-        panel = Panel(title="Calculation result", meta=meta)
+        panel = Panel(title=STR.CALC_RESULT_TITLE, meta=meta)
         panel.set_content(body)
         return panel
 

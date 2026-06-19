@@ -136,6 +136,7 @@ class Strings:
     FGC_NA: str = "N/A"
     FGC_NA_TESOURO: str = "N/A — Tesouro"
     FGC_PAID: str = "PAGO"
+    FGC_AT_CAP: str = "NO LIMITE"
 
     # ── Mock marker ─────────────────────────────────────────────────────────────
     MOCK_BADGE: str = "SIMULADO"
@@ -156,6 +157,32 @@ class Strings:
     CALC_ERR_ISSUER: str = "Selecione um emissor."
     CALC_ERR_DATES: str = "A data de vencimento deve ser posterior à data de compra."
     CALC_ERR_AMOUNT: str = "Insira um valor positivo (ex. 50.000,00)."
+
+    # ── Calculator result card ────────────────────────────────────────────────────
+    CALC_RESULT_TITLE: str = "Resultado do cálculo"
+    CALC_SOLVE_TITLE: str = "Resultado do cálculo reverso"
+    CALC_MAX_PRINCIPAL: str = "Principal máximo"
+    CALC_MAX_PRINCIPAL_CAPPED: str = "Principal máximo (limitado pelo FGC)"
+    CALC_PROJ_AT: str = "Projetado no vencimento ({date})"
+    CALC_FGC_PEAK_UTIL: str = "Pico de uso do FGC"
+    CALC_STATUS_ROW: str = "Situação"
+    CALC_EFF_RATE_GROSS: str = "Taxa efetiva (a.a., bruta)"
+    CALC_EFF_RATE_NET: str = "Taxa efetiva (a.a.)"
+    CALC_TENOR: str = "Prazo"
+    CALC_TENOR_DAYS: str = "{n} dias"
+    CALC_HINT_MAX_PRINCIPAL: str = "Conforme inserido. Mude para o modo Calcular para achar o máximo."
+    CALC_HINT_CAPPED: str = "Posições existentes já no limite do FGC ou acima. Sem espaço para nova posição."
+    CALC_HINT_GROSS: str = "Bruto, antes do IR."
+    CALC_HINT_NET: str = "Líquido de IR."
+    CALC_HINT_UTIL: str = "No vencimento. A verificação de saldo corrente aparece no modo Calcular."
+    CALC_HINT_TESOURO: str = "Investimentos do Tesouro não são cobertos pelo FGC."
+    CALC_HINT_OVER_ENTER: str = "Reduza o principal ou escolha outro emissor para ficar abaixo de R$ 250 mil."
+    CALC_HINT_OVER_SOLVE: str = "Limite do FGC excedido no pico — reduza o prazo ou troque o emissor."
+    CALC_HINT_APPROACHING: str = "Próximo do limite de R$ 250 mil do FGC."
+    CALC_MSG_ENTER_TESOURO: str = "Projetado em {date} · {name} · Tesouro (sem FGC)"
+    CALC_MSG_ENTER_FGC: str = "Projetado em {date} · {name} · FGC {status}"
+    CALC_MSG_SOLVED_AT_CAP: str = "Posições de {conglomerate} já no limite do FGC."
+    CALC_MSG_SOLVED: str = "Principal máximo calculado sob o FGC · limite atingido em {date}"
 
 
 STR = Strings()

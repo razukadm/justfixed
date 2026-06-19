@@ -271,7 +271,7 @@ class TestCalculateResultLines:
     def test_status_under(self, qapp) -> None:
         tab = self._run(qapp)
         assert tab._res_status_pill is not None
-        assert tab._res_status_pill.text() == "UNDER"
+        assert tab._res_status_pill.text() == STR.FGC_UNDER
         assert tab._res_status_pill.property("fgcStatus") == "under"
 
     def test_effective_rate(self, qapp) -> None:
@@ -298,7 +298,7 @@ class TestCalculateResultLines:
     def test_tenor_line(self, qapp) -> None:
         tab = self._run(qapp)
         assert tab._res_tenor_lbl is not None
-        assert tab._res_tenor_lbl.text() == "366 days"
+        assert tab._res_tenor_lbl.text() == STR.CALC_TENOR_DAYS.format(n=366)
 
     def test_result_card_shown(self, qapp) -> None:
         tab = self._run(qapp)
@@ -329,7 +329,7 @@ class TestCalculateFGCOver:
         tab._on_calculate_clicked()
 
         assert tab._res_status_pill is not None
-        assert tab._res_status_pill.text() == "OVER"
+        assert tab._res_status_pill.text() == STR.FGC_OVER
         assert tab._res_status_pill.property("fgcStatus") == "over"
 
 
@@ -352,10 +352,10 @@ class TestCalculateTesouro:
         tab._on_calculate_clicked()
 
         assert tab._res_status_pill is not None
-        assert tab._res_status_pill.text() == "N/A — Tesouro"
+        assert tab._res_status_pill.text() == STR.FGC_NA_TESOURO
         assert tab._res_status_pill.property("fgcStatus") == "not_fgc"
         assert tab._res_fgc_util_lbl is not None
-        assert tab._res_fgc_util_lbl.text() == "N/A"
+        assert tab._res_fgc_util_lbl.text() == STR.FGC_NA
 
 
 # ── Test D: validation failures ────────────────────────────────────────────────
@@ -471,7 +471,7 @@ class TestSolveMode:
         # is always ≥ 0.99 → AT CAP when no existing holdings consume the limit.
         tab, _ = self._run(qapp)
         assert tab._res_status_pill is not None
-        assert tab._res_status_pill.text() == "AT CAP"
+        assert tab._res_status_pill.text() == STR.FGC_AT_CAP
         assert tab._res_status_pill.property("fgcStatus") == "under"
 
     def test_effective_rate_is_gross(self, qapp) -> None:
@@ -510,7 +510,7 @@ class TestSolveMode:
         assert tab._res_principal_lbl is not None
         assert tab._res_principal_lbl.text() == "R$ 0,00"
         assert tab._res_status_pill is not None
-        assert tab._res_status_pill.text() == "OVER"
+        assert tab._res_status_pill.text() == STR.FGC_OVER
         # Effective rate line is omitted when principal is zero.
         assert tab._res_effective_rate_lbl is None
 
