@@ -2068,7 +2068,7 @@ class TestInvestmentsTableAlignment:
             from justfixed.ui.main import _COL_CURRENT
             item = win._table.item(0, _COL_CURRENT)
             assert item is not None
-            assert item.text() == "PAID"
+            assert item.text() == STR.FGC_PAID
             assert Qt.AlignmentFlag.AlignLeft in Qt.Alignment(item.textAlignment())
             assert Qt.AlignmentFlag.AlignRight not in Qt.Alignment(item.textAlignment())
         finally:

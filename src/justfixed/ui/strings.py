@@ -124,5 +124,21 @@ class Strings:
     FILTER_UNSET: str = "(sem custodiante)"
     CB_HIDE_MATURED: str = "Ocultar vencidos"
 
+    # ── Conglomerate accordion columns ──────────────────────────────────────────
+    COL_NEXT_MATURITY: str = "Próx. vencimento"
+    COL_PROJECTED_BALANCE: str = "Saldo projetado"
+    CONG_PROJECT_PROMPT: str = 'Clique em "{btn}" para preencher.'
+
+    # ── FGC status / badges ─────────────────────────────────────────────────────
+    FGC_UNDER: str = "ABAIXO"
+    FGC_APPROACHING: str = "PRÓXIMO"
+    FGC_OVER: str = "ACIMA"
+    FGC_NA: str = "N/A"
+    FGC_NA_TESOURO: str = "N/A — Tesouro"
+    FGC_PAID: str = "PAGO"
+
+    # ── Mock marker ─────────────────────────────────────────────────────────────
+    MOCK_BADGE: str = "SIMULADO"
+
 
 STR = Strings()

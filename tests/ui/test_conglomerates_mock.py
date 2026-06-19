@@ -38,6 +38,7 @@ from justfixed.ui.main import (
     _make_cong_detail_row,
     _row_is_mock,
 )
+from justfixed.ui.strings import STR
 
 
 @pytest.fixture(scope="session")
@@ -173,7 +174,7 @@ class TestMockBadge:
             lbl for lbl in widget.findChildren(QLabel)
             if lbl.property("badge") == "mock"
         )
-        assert badge.text() == "MOCK"
+        assert badge.text() == STR.MOCK_BADGE
 
     def test_non_mock_row_has_no_badge(self, qapp) -> None:
         widget = _make_cong_detail_row(_make_detail_row(), 0, is_mock=False)
@@ -393,13 +394,13 @@ class TestDetailRowColumnWidths:
     def test_detail_header_maturity_width(self, qapp) -> None:
         w = _make_cong_detail_header()
         labels = w.findChildren(QLabel)
-        maturity_lbl = next(lbl for lbl in labels if lbl.text() == "Maturity")
+        maturity_lbl = next(lbl for lbl in labels if lbl.text() == STR.COL_MATURITY)
         assert maturity_lbl.width() == _CONG_W_DATE
 
     def test_detail_header_principal_width(self, qapp) -> None:
         w = _make_cong_detail_header()
         labels = w.findChildren(QLabel)
-        principal_lbl = next(lbl for lbl in labels if lbl.text() == "Principal")
+        principal_lbl = next(lbl for lbl in labels if lbl.text() == STR.COL_PRINCIPAL)
         assert principal_lbl.width() == _CONG_W_MONEY
 
     def test_detail_header_fgc_width(self, qapp) -> None:
@@ -518,7 +519,7 @@ class TestSummaryRowAlignment:
         self_mock = MagicMock(spec=MainWindow)
         header = MainWindow._make_summary_header(self_mock)
         non_fgc = [lbl for lbl in header.findChildren(QLabel)
-                   if lbl.text() not in ("FGC", "", "Conglomerate")]
+                   if lbl.text() not in (STR.COL_FGC, "", STR.COL_CONGLOMERATE)]
         assert len(non_fgc) >= 4  # Next maturity, Principal, Current, Projected
         for lbl in non_fgc:
             assert Qt.AlignmentFlag.AlignLeft in lbl.alignment()

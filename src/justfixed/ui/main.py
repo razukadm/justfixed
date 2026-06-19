@@ -155,10 +155,10 @@ _PT_BR = QLocale(QLocale.Language.Portuguese, QLocale.Country.Brazil)
 # Unified badge data for both ExposureStatus and ConglomerateStatus.
 # Keyed by .value string — both enums share "under"/"approaching"/"over".
 _BADGE_STYLE: dict[str, tuple[str, str]] = {
-    "under":       ("● UNDER",       COLORS.FGC_UNDER),
-    "approaching": ("● APPROACHING", COLORS.WARN),
-    "over":        ("● OVER",        COLORS.FGC_OVER),
-    "not_fgc":     ("N/A",           COLORS.FGC_NA),
+    "under":       ("● " + STR.FGC_UNDER,       COLORS.FGC_UNDER),
+    "approaching": ("● " + STR.FGC_APPROACHING, COLORS.WARN),
+    "over":        ("● " + STR.FGC_OVER,        COLORS.FGC_OVER),
+    "not_fgc":     (STR.FGC_NA,                 COLORS.FGC_NA),
 }
 
 # ── Conglomerate accordion: shared column widths ─────────────────────────────
@@ -319,19 +319,19 @@ def _make_cong_detail_header() -> QWidget:
     h = QHBoxLayout(w)
     h.setContentsMargins(8, 4, 8, 4)
     for text, width, stretch in [
-        ("Maturity",          _CONG_W_DATE,    0),
-        ("Issuer",                         0,  1),
-        ("Product",                      100,  0),
-        ("Principal",         _CONG_W_MONEY,   0),
-        ("Current",           _CONG_W_MONEY,   0),
-        ("Projected",         _CONG_W_MONEY,   0),
-        ("Projected Balance", _CONG_W_BALANCE,   0),
-        ("FGC",               _CONG_W_FGC,     0),
+        (STR.COL_MATURITY,          _CONG_W_DATE,    0),
+        (STR.COL_ISSUER,                         0,  1),
+        (STR.COL_PRODUCT,                      100,  0),
+        (STR.COL_PRINCIPAL,         _CONG_W_MONEY,   0),
+        (STR.COL_CURRENT,           _CONG_W_MONEY,   0),
+        (STR.COL_PROJECTED,         _CONG_W_MONEY,   0),
+        (STR.COL_PROJECTED_BALANCE, _CONG_W_BALANCE,   0),
+        (STR.COL_FGC,               _CONG_W_FGC,     0),
     ]:
         lbl = QLabel(text)
         if width:
             lbl.setFixedWidth(width)
-        if text == "FGC":
+        if text == STR.COL_FGC:
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
         h.addWidget(lbl, stretch=stretch)
     return w
@@ -359,7 +359,7 @@ def _make_cong_detail_row(row: ConglomerateDetailRow, idx: int, *, is_mock: bool
         ic = QHBoxLayout(issuer_cell)
         ic.setContentsMargins(0, 0, 0, 0)
         ic.setSpacing(4)
-        badge = QLabel("MOCK")
+        badge = QLabel(STR.MOCK_BADGE)
         badge.setProperty("badge", "mock")
         ic.addWidget(badge)
         ic.addWidget(QLabel(row.issuer_name))
@@ -473,7 +473,7 @@ def _make_drawdown_row(
         ic = QHBoxLayout(issuer_cell)
         ic.setContentsMargins(0, 0, 0, 0)
         ic.setSpacing(4)
-        badge = QLabel("MOCK")
+        badge = QLabel(STR.MOCK_BADGE)
         badge.setProperty("badge", "mock")
         ic.addWidget(QLabel(issuer_name))
         ic.addWidget(badge)
@@ -2954,20 +2954,20 @@ class MainWindow(QMainWindow):
         spacer.setFixedWidth(20)
         h.addWidget(spacer)
 
-        h.addWidget(QLabel("Conglomerate"), stretch=1)
+        h.addWidget(QLabel(STR.COL_CONGLOMERATE), stretch=1)
 
         for text, width in [
-            ("Next maturity", _CONG_W_DATE),
-            ("Principal",     _CONG_W_MONEY),
-            ("Current",       _CONG_W_MONEY),
-            ("Projected",     _CONG_W_MONEY),
-            ("",              _CONG_W_BALANCE),   # blank gap over child's Projected Balance column
-            ("FGC",           _CONG_W_FGC),
+            (STR.COL_NEXT_MATURITY, _CONG_W_DATE),
+            (STR.COL_PRINCIPAL,     _CONG_W_MONEY),
+            (STR.COL_CURRENT,       _CONG_W_MONEY),
+            (STR.COL_PROJECTED,     _CONG_W_MONEY),
+            ("",                    _CONG_W_BALANCE),   # blank gap over child's Projected Balance column
+            (STR.COL_FGC,           _CONG_W_FGC),
         ]:
             lbl = QLabel(text)
             lbl.setFixedWidth(width)
             lbl.setAlignment(
-                (Qt.AlignmentFlag.AlignCenter if text == "FGC" else Qt.AlignmentFlag.AlignLeft)
+                (Qt.AlignmentFlag.AlignCenter if text == STR.COL_FGC else Qt.AlignmentFlag.AlignLeft)
                 | Qt.AlignmentFlag.AlignVCenter
             )
             h.addWidget(lbl)
@@ -2978,7 +2978,7 @@ class MainWindow(QMainWindow):
         self._clear_cong_layout()
         self._cong_section_widgets = {}
         if self.projection_cache is None:
-            placeholder = QLabel('Press "Project as of today" to populate.')
+            placeholder = QLabel(STR.CONG_PROJECT_PROMPT.format(btn=STR.BTN_PROJECT))
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._cong_layout.addWidget(placeholder)
             return
@@ -3242,7 +3242,7 @@ class MainWindow(QMainWindow):
 
         if show_paid:
             for col in (_COL_CURRENT, _COL_PROJECTED):
-                paid = QTableWidgetItem("PAID")
+                paid = QTableWidgetItem(STR.FGC_PAID)
                 paid.setFont(_MONO_FONT)
                 paid.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
                 self._table.setItem(row, col, paid)
@@ -3252,7 +3252,7 @@ class MainWindow(QMainWindow):
 
         # FGC badge
         if inv.issuer.kind == IssuerKind.TREASURY:
-            badge = QTableWidgetItem("N/A — Tesouro")
+            badge = QTableWidgetItem(STR.FGC_NA_TESOURO)
             badge.setForeground(QColor(COLORS.FGC_NA))
         elif fgc_status is None:
             badge = QTableWidgetItem("—")
