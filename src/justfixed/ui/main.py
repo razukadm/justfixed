@@ -58,7 +58,7 @@ from justfixed.ui.curve_inspector import (
     SERIES_PRE,
 )
 from justfixed.ui.manage_reference_data import ManageReferenceDataDialog
-from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX, display_conglomerate
+from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX, display_conglomerate, display_issuer_kind
 from justfixed.domain.investment import Investment, InvestmentSource
 from justfixed.domain.money import Money
 from justfixed.domain.product import CouponFrequency, ProductType, rules_for
@@ -2181,7 +2181,7 @@ class _AddInvestmentPanel(QWidget):
 
         self._new_kind_combo = QComboBox()
         for kind in IssuerKind:
-            self._new_kind_combo.addItem(kind.value.replace("_", " ").title(), kind)
+            self._new_kind_combo.addItem(display_issuer_kind(kind), kind)
         kind_row = QHBoxLayout()
         kind_lbl = QLabel(STR.ADD_TYPE)
         kind_lbl.setProperty("role", "subLabel")

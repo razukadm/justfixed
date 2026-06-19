@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX, display_conglomerate
+from justfixed.domain.issuer import Issuer, IssuerKind, UNVERIFIED_CONGLOMERATE_PREFIX, display_conglomerate, display_issuer_kind
 
 
 # ---------- IssuerKind ----------
@@ -238,6 +238,17 @@ class TestTreasuryFactory:
         a = Issuer.treasury()
         b = Issuer.treasury()
         assert a.id != b.id
+
+
+def test_display_issuer_kind_spot_checks() -> None:
+    assert display_issuer_kind(IssuerKind.COMMERCIAL_BANK) == "Banco comercial"
+    assert display_issuer_kind(IssuerKind.COOP) == "Cooperativa de crédito"
+    assert display_issuer_kind(IssuerKind.TREASURY) == "Tesouro"
+
+def test_display_issuer_kind_is_exhaustive() -> None:
+    for kind in IssuerKind:
+        label = display_issuer_kind(kind)
+        assert isinstance(label, str) and label
 
 
 def test_display_conglomerate_swaps_unverified_prefix() -> None:

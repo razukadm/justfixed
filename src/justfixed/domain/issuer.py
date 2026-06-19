@@ -102,6 +102,27 @@ class IssuerKind(Enum):
         return self not in {IssuerKind.TREASURY, IssuerKind.OTHERS}
 
 
+_ISSUER_KIND_DISPLAY: dict[IssuerKind, str] = {
+    IssuerKind.MULTIPLE_BANK: "Banco múltiplo",
+    IssuerKind.COMMERCIAL_BANK: "Banco comercial",
+    IssuerKind.INVESTMENT_BANK: "Banco de investimento",
+    IssuerKind.DEVELOPMENT_BANK: "Banco de desenvolvimento",
+    IssuerKind.CAIXA_ECONOMICA: "Caixa econômica",
+    IssuerKind.CREDIT_FINANCE_INVESTMENT_COMPANY: "Sociedade de crédito, financiamento e investimento",
+    IssuerKind.REAL_ESTATE_CREDIT_COMPANY: "Sociedade de crédito imobiliário",
+    IssuerKind.MORTGAGE_COMPANY: "Companhia hipotecária",
+    IssuerKind.SAVINGS_LOAN_ASSOCIATION: "Associação de poupança e empréstimo",
+    IssuerKind.COOP: "Cooperativa de crédito",
+    IssuerKind.TREASURY: "Tesouro",
+    IssuerKind.OTHERS: "Outros",
+}
+
+
+def display_issuer_kind(kind: IssuerKind) -> str:
+    """pt-BR display label for an issuer kind. Display-only; stored value unchanged."""
+    return _ISSUER_KIND_DISPLAY[kind]
+
+
 def _normalize_cnpj(cnpj: str) -> str:
     """Strip non-digits from a CNPJ. Returns 14-digit string or empty."""
     digits = re.sub(r"\D", "", cnpj)

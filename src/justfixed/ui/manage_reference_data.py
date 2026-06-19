@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from justfixed.domain.issuer import UNVERIFIED_CONGLOMERATE_PREFIX
+from justfixed.domain.issuer import UNVERIFIED_CONGLOMERATE_PREFIX, display_issuer_kind
 from justfixed.persistence.repositories import InvestmentRepository, IssuerRepository
 
 
@@ -171,7 +171,7 @@ class ManageReferenceDataDialog(QDialog):
         self._issuers_table.setRowCount(len(issuers))
         for row, issuer in enumerate(issuers):
             count = counts.get(issuer.id, 0)
-            kind_display = issuer.kind.value.replace("_", " ").title()
+            kind_display = display_issuer_kind(issuer.kind)
 
             self._issuers_table.setItem(row, 0, QTableWidgetItem(issuer.name))
             self._issuers_table.setItem(row, 1, QTableWidgetItem(issuer.conglomerate))
