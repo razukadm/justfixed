@@ -3883,7 +3883,7 @@ class MainWindow(QMainWindow):
         self._set_busy(False)
         self._ts_label.setText(STR.STATUS_PROJECTED_TS.format(ts=f"{datetime.now():%Y-%m-%d %H:%M}"))
         self.statusBar().showMessage(
-            f"Projected {len(results)} investments as of {date.today():%d/%m/%Y}.", 6000
+            STR.MSG_PROJECTED_COUNT.format(count=len(results), date=f"{date.today():%d/%m/%Y}"), 6000
         )
         self.projection_cache = results
         self.refresh_table()

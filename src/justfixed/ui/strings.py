@@ -267,6 +267,7 @@ class Strings:
     STATUS_PROJECTED_TS: str = "Projetado: {ts}"
     ERR_ISSUER_NAME_EMPTY: str = "O nome do emissor não pode ficar vazio."
     CALLOUT_ASOF: str = "DATA-BASE"
+    MSG_PROJECTED_COUNT: str = "Projetados {count} investimentos em {date}."
 
 
 STR = Strings()
