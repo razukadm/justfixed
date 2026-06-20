@@ -242,5 +242,21 @@ class Strings:
     CURVE_UNAVAIL_HEADING: str = "Dados da curva indisponíveis"
     CURVE_UNAVAIL_BODY: str = "Não foi possível buscar ou carregar uma curva em cache para esta série.\nA janela não pode mostrar vértices até que os dados estejam disponíveis."
 
+    # ── Dialogs & status messages ───────────────────────────────────────────────
+    DLG_DELETE_INV_TITLE: str = "Excluir investimento"
+    DLG_DELETE_INV_BODY: str = "Excluir permanentemente este investimento?\n\n{issuer}  ·  {product}\nPrincipal: {principal}  ·  Vencimento: {maturity}\n\nEsta ação não pode ser desfeita."
+    DLG_IMPORT_OK_TITLE: str = "Importação concluída"
+    DLG_IMPORT_OK_BODY: str = "Extrato {broker} importado — {new} novos, {unchanged} inalterados."
+    DLG_IMPORT_FAIL_TITLE: str = "Falha na importação"
+    DLG_PROJECTION_FAIL_TITLE: str = "Falha na projeção"
+    MSG_CALENDAR_EXPORTED: str = "Calendário exportado para {path}."
+    MSG_INVESTMENTS_EXPORTED: str = "Investimentos exportados para {path}."
+    MSG_CONGLOMERATES_EXPORTED: str = "Conglomerados exportados para {path}."
+    MSG_CURVE_EXPORTED: str = "Dados da curva exportados para {path}."
+    DLG_CALENDAR_FAIL_TITLE: str = "Falha ao exportar calendário"
+    DLG_EXCEL_FAIL_TITLE: str = "Falha ao exportar Excel"
+    DLG_DB_ERROR_TITLE: str = "Erro de banco de dados"
+    DLG_DB_ERROR_BODY: str = "O JustFixed não pôde abrir seu banco de dados e será encerrado.\n\n{exc}"
+
 
 STR = Strings()

@@ -1155,11 +1155,13 @@ class InvestmentDetailPanel(QWidget):
         )
         reply = QMessageBox.question(
             self,
-            "Delete Investment",
-            f"Permanently delete this investment?\n\n"
-            f"{inv.issuer.name}  ·  {product_name}\n"
-            f"Principal: {inv.principal.to_display()}  ·  Maturity: {maturity_str}\n\n"
-            "This cannot be undone.",
+            STR.DLG_DELETE_INV_TITLE,
+            STR.DLG_DELETE_INV_BODY.format(
+                issuer=inv.issuer.name,
+                product=product_name,
+                principal=inv.principal.to_display(),
+                maturity=maturity_str,
+            ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -2514,7 +2516,7 @@ class MainWindow(QMainWindow):
             self._session_factory = make_session_factory(engine)
             self._repo = InvestmentRepository(self._session_factory)
         except Exception as exc:
-            QMessageBox.critical(None, "Database error", f"JustFixed could not open its database and will now close.\n\n{exc}")
+            QMessageBox.critical(None, STR.DLG_DB_ERROR_TITLE, STR.DLG_DB_ERROR_BODY.format(exc=exc))
             sys.exit(1)
 
         # Seed DB on first run (empty DB only; no-op on every subsequent launch).
@@ -3429,9 +3431,10 @@ class MainWindow(QMainWindow):
         )
         QMessageBox.information(
             self,
-            "Import complete",
-            f"{broker_display} statement imported — "
-            f"{result.inserted} new, {result.skipped} unchanged.",
+            STR.DLG_IMPORT_OK_TITLE,
+            STR.DLG_IMPORT_OK_BODY.format(
+                broker=broker_display, new=result.inserted, unchanged=result.skipped
+            ),
         )
         self.projection_cache = None
         self._expanded_conglomerates.clear()
@@ -3442,7 +3445,7 @@ class MainWindow(QMainWindow):
         # _investments unchanged — failed import did not reach refresh_table().
         self._set_busy(False)
         self._status_label.setText(STR.STATUS_READY)
-        QMessageBox.critical(self, "Import failed", message)
+        QMessageBox.critical(self, STR.DLG_IMPORT_FAIL_TITLE, message)
 
     def _on_add_investment_clicked(self) -> None:
         self._table.clearSelection()
@@ -3882,7 +3885,7 @@ class MainWindow(QMainWindow):
 
     def _on_project_error(self, message: str) -> None:
         self._set_busy(False)
-        QMessageBox.critical(self, "Projection failed", message)
+        QMessageBox.critical(self, STR.DLG_PROJECTION_FAIL_TITLE, message)
 
     # ── Calendar export ───────────────────────────────────────────────────────
 
@@ -3899,9 +3902,9 @@ class MainWindow(QMainWindow):
                 self.visible_investments(), as_of=date.today(), assumed_cdi=self._assumed_cdi, assumed_ipca=self._assumed_ipca
             )
             Path(path_str).write_bytes(ics)
-            self.statusBar().showMessage(f"Calendar exported to {path_str}.", 8000)
+            self.statusBar().showMessage(STR.MSG_CALENDAR_EXPORTED.format(path=path_str), 8000)
         except Exception as exc:
-            QMessageBox.critical(self, "Calendar export failed", str(exc))
+            QMessageBox.critical(self, STR.DLG_CALENDAR_FAIL_TITLE, str(exc))
 
     # ── XLSX exports ──────────────────────────────────────────────────────────
 
@@ -3921,9 +3924,9 @@ class MainWindow(QMainWindow):
                 as_of=date.today(),
             )
             Path(path_str).write_bytes(data)
-            self.statusBar().showMessage(f"Investments exported to {path_str}.", 8000)
+            self.statusBar().showMessage(STR.MSG_INVESTMENTS_EXPORTED.format(path=path_str), 8000)
         except Exception as exc:
-            QMessageBox.critical(self, "Excel export failed", str(exc))
+            QMessageBox.critical(self, STR.DLG_EXCEL_FAIL_TITLE, str(exc))
 
     def _on_export_conglomerates_xlsx(self) -> None:
         path_str, _ = QFileDialog.getSaveFileName(
@@ -3939,9 +3942,9 @@ class MainWindow(QMainWindow):
             )
             data = export_conglomerates_xlsx(report)
             Path(path_str).write_bytes(data)
-            self.statusBar().showMessage(f"Conglomerates exported to {path_str}.", 8000)
+            self.statusBar().showMessage(STR.MSG_CONGLOMERATES_EXPORTED.format(path=path_str), 8000)
         except Exception as exc:
-            QMessageBox.critical(self, "Excel export failed", str(exc))
+            QMessageBox.critical(self, STR.DLG_EXCEL_FAIL_TITLE, str(exc))
 
     def _on_export_curves_xlsx(self) -> None:
         path_str, _ = QFileDialog.getSaveFileName(
@@ -3956,9 +3959,9 @@ class MainWindow(QMainWindow):
                 self._cdi_curve, self._pre_curve, self._ipca_curve
             )
             Path(path_str).write_bytes(data)
-            self.statusBar().showMessage(f"Curve data exported to {path_str}.", 8000)
+            self.statusBar().showMessage(STR.MSG_CURVE_EXPORTED.format(path=path_str), 8000)
         except Exception as exc:
-            QMessageBox.critical(self, "Excel export failed", str(exc))
+            QMessageBox.critical(self, STR.DLG_EXCEL_FAIL_TITLE, str(exc))
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

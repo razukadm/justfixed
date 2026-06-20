@@ -102,7 +102,7 @@ class TestProjectionCacheInvalidation:
 
         mock_info.assert_called_once()
         _, title, body = mock_info.call_args.args
-        assert title == "Import complete"
+        assert title == STR.DLG_IMPORT_OK_TITLE
         assert "BTG Pactual" in body
 
     def test_import_done_xp_shows_xp_in_dialog(self) -> None:
