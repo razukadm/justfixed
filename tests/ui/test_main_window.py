@@ -1034,22 +1034,22 @@ class TestUpdateCurveLabel:
     def test_live_with_vertices_shows_anchor(self) -> None:
         self_mock = self._mock()
         MainWindow._update_curve_label(self_mock, "live", _make_curve())
-        self_mock._curve_label.setText.assert_called_once_with("Curve: live (2026-05-15)")
+        self_mock._curve_label.setText.assert_called_once_with(STR.STATUS_CURVE.format(source=STR.CURVE_SOURCE_LIVE, date="2026-05-15"))
 
     def test_unavailable_shows_unavailable(self) -> None:
         self_mock = self._mock()
         MainWindow._update_curve_label(self_mock, "unavailable", None)
-        self_mock._curve_label.setText.assert_called_once_with("Curve: unavailable")
+        self_mock._curve_label.setText.assert_called_once_with(STR.STATUS_CURVE_UNAVAIL)
 
     def test_live_no_curve_shows_no_data(self) -> None:
         self_mock = self._mock()
         MainWindow._update_curve_label(self_mock, "live", None)
-        self_mock._curve_label.setText.assert_called_once_with("Curve: live (no data)")
+        self_mock._curve_label.setText.assert_called_once_with(STR.STATUS_CURVE_NO_DATA.format(source=STR.CURVE_SOURCE_LIVE))
 
     def test_manual_with_curve_shows_manual(self) -> None:
         self_mock = self._mock()
         MainWindow._update_curve_label(self_mock, "manual", _make_curve())
-        self_mock._curve_label.setText.assert_called_once_with("Curve: manual (2026-05-15)")
+        self_mock._curve_label.setText.assert_called_once_with(STR.STATUS_CURVE.format(source=STR.CURVE_SOURCE_MANUAL, date="2026-05-15"))
 
 
 # ── _on_load_curve_from_file_clicked (B30) ────────────────────────────────────

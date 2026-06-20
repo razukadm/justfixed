@@ -258,5 +258,15 @@ class Strings:
     DLG_DB_ERROR_TITLE: str = "Erro de banco de dados"
     DLG_DB_ERROR_BODY: str = "O JustFixed não pôde abrir seu banco de dados e será encerrado.\n\n{exc}"
 
+    # ── Status indicators & misc ────────────────────────────────────────────────
+    STATUS_CURVE: str = "Curva: {source} ({date})"
+    STATUS_CURVE_UNAVAIL: str = "Curva: indisponível"
+    STATUS_CURVE_NO_DATA: str = "Curva: {source} (sem dados)"
+    CURVE_SOURCE_LIVE: str = "ativa"
+    CURVE_SOURCE_MANUAL: str = "manual"
+    STATUS_PROJECTED_TS: str = "Projetado: {ts}"
+    ERR_ISSUER_NAME_EMPTY: str = "O nome do emissor não pode ficar vazio."
+    CALLOUT_ASOF: str = "DATA-BASE"
+
 
 STR = Strings()

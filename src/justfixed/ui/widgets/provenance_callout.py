@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from justfixed.ui.theme import COLORS
+from justfixed.ui.strings import STR
 
 
 class ProvenanceCallout(QFrame):
@@ -64,7 +65,7 @@ class ProvenanceCallout(QFrame):
         asof_layout.setContentsMargins(0, 0, 0, 0)
         asof_layout.setSpacing(6)
 
-        lbl_asof = QLabel("CURVE AS-OF")
+        lbl_asof = QLabel(STR.CALLOUT_ASOF)
         lbl_asof.setStyleSheet(
             f"color: {COLORS.INK_3}; font-size: 9px; letter-spacing: 0.06em; border: none;"
         )

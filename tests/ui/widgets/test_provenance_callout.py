@@ -9,6 +9,7 @@ import pytest
 from PySide6.QtWidgets import QApplication, QFrame, QLabel
 
 from justfixed.ui.widgets.provenance_callout import ProvenanceCallout
+from justfixed.ui.strings import STR
 
 
 @pytest.fixture(scope="session")
@@ -41,7 +42,7 @@ class TestProvenanceCallout:
     def test_curve_asof_label_present(self, qapp) -> None:
         pc = ProvenanceCallout("series label", date(2025, 1, 15))
         labels = [lbl.text() for lbl in pc.findChildren(QLabel)]
-        assert "CURVE AS-OF" in labels
+        assert STR.CALLOUT_ASOF in labels
 
     def test_set_as_of(self, qapp) -> None:
         pc = ProvenanceCallout("series label", date(2025, 1, 1))

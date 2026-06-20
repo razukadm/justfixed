@@ -2308,13 +2308,13 @@ class _AddInvestmentPanel(QWidget):
         try:
             principal = parse_brazilian_money(self._principal_edit.text().strip())
         except Exception as exc:
-            self._set_error(f"Principal: {exc}")
+            self._set_error(f"{STR.FIELD_PRINCIPAL}: {exc}")
             return
 
         try:
             rate = self._rate_editor.get_rate()
         except ValueError as exc:
-            self._set_error(f"Rate: {exc}")
+            self._set_error(f"{STR.FIELD_RATE}: {exc}")
             return
 
         product       = self._product_combo.currentData()
@@ -2355,7 +2355,7 @@ class _AddInvestmentPanel(QWidget):
 
         name = self._new_name_edit.text().strip()
         if not name:
-            raise ValueError("Issuer name cannot be empty.")
+            raise ValueError(STR.ERR_ISSUER_NAME_EMPTY)
         kind        = self._new_kind_combo.currentData()
         conglomerate = self._new_cong_edit.text().strip()
         if not conglomerate:
@@ -3507,12 +3507,18 @@ class MainWindow(QMainWindow):
             self._refresh_dev_tab_curves()
 
     def _update_curve_label(self, source: str, curve: Curve | None) -> None:
+        source_display = {
+            "live": STR.CURVE_SOURCE_LIVE,
+            "manual": STR.CURVE_SOURCE_MANUAL,
+        }.get(source, source)
         if curve and curve.vertices:
-            self._curve_label.setText(f"Curve: {source} ({curve.anchor:%Y-%m-%d})")
+            self._curve_label.setText(
+                STR.STATUS_CURVE.format(source=source_display, date=f"{curve.anchor:%Y-%m-%d}")
+            )
         elif source == "unavailable":
-            self._curve_label.setText("Curve: unavailable")
+            self._curve_label.setText(STR.STATUS_CURVE_UNAVAIL)
         else:
-            self._curve_label.setText(f"Curve: {source} (no data)")
+            self._curve_label.setText(STR.STATUS_CURVE_NO_DATA.format(source=source_display))
 
     def _refresh_dev_tab_curves(self) -> None:
         fetch_source = self._fetch_result.source if self._fetch_result else "unavailable"
@@ -3875,7 +3881,7 @@ class MainWindow(QMainWindow):
 
     def _on_project_done(self, results: list) -> None:
         self._set_busy(False)
-        self._ts_label.setText(f"Projected: {datetime.now():%Y-%m-%d %H:%M}")
+        self._ts_label.setText(STR.STATUS_PROJECTED_TS.format(ts=f"{datetime.now():%Y-%m-%d %H:%M}"))
         self.statusBar().showMessage(
             f"Projected {len(results)} investments as of {date.today():%d/%m/%Y}.", 6000
         )
