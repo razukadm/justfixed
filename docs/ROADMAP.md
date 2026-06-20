@@ -25,7 +25,7 @@ careful pace this project uses (2–4 hours each).
 ### 1. UI — PySide6
 
 **Status:** Milestones A′, A′-plus, B′, B′ companion, B24, B9a, B27,
-C′, B34, B41, B44, B22, Curve Inspector, and B19 (partial — delete +
+C′, B34, B41, B44, B22, B37, Curve Inspector, and B19 (partial — delete +
 conglomerate/custodian management) complete. See `docs/UI_DESIGN.md`
 and `docs/ARCHITECTURE.md` for what shipped.
 
@@ -894,11 +894,11 @@ to B37 (i18n), which will revisit these strings for translation regardless.
 
 **Source:** Session 2026-05-21.
 
-**What it is:** Localize the UI to pt-BR. This is not a one-time text swap — it means introducing internationalization: externalizing every UI string into a catalog and adding a locale mechanism.
+**Shipped:** 2026-06-20, slices S1 `3afc1e7` through S9b-tail `17f4142` (14 slices). Implemented as a lightweight in-repo string catalog: `src/justfixed/ui/strings.py` defines a frozen `Strings` dataclass exposed as the `STR` singleton — a single pt-BR locale with no runtime toggle and no Qt `tr()`/`.ts` plumbing (deliberate; the entire user base is Brazilian). Every user-facing UI string routes through `STR`: menus and tabs, the Investments and Conglomerates tabs, the Calculator, Manage Reference Data, the Curve Inspector, all `QMessageBox` dialogs and status-bar messages, the add-investment panel and its field errors, and the provenance callout. Domain display values (`Money.to_display`, `rate_type_label`, product names, dates) were already pt-BR and left untouched. The XLSX export (S8) was localized with module-local constants instead of importing `STR`, preserving the exports→UI dependency direction. Deliberately left in English: the `JUSTFIXED_DEV`-gated Dev tab and the `"JustFixed"` app-name window titles. Suite at 1517.
 
-**Why deferred / why it matters:** The entire user base and all data sources are Brazilian, so the value is high. The app is already drifting into mixed-language state ad hoc — B27 adds Portuguese column headers ("Taxa", "Tipo") while QMessageBox text, the dev view, and error messages stay English. An i18n pass makes language a deliberate decision instead of an accretion. Real effort: every string, plus the locale plumbing.
+**Original scoping (historical, pre-implementation):**
 
-**Trigger to revisit:** Before beta release to Brazilian non-developer users. Sequence after or alongside B36 — same strings, touch once.
+**What it is:** Localize the UI to pt-BR.
 
 ### B38. UI design-review pass
 
