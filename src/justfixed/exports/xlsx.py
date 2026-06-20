@@ -18,15 +18,25 @@ from justfixed.engine.projection import ProjectionResult
 
 
 _INVESTMENTS_HEADER = [
-    "Issuer", "Conglomerate", "Custodian", "Product", "Type", "Rate",
-    "Principal", "Maturity", "Current", "Projected", "FGC",
+    "Emissor", "Conglomerado", "Custodiante", "Produto", "Tipo", "Taxa",
+    "Principal", "Vencimento", "Atual", "Projetado", "FGC",
 ]
 
 _CONGLOMERATES_HEADER = [
-    "Conglomerate", "Investments", "Principal", "Current", "Projected",
-    "Next maturity", "FGC",
+    "Conglomerado", "Investimentos", "Principal", "Atual", "Projetado",
+    "Próx. vencimento", "FGC",
 ]
 
+_FGC_DISPLAY: dict[str, str] = {
+    "under": "ABAIXO",
+    "approaching": "PRÓXIMO",
+    "over": "ACIMA",
+    "not_fgc": "N/A",
+}
+
+
+def _fgc_display(status_value: str) -> str:
+    return _FGC_DISPLAY.get(status_value, status_value)
 
 
 def _fgc_cell(
@@ -35,11 +45,11 @@ def _fgc_cell(
 ) -> str | None:
     # Treasury: FGC does not apply — domain property, checked before the map.
     if inv.issuer.kind == IssuerKind.TREASURY:
-        return "not_fgc"
+        return _FGC_DISPLAY["not_fgc"]
     status = fgc_status_by_id.get(inv.id)
     if status is None:
         return None
-    return status.value
+    return _fgc_display(status.value)
 
 
 def export_investments_xlsx(
@@ -106,7 +116,7 @@ def export_conglomerates_xlsx(report: ConglomerateReport) -> bytes:
             float(section.total_current_value.amount),
             float(section.total_projected_value.amount),
             section.next_maturity,
-            section.summary_fgc_status.value,
+            _fgc_display(section.summary_fgc_status.value),
         ])
 
     buf = BytesIO()
@@ -114,7 +124,7 @@ def export_conglomerates_xlsx(report: ConglomerateReport) -> bytes:
     return buf.getvalue()
 
 
-_CURVES_HEADER = ["Business Days", "Rate"]
+_CURVES_HEADER = ["Dias úteis", "Taxa"]
 
 
 def export_curves_xlsx(
@@ -134,7 +144,7 @@ def export_curves_xlsx(
         ws.append(_CURVES_HEADER)
 
         if curve is None or not curve.vertices:
-            ws.append(["(no curve loaded)"])
+            ws.append(["(nenhuma curva carregada)"])
         else:
             for vertex in curve.vertices:
                 ws.append([vertex.business_days, float(vertex.rate)])

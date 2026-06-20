@@ -35,6 +35,7 @@ from justfixed.engine.fgc import ExposureStatus, fgc_concentration_report_from_p
 from justfixed.engine.projection import ProjectionResult, project
 from justfixed.engine.curve import Curve, CurveVertex
 from justfixed.exports.xlsx import (
+    _FGC_DISPLAY,
     export_conglomerates_xlsx,
     export_curves_xlsx,
     export_investments_xlsx,
@@ -149,8 +150,8 @@ def test_investments_header_row() -> None:
     )
     ws = _ws(data)
     expected = [
-        "Issuer", "Conglomerate", "Custodian", "Product", "Type", "Rate",
-        "Principal", "Maturity", "Current", "Projected", "FGC",
+        "Emissor", "Conglomerado", "Custodiante", "Produto", "Tipo", "Taxa",
+        "Principal", "Vencimento", "Atual", "Projetado", "FGC",
     ]
     actual = [ws.cell(row=1, column=c).value for c in range(1, len(expected) + 1)]
     assert actual == expected
@@ -187,7 +188,7 @@ def test_investments_one_row_values() -> None:
     assert projected_cell.value == float(result.gross_at_maturity.amount)
 
     fgc_cell = ws.cell(row=2, column=11).value
-    assert fgc_cell in {"under", "approaching", "over", "not_fgc"}
+    assert fgc_cell in set(_FGC_DISPLAY.values())
 
 
 def test_investments_uncached_row_blank_value_cells() -> None:
@@ -214,7 +215,7 @@ def test_investments_treasury_fgc_cell() -> None:
     )
     result = project(inv, as_of=AS_OF, assumed_cdi=ASSUMED_CDI)
     # Treasury is filtered out of the FGC report → empty map.
-    # The issuer-kind branch in the export must still return "not_fgc".
+    # The issuer-kind branch in the export must still return "N/A".
     status_map = _status_map([result])
 
     data = export_investments_xlsx(
@@ -222,7 +223,7 @@ def test_investments_treasury_fgc_cell() -> None:
     )
     ws = _ws(data)
 
-    assert ws.cell(row=2, column=11).value == "not_fgc"
+    assert ws.cell(row=2, column=11).value == "N/A"
 
 
 def test_investments_money_cells_are_numeric() -> None:
@@ -290,8 +291,8 @@ def test_investments_fgc_reflects_conglomerate_not_individual() -> None:
     ws = _ws(data)
 
     for row in (2, 3, 4):
-        assert ws.cell(row=row, column=11).value == "over", (
-            f"row {row}: expected 'over' (conglomerate aggregate ≈ R$336k), "
+        assert ws.cell(row=row, column=11).value == "ACIMA", (
+            f"row {row}: expected 'ACIMA' (conglomerate aggregate ≈ R$336k), "
             f"got {ws.cell(row=row, column=11).value!r}"
         )
 
@@ -343,8 +344,8 @@ def test_conglomerates_header_row() -> None:
     data = export_conglomerates_xlsx(report)
     ws = _ws(data)
     expected = [
-        "Conglomerate", "Investments", "Principal", "Current", "Projected",
-        "Next maturity", "FGC",
+        "Conglomerado", "Investimentos", "Principal", "Atual", "Projetado",
+        "Próx. vencimento", "FGC",
     ]
     actual = [ws.cell(row=1, column=c).value for c in range(1, len(expected) + 1)]
     assert actual == expected
@@ -379,7 +380,7 @@ def test_conglomerates_one_section_values() -> None:
     assert projected_cell.value == float(section.total_projected_value.amount)
 
     assert _date_eq(ws.cell(row=2, column=6).value, section.next_maturity)
-    assert ws.cell(row=2, column=7).value == section.summary_fgc_status.value
+    assert ws.cell(row=2, column=7).value == _FGC_DISPLAY[section.summary_fgc_status.value]
 
 
 def test_conglomerates_summary_only_no_detail_rows() -> None:
@@ -538,8 +539,8 @@ def test_curves_header_row_on_all_sheets() -> None:
     wb = _load(data)
     for title in ("CDI", "PRE", "IPCA"):
         ws = wb[title]
-        assert ws.cell(row=1, column=1).value == "Business Days"
-        assert ws.cell(row=1, column=2).value == "Rate"
+        assert ws.cell(row=1, column=1).value == "Dias úteis"
+        assert ws.cell(row=1, column=2).value == "Taxa"
 
 
 def test_curves_vertex_rows_business_days_and_rate() -> None:
@@ -582,7 +583,7 @@ def test_curves_none_curve_produces_marker_row() -> None:
     for title in ("CDI", "PRE", "IPCA"):
         ws = wb[title]
         assert ws.max_row == 2
-        assert ws.cell(row=2, column=1).value == "(no curve loaded)"
+        assert ws.cell(row=2, column=1).value == "(nenhuma curva carregada)"
         assert ws.cell(row=2, column=2).value is None
 
 
@@ -591,7 +592,7 @@ def test_curves_empty_vertices_produces_marker_row() -> None:
     data = export_curves_xlsx(empty, None, None)
     ws = _load(data)["CDI"]
     assert ws.max_row == 2
-    assert ws.cell(row=2, column=1).value == "(no curve loaded)"
+    assert ws.cell(row=2, column=1).value == "(nenhuma curva carregada)"
     assert ws.cell(row=2, column=2).value is None
 
 
@@ -603,5 +604,5 @@ def test_curves_mixed_none_and_populated() -> None:
     assert wb["PRE"].max_row == 2  # header + marker
     assert wb["IPCA"].max_row == 2  # header + marker
     assert wb["CDI"].cell(row=2, column=2).value == float(Decimal("0.144"))
-    assert wb["PRE"].cell(row=2, column=1).value == "(no curve loaded)"
-    assert wb["IPCA"].cell(row=2, column=1).value == "(no curve loaded)"
+    assert wb["PRE"].cell(row=2, column=1).value == "(nenhuma curva carregada)"
+    assert wb["IPCA"].cell(row=2, column=1).value == "(nenhuma curva carregada)"
