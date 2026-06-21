@@ -11,7 +11,8 @@ import sys
 from unittest.mock import MagicMock, call, patch
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QStyle, QStyledItemDelegate
 
 from justfixed.domain.issuer import Issuer, UNVERIFIED_CONGLOMERATE_PREFIX
 from justfixed.ui.main import ConglomerateEditDelegate
@@ -162,3 +163,69 @@ class TestConglomerateEditDelegateSave:
         assert inv.issuer.conglomerate == "New Conglomerate"
         mock_logging.warning.assert_called_once()
         delegate._main_window.trigger_conglomerate_highlight.assert_called_once_with(inv.issuer.id)
+
+
+# ---------- Paint — pencil glyph visibility ----------
+
+
+def _make_option(state_flags):
+    option = MagicMock()
+    option.state = state_flags
+    return option
+
+
+class TestConglomerateEditDelegatePaint:
+    """Pencil glyph drawn only on hover/focus; absent at rest."""
+
+    def test_glyph_shown_on_hover(self, delegate) -> None:
+        painter = MagicMock()
+        option = _make_option(QStyle.StateFlag.State_MouseOver)
+        index = MagicMock()
+        index.data.return_value = False
+        with patch.object(QStyledItemDelegate, "paint"):
+            delegate.paint(painter, option, index)
+        painter.drawText.assert_called_once()
+
+    def test_glyph_shown_on_focus(self, delegate) -> None:
+        painter = MagicMock()
+        option = _make_option(QStyle.StateFlag.State_HasFocus)
+        index = MagicMock()
+        index.data.return_value = False
+        with patch.object(QStyledItemDelegate, "paint"):
+            delegate.paint(painter, option, index)
+        painter.drawText.assert_called_once()
+
+    def test_no_glyph_at_rest(self, delegate) -> None:
+        painter = MagicMock()
+        option = _make_option(QStyle.StateFlag(0))
+        index = MagicMock()
+        with patch.object(QStyledItemDelegate, "paint"):
+            delegate.paint(painter, option, index)
+        painter.drawText.assert_not_called()
+        painter.save.assert_not_called()
+
+    def test_matured_row_uses_matured_color(self, delegate) -> None:
+        """When UserRole+1 is True, setPen receives _MATURED_COLOR, not INK_2."""
+        from justfixed.ui.main import _MATURED_COLOR
+        from justfixed.ui.theme import COLORS
+        from PySide6.QtGui import QColor
+
+        painter = MagicMock()
+        option = _make_option(QStyle.StateFlag.State_MouseOver)
+        index = MagicMock()
+        index.data.return_value = True  # matured
+        with patch.object(QStyledItemDelegate, "paint"):
+            delegate.paint(painter, option, index)
+        painter.setPen.assert_called_once_with(_MATURED_COLOR)
+
+    def test_normal_row_uses_ink2_color(self, delegate) -> None:
+        from justfixed.ui.theme import COLORS
+        from PySide6.QtGui import QColor
+
+        painter = MagicMock()
+        option = _make_option(QStyle.StateFlag.State_MouseOver)
+        index = MagicMock()
+        index.data.return_value = False  # not matured
+        with patch.object(QStyledItemDelegate, "paint"):
+            delegate.paint(painter, option, index)
+        painter.setPen.assert_called_once_with(QColor(COLORS.INK_2))

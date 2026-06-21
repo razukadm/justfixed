@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QStackedLayout,
     QStackedWidget,
     QStatusBar,
+    QStyle,
     QStyledItemDelegate,
     QTabWidget,
     QTableWidget,
@@ -2534,16 +2535,19 @@ class ConglomerateEditDelegate(QStyledItemDelegate):
 
     def paint(self, painter, option, index) -> None:
         super().paint(painter, option, index)
-        # Subtle dotted underline: signals inline-editability without competing
-        # with selection highlight, [unverified] italic, or matured-row demote.
+        hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
+        focused = bool(option.state & QStyle.StateFlag.State_HasFocus)
+        if not (hovered or focused):
+            return
+        is_matured = bool(index.data(Qt.ItemDataRole.UserRole + 1))
+        glyph_color = _MATURED_COLOR if is_matured else QColor(COLORS.INK_2)
         painter.save()
-        pen = QPen(QColor(COLORS.INK_3))
-        pen.setStyle(Qt.PenStyle.DotLine)
-        pen.setWidth(1)
-        painter.setPen(pen)
-        r = option.rect
-        y = r.bottom() - 2
-        painter.drawLine(r.left() + 4, y, r.right() - 4, y)
+        painter.setPen(glyph_color)
+        painter.drawText(
+            option.rect.adjusted(0, 0, -6, 0),
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            "✎",
+        )
         painter.restore()
 
     def setEditorData(self, editor, index) -> None:
@@ -2767,6 +2771,7 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
 
         self._table = QTableWidget(0, _NCOLS)
+        self._table.setMouseTracking(True)
         self._table.setObjectName("investmentsTable")
         self._table.setAlternatingRowColors(True)
         self._table.setShowGrid(False)
@@ -3338,10 +3343,14 @@ class MainWindow(QMainWindow):
     ) -> None:
         self._cell(row, _COL_ISSUER, inv.issuer.name)
 
-        # Conglomerate — gray italic when [unverified]
+        show_paid = _is_matured(inv) and not self._hide_matured
+
+        # Conglomerate — gray italic when [unverified]; pencil glyph on hover/focus
         cong = inv.issuer.conglomerate
         cong_item = QTableWidgetItem(display_conglomerate(cong))
         cong_item.setData(Qt.ItemDataRole.EditRole, cong)
+        # Matured state for ConglomerateEditDelegate.paint() — glyph color branch
+        cong_item.setData(Qt.ItemDataRole.UserRole + 1, show_paid)
         cong_item.setToolTip(STR.TIP_CONG_EDITABLE)
         if cong.startswith(UNVERIFIED_CONGLOMERATE_PREFIX):
             font = cong_item.font()
@@ -3361,8 +3370,6 @@ class MainWindow(QMainWindow):
             _PT_BR.toString(QDate(d.year, d.month, d.day), QLocale.FormatType.ShortFormat),
             mono=True,
         )
-
-        show_paid = _is_matured(inv) and not self._hide_matured
 
         if show_paid:
             for col in (_COL_CURRENT, _COL_PROJECTED):

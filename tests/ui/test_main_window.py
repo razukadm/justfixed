@@ -1917,6 +1917,33 @@ class TestInvestmentsTableSmoke:
         finally:
             win.close()
 
+    def test_cong_item_matured_data_role_true_when_matured(self, qapp) -> None:
+        """Matured row with hide_matured=False: cong_item UserRole+1 is True."""
+        from PySide6.QtCore import Qt
+        win = self._make_window()
+        try:
+            win._hide_matured = False
+            inv = _make_smoke_investment(maturity_offset_days=-1)
+            win._table.setRowCount(1)
+            win._populate_row(0, inv, current_value=None, projected_value=None, fgc_status=None)
+            cong_item = win._table.item(0, 1)  # _COL_CONGLOMERATE = 1
+            assert cong_item.data(Qt.ItemDataRole.UserRole + 1) is True
+        finally:
+            win.close()
+
+    def test_cong_item_matured_data_role_false_when_active(self, qapp) -> None:
+        """Active (non-matured) row: cong_item UserRole+1 is False."""
+        from PySide6.QtCore import Qt
+        win = self._make_window()
+        try:
+            inv = _make_smoke_investment(maturity_offset_days=365)
+            win._table.setRowCount(1)
+            win._populate_row(0, inv, current_value=None, projected_value=None, fgc_status=None)
+            cong_item = win._table.item(0, 1)  # _COL_CONGLOMERATE = 1
+            assert cong_item.data(Qt.ItemDataRole.UserRole + 1) is False
+        finally:
+            win.close()
+
     def test_stylesheet_applied_no_exception(self, qapp) -> None:
         from justfixed.ui.qss import make_stylesheet
         win = self._make_window()
