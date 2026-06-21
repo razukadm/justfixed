@@ -87,6 +87,38 @@ class TestColors:
         # The secondary button border reuses RULE (#d9d6cf) — no duplicate token.
         assert COLORS.RULE == "#d9d6cf"
 
+    def test_tab_active_bg(self) -> None:
+        assert COLORS.TAB_ACTIVE_BG == "#ffffff"
+
+    def test_tab_inactive_bg(self) -> None:
+        assert COLORS.TAB_INACTIVE_BG == "#f6f6f6"
+
+    def test_tab_hover_bg(self) -> None:
+        assert COLORS.TAB_HOVER_BG == "#fbfbfb"
+
+    def test_tab_active_ink(self) -> None:
+        assert COLORS.TAB_ACTIVE_INK == "#1f1f1f"
+
+    def test_tab_inactive_ink(self) -> None:
+        assert COLORS.TAB_INACTIVE_INK == "#444444"
+
+    def test_tab_border(self) -> None:
+        assert COLORS.TAB_BORDER == "#e5e5e5"
+
+    def test_tab_border_strong(self) -> None:
+        assert COLORS.TAB_BORDER_STRONG == "#cccccc"
+
+    def test_tab_chrome(self) -> None:
+        assert COLORS.TAB_CHROME == "#f0f0f0"
+
+    def test_tab_active_bg_distinct_from_inactive_bg(self) -> None:
+        # Active card must differ from inactive to create card-lift contrast.
+        assert COLORS.TAB_ACTIVE_BG != COLORS.TAB_INACTIVE_BG
+
+    def test_tab_border_strong_distinct_from_tab_border(self) -> None:
+        # Strong border (active + pane seam) must be darker than inactive border.
+        assert COLORS.TAB_BORDER_STRONG != COLORS.TAB_BORDER
+
 
 class TestFonts:
     def test_singleton_is_frozen(self) -> None:
@@ -312,7 +344,7 @@ class TestMakeStylesheet:
         block = sheet[idx:block_end + 1]
         assert COLORS.PANEL_2 in block
 
-    # ── CH-1: tab styling ────────────────────────────────────────────────────
+    # ── CH-1: tab styling (seated-card design) ──────────────────────────────
 
     def test_tab_bar_tab_rule_present(self) -> None:
         from justfixed.ui.qss import make_stylesheet
@@ -324,23 +356,56 @@ class TestMakeStylesheet:
 
     def test_tab_widget_pane_rule_present(self) -> None:
         from justfixed.ui.qss import make_stylesheet
-        assert "QTabWidget::pane {" in make_stylesheet()
+        assert "QTabWidget#mainTabs::pane {" in make_stylesheet()
 
-    def test_tab_bar_uses_panel_2_for_inactive(self) -> None:
+    def test_tab_widget_container_rule_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert "QTabWidget#mainTabs {" in make_stylesheet()
+
+    def test_tab_widget_tab_bar_subcontrol_rule_present(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        assert "QTabWidget#mainTabs::tab-bar {" in make_stylesheet()
+
+    def test_tab_bar_uses_tab_inactive_bg(self) -> None:
         from justfixed.ui.qss import make_stylesheet
         sheet = make_stylesheet()
         idx = sheet.index("QTabBar::tab {")
         block_end = sheet.index("}", idx)
         block = sheet[idx:block_end + 1]
-        assert COLORS.PANEL_2 in block
+        assert COLORS.TAB_INACTIVE_BG in block
 
-    def test_tab_bar_selected_uses_panel(self) -> None:
+    def test_tab_bar_selected_uses_tab_active_bg(self) -> None:
         from justfixed.ui.qss import make_stylesheet
         sheet = make_stylesheet()
         idx = sheet.index("QTabBar::tab:selected {")
         block_end = sheet.index("}", idx)
         block = sheet[idx:block_end + 1]
-        assert COLORS.PANEL in block
+        assert COLORS.TAB_ACTIVE_BG in block
+
+    def test_tab_widget_container_background_uses_tab_chrome(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        idx = sheet.index("QTabWidget#mainTabs {")
+        block_end = sheet.index("}", idx)
+        block = sheet[idx:block_end + 1]
+        assert COLORS.TAB_CHROME in block
+
+    def test_tab_widget_pane_uses_tab_border_strong(self) -> None:
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        idx = sheet.index("QTabWidget#mainTabs::pane {")
+        block_end = sheet.index("}", idx)
+        block = sheet[idx:block_end + 1]
+        assert COLORS.TAB_BORDER_STRONG in block
+
+    def test_tab_bar_selected_has_margin_bottom_negative(self) -> None:
+        # Load-bearing: active card overlaps pane border to merge with content area.
+        from justfixed.ui.qss import make_stylesheet
+        sheet = make_stylesheet()
+        idx = sheet.index("QTabBar::tab:selected {")
+        block_end = sheet.index("}", idx)
+        block = sheet[idx:block_end + 1]
+        assert "margin-bottom: -1px" in block
 
     # ── IN-1: soft-blue selection ────────────────────────────────────────────
 
@@ -367,12 +432,13 @@ class TestMakeStylesheet:
         # Foundations body spec: 13px ≈ 10pt at 96 DPI.
         assert FONTS.UI_SIZE_MD == 10
 
-    def test_inactive_tab_uses_ink_2_not_ink_3(self) -> None:
-        # CH-1 inactive tab text: INK_2 (#4a4a4a) for contrast; INK_3 (#888888) is too light.
+    def test_inactive_tab_uses_tab_inactive_ink_not_ink_3(self) -> None:
+        # Seated-card design: TAB_INACTIVE_INK (#444444) for inactive text;
+        # INK_3 (#888888) is too light for tab contrast.
         from justfixed.ui.qss import make_stylesheet
         sheet = make_stylesheet()
         idx = sheet.index("QTabBar::tab {")
         block_end = sheet.index("}", idx)
         block = sheet[idx:block_end + 1]
-        assert COLORS.INK_2 in block
+        assert COLORS.TAB_INACTIVE_INK in block
         assert COLORS.INK_3 not in block

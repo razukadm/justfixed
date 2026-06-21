@@ -21,6 +21,16 @@ class Colors:
     RULE: str = "#d9d6cf"
     RULE_2: str = "#ececea"
 
+    # ── Tab bar (seated-card chrome) ──────────────────────────────────────────
+    TAB_ACTIVE_BG: str = "#ffffff"        # active tab card fill
+    TAB_INACTIVE_BG: str = "#f6f6f6"      # inactive tab fill
+    TAB_HOVER_BG: str = "#fbfbfb"         # inactive hover, lifts toward white
+    TAB_ACTIVE_INK: str = "#1f1f1f"       # active label text
+    TAB_INACTIVE_INK: str = "#444444"     # inactive label text
+    TAB_BORDER: str = "#e5e5e5"           # inactive tab border
+    TAB_BORDER_STRONG: str = "#cccccc"    # active tab border + pane seam
+    TAB_CHROME: str = "#f0f0f0"           # bar background behind the tabs
+
     # ── Accent ─────────────────────────────────────────────────────────────────
     LINK: str = "#1f6feb"
     WARN: str = "#e67e22"          # approaching-FGC badge; curve_inspector warning

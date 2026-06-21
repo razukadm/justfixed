@@ -313,31 +313,45 @@ QLabel[indicator="peak"] {{
 }}
 
 /* ── Tab widget chrome (CH-1) ────────────────────────────────────────
-   90% goal: branded, readable tabs.  The pane-seam between the active
-   tab and the content area is accepted as a Qt rendering artefact and
-   not fought.  Heavy QTabWidget frame replaced with a single RULE line.
-   Hover uses PAPER (lighter than inactive PANEL_2); no extra border so
-   the hover doesn't add visual weight.                                */
-QTabWidget::pane {{
+   Seated-card design: top-radius cards that merge into the pane seam.
+   Active card overlaps the pane border (margin-bottom: -1px) so its
+   open bottom edge is continuous with the content area — no separate
+   bottom indicator.  Weight contrast (500 → 600 + ink shift) marks the
+   active tab.  Gutter fill comes from the QTabWidget container, NOT from
+   QTabBar — QTabBar's rect hugs the tab cards and paints no visible gap. */
+QTabWidget#mainTabs {{
+    background-color: {c.TAB_CHROME};
+}}
+QTabWidget#mainTabs::tab-bar {{
+    left: 6px;
+}}
+QTabWidget#mainTabs::pane {{
     border: none;
-    border-top: 1px solid {c.RULE};
+    border-top: 1px solid {c.TAB_BORDER_STRONG};
 }}
 QTabBar::tab {{
-    background-color: {c.PANEL_2};
-    color: {c.INK_2};
-    padding: 7px 16px;
+    background-color: {c.TAB_INACTIVE_BG};
+    color: {c.TAB_INACTIVE_INK};
+    font-weight: 500;
+    padding: 6px 14px 7px;
     margin-right: 2px;
-    border: none;
-    border-bottom: 2px solid transparent;
+    margin-top: 4px;
+    border: 1px solid {c.TAB_BORDER};
+    border-bottom: 0;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
 }}
 QTabBar::tab:selected {{
-    background-color: {c.PANEL};
-    color: {c.INK};
-    border-bottom: 2px solid {c.INK};
+    background-color: {c.TAB_ACTIVE_BG};
+    color: {c.TAB_ACTIVE_INK};
+    font-weight: 600;
+    border: 1px solid {c.TAB_BORDER_STRONG};
+    border-bottom: 1px solid {c.TAB_ACTIVE_BG};
+    margin-bottom: -1px;
 }}
 QTabBar::tab:hover:!selected {{
-    background-color: {c.PAPER};
-    color: {c.INK_2};
+    background-color: {c.TAB_HOVER_BG};
+    color: {c.TAB_ACTIVE_INK};
 }}
 
 /* ── Investments totals strip ────────────────────────────────────── */

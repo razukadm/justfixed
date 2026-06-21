@@ -2693,6 +2693,7 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         self._tabs = QTabWidget()
+        self._tabs.setObjectName("mainTabs")
         self.setCentralWidget(self._tabs)
         self._conglomerates_tab = QWidget()
         _cong_outer = QVBoxLayout(self._conglomerates_tab)
