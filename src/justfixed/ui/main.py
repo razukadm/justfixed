@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from PySide6.QtCore import QDate, QEvent, QLocale, QStandardPaths, QStringListModel, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPalette
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPalette, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -191,6 +191,8 @@ def _make_fgc_badge(status, width: int) -> QLabel:
 _HIGHLIGHT_COLOR = QColor(COLORS.HIGHLIGHT_ROW)
 _MONO_FONT = QFont(FONTS.MONO_FAMILY, FONTS.MONO_SIZE)
 _MATURED_COLOR = QColor(COLORS.INK_3)   # whole-row demote + PAID text color
+# Wide enough for "Data de vencimento:" in Segoe UI 10pt; narrower clips in pt-BR.
+_DETAIL_LABEL_WIDTH = 140
 
 
 def _format_type(rate: Rate) -> str:
@@ -612,6 +614,7 @@ class _EditableField(QWidget):
         self._committing = False
 
         self._stack = QStackedLayout(self)
+        self._stack.setContentsMargins(0, 0, 0, 0)
 
         self._label = QLabel()
         self._label.setWordWrap(True)
@@ -975,7 +978,7 @@ class InvestmentDetailPanel(QWidget):
             row.setContentsMargins(0, 2, 0, 2)
             lbl = QLabel(label_text + ":")
             lbl.setProperty("role", "fieldLabel")
-            lbl.setFixedWidth(100)
+            lbl.setFixedWidth(_DETAIL_LABEL_WIDTH)
             lbl.setAlignment(Qt.AlignmentFlag.AlignTop)
             # Custodian gets autocomplete injected; other fields have no completions.
             completions = self._main_window._distinct_custodians() if key == "custodian" else None
@@ -984,7 +987,7 @@ class InvestmentDetailPanel(QWidget):
                 val.set_display_font(_MONO_FONT)
             self._field_values[key] = val
             row.addWidget(lbl)
-            row.addWidget(val, stretch=1)
+            row.addWidget(val, stretch=1, alignment=Qt.AlignmentFlag.AlignTop)
             body_layout.addLayout(row)
 
         body_layout.addStretch()
@@ -2529,6 +2532,20 @@ class ConglomerateEditDelegate(QStyledItemDelegate):
         editor.setCompleter(completer)
         return editor
 
+    def paint(self, painter, option, index) -> None:
+        super().paint(painter, option, index)
+        # Subtle dotted underline: signals inline-editability without competing
+        # with selection highlight, [unverified] italic, or matured-row demote.
+        painter.save()
+        pen = QPen(QColor(COLORS.INK_3))
+        pen.setStyle(Qt.PenStyle.DotLine)
+        pen.setWidth(1)
+        painter.setPen(pen)
+        r = option.rect
+        y = r.bottom() - 2
+        painter.drawLine(r.left() + 4, y, r.right() - 4, y)
+        painter.restore()
+
     def setEditorData(self, editor, index) -> None:
         editor.setText(index.data(Qt.ItemDataRole.EditRole) or "")
 
@@ -3325,6 +3342,7 @@ class MainWindow(QMainWindow):
         cong = inv.issuer.conglomerate
         cong_item = QTableWidgetItem(display_conglomerate(cong))
         cong_item.setData(Qt.ItemDataRole.EditRole, cong)
+        cong_item.setToolTip(STR.TIP_CONG_EDITABLE)
         if cong.startswith(UNVERIFIED_CONGLOMERATE_PREFIX):
             font = cong_item.font()
             font.setItalic(True)

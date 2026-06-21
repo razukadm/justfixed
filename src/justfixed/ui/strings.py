@@ -282,5 +282,8 @@ class Strings:
     DETAIL_FGC_EXPOSURE: str = "Exposição: {value}"
     DETAIL_FGC_CAP: str = "Teto: {value}"
 
+    # ── B38: Conglomerate cell affordance ────────────────────────────────────────
+    TIP_CONG_EDITABLE: str = "Duplo-clique para editar o conglomerado."
+
 
 STR = Strings()
