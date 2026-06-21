@@ -269,5 +269,21 @@ class Strings:
     CALLOUT_ASOF: str = "DATA-BASE"
     MSG_PROJECTED_COUNT: str = "Projetados {count} investimentos em {date}."
 
+    # ── B38: FGC counter (totals strip + toast) ─────────────────────────────────
+    FGC_COUNT_OVER: str = "▲ {n} acima"
+    FGC_COUNT_APPROACHING: str = "◐ {n} próximo"
+    FGC_COUNT_OK: str = "{n} ok"
+    FGC_TOAST_OVER_1: str = "· 1 conglomerado acima do teto FGC"
+    FGC_TOAST_OVER_N: str = "· {n} conglomerados acima do teto FGC"
+
+    # ── B38: Detail panel FGC block ──────────────────────────────────────────────
+    DETAIL_FGC_TITLE: str = "Concentração FGC"
+    DETAIL_FGC_NO_PROJ: str = "Projetar para ver situação FGC."
+    DETAIL_FGC_EXPOSURE: str = "Exposição: {value}"
+    DETAIL_FGC_CAP: str = "Teto: {value}"
+
+    # ── B38: Conglomerate column same-name collapse ──────────────────────────────
+    CONG_SAME: str = "— mesmo —"
+
 
 STR = Strings()

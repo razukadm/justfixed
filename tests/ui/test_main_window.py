@@ -567,6 +567,7 @@ class TestUpdateTotals:
         self_mock._current_label = MagicMock()
         self_mock._projected_label = MagicMock()
         self_mock._rows_label = MagicMock()
+        self_mock._fgc_count_label = MagicMock()
         return self_mock
 
     def _active_inv(self) -> MagicMock:
@@ -653,6 +654,7 @@ class TestUpdateTotalsMatured:
         self_mock._current_label = MagicMock()
         self_mock._projected_label = MagicMock()
         self_mock._rows_label = MagicMock()
+        self_mock._fgc_count_label = MagicMock()
         return self_mock
 
     def _active_inv(self) -> MagicMock:
@@ -787,6 +789,7 @@ def _make_integration_self_mock(
     self_mock._current_label = MagicMock()
     self_mock._projected_label = MagicMock()
     self_mock._rows_label = MagicMock()
+    self_mock._fgc_count_label = MagicMock()
 
     self_mock._repo = MagicMock()
     self_mock._repo.list_all.return_value = investments

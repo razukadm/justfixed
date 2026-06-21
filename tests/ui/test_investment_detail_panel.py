@@ -46,6 +46,7 @@ def _mock_inv(**overrides):
     inv.issuer = types.SimpleNamespace(
         name="Banco Inter",
         conglomerate="Banco Inter S.A.",
+        kind=IssuerKind.COMMERCIAL_BANK,
     )
     inv.product = ProductType.CDB
     inv.principal.to_display.return_value = "R$ 10.000,00"

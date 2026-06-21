@@ -156,8 +156,8 @@ _PT_BR = QLocale(QLocale.Language.Portuguese, QLocale.Country.Brazil)
 # Keyed by .value string — both enums share "under"/"approaching"/"over".
 _BADGE_STYLE: dict[str, tuple[str, str]] = {
     "under":       ("● " + STR.FGC_UNDER,       COLORS.FGC_UNDER),
-    "approaching": ("● " + STR.FGC_APPROACHING, COLORS.WARN),
-    "over":        ("● " + STR.FGC_OVER,        COLORS.FGC_OVER),
+    "approaching": ("◐ " + STR.FGC_APPROACHING, COLORS.WARN),
+    "over":        ("▲ " + STR.FGC_OVER,        COLORS.FGC_OVER),
     "not_fgc":     (STR.FGC_NA,                 COLORS.FGC_NA),
 }
 
@@ -254,14 +254,17 @@ def _is_matured(inv) -> bool:
 def compute_totals(
     investments: list,
     cache: list[ProjectionResult] | None,
+    fgc_status_by_id: dict | None = None,
 ) -> dict:
     """Summarise visible investments and their projection data.
 
-    Returns a dict with four keys:
+    Returns a dict with five keys:
       principal_total     — always a Money (sum of inv.principal).
       current_value_total — Money if all investments are in cache, else None.
       projected_total     — Money (gross_at_maturity) if all in cache, else None.
       row_count           — int, always len(investments).
+      fgc_counts          — dict(over, approaching, ok) per distinct conglomerate,
+                            or None when fgc_status_by_id is not provided.
 
     None semantics: "we have investments but the cache doesn't cover all of
     them." Zero investments with a cache present gives zero totals, not None
@@ -269,6 +272,22 @@ def compute_totals(
     """
     row_count = len(investments)
     principal_total = sum((inv.principal for inv in investments), Money.zero())
+
+    # FGC counts — per distinct conglomerate (all investments in a conglomerate
+    # share the same current_status, so we just deduplicate by conglomerate name).
+    if fgc_status_by_id:
+        cong_statuses: dict[str, str] = {}
+        for inv in investments:
+            status = fgc_status_by_id.get(inv.id)
+            if status is not None and status.value != "not_fgc":
+                cong_statuses[inv.issuer.conglomerate] = status.value
+        fgc_counts: dict | None = {
+            "over":        sum(1 for s in cong_statuses.values() if s == "over"),
+            "approaching": sum(1 for s in cong_statuses.values() if s == "approaching"),
+            "ok":          sum(1 for s in cong_statuses.values() if s == "under"),
+        }
+    else:
+        fgc_counts = None
 
     if not investments:
         current_value_total = Money.zero() if cache is not None else None
@@ -278,6 +297,7 @@ def compute_totals(
             "current_value_total": current_value_total,
             "projected_total": projected_total,
             "row_count": row_count,
+            "fgc_counts": fgc_counts,
         }
 
     if not cache:
@@ -286,6 +306,7 @@ def compute_totals(
             "current_value_total": None,
             "projected_total": None,
             "row_count": row_count,
+            "fgc_counts": fgc_counts,
         }
 
     proj_by_id = {p.investment.id: p for p in cache}
@@ -299,6 +320,7 @@ def compute_totals(
                 "current_value_total": None,
                 "projected_total": None,
                 "row_count": row_count,
+                "fgc_counts": fgc_counts,
             }
         current_values.append(proj.current_value)
         projected_values.append(proj.gross_at_maturity)
@@ -308,6 +330,7 @@ def compute_totals(
         "current_value_total": sum(current_values, Money.zero()),
         "projected_total": sum(projected_values, Money.zero()),
         "row_count": row_count,
+        "fgc_counts": fgc_counts,
     }
 
 
@@ -936,6 +959,8 @@ class InvestmentDetailPanel(QWidget):
         self._error_label.hide()
         layout.addWidget(self._error_label)
 
+        layout.addWidget(self._build_fgc_section())
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -1102,6 +1127,78 @@ class InvestmentDetailPanel(QWidget):
         self._proj_panel.set_content(self._proj_stack)
         return self._proj_panel
 
+    def _build_fgc_section(self) -> Panel:
+        """Build the FGC-concentration Panel; stored refs allow _refresh_fgc_block() to update it."""
+        self._fgc_stack = QStackedWidget()
+
+        placeholder = QLabel(STR.DETAIL_FGC_NO_PROJ)
+        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        placeholder.setProperty("role", "emptyState")
+        placeholder.setWordWrap(True)
+        self._fgc_stack.addWidget(placeholder)   # index 0
+
+        body = QWidget()
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(10, 8, 10, 12)
+        bl.setSpacing(4)
+
+        self._fgc_exposure_lbl = QLabel()
+        self._fgc_cap_lbl = QLabel()
+        self._fgc_badge_lbl = QLabel()
+
+        bl.addWidget(self._fgc_exposure_lbl)
+        bl.addWidget(self._fgc_cap_lbl)
+        bl.addWidget(self._fgc_badge_lbl)
+        bl.addStretch()
+
+        self._fgc_stack.addWidget(body)          # index 1
+
+        # The stack is mounted in a non-stretching parent outside the scroll area,
+        # so it collapses to the placeholder's (index-0) height by default.
+        # Pin the minimum to the body page's natural sizeHint so index 1 never
+        # overruns. The stretch above contributes 0 to sizeHint so is harmless.
+        self._fgc_stack.setMinimumHeight(body.sizeHint().height())
+
+        self._fgc_panel = Panel(title=STR.DETAIL_FGC_TITLE)
+        self._fgc_panel.set_content(self._fgc_stack)
+        return self._fgc_panel
+
+    def _refresh_fgc_block(self) -> None:
+        """Update the FGC-concentration block from main_window.projection_cache."""
+        cache = self._main_window.projection_cache
+        if self._current_inv is None or not cache:
+            self._fgc_stack.setCurrentIndex(0)
+            return
+        if self._current_inv.issuer.kind == IssuerKind.TREASURY:
+            self._fgc_stack.setCurrentIndex(0)
+            return
+        inv_id = self._current_inv.id
+        # Guard: only proceed if this investment is actually in the cache.
+        # This also protects against non-list truthy values (e.g. test mocks)
+        # by safely iterating before calling the engine.
+        if not any(p.investment.id == inv_id for p in cache):
+            self._fgc_stack.setCurrentIndex(0)
+            return
+        report = fgc_concentration_report_from_projections(cache)
+        cong_entry = next(
+            (c for c in report.conglomerates
+             if any(ie.investment_id == inv_id for ie in c.investments)),
+            None,
+        )
+        if cong_entry is None:
+            self._fgc_stack.setCurrentIndex(0)
+            return
+        self._fgc_exposure_lbl.setText(
+            STR.DETAIL_FGC_EXPOSURE.format(value=cong_entry.current_exposure.to_display())
+        )
+        self._fgc_cap_lbl.setText(
+            STR.DETAIL_FGC_CAP.format(value=FGC_PER_CONGLOMERATE_LIMIT.to_display())
+        )
+        label, color = _BADGE_STYLE[cong_entry.current_status.value]
+        self._fgc_badge_lbl.setText(label)
+        self._fgc_badge_lbl.setStyleSheet(f"color: {color};")
+        self._fgc_stack.setCurrentIndex(1)
+
     def refresh_projection(self) -> None:
         """Update the projection section from main_window.projection_cache.
 
@@ -1112,6 +1209,7 @@ class InvestmentDetailPanel(QWidget):
         if self._current_inv is None or not cache:
             self._proj_stack.setCurrentIndex(0)
             self._proj_panel.set_meta(None)
+            self._refresh_fgc_block()
             return
         proj = next(
             (p for p in cache if p.investment.id == self._current_inv.id), None
@@ -1119,6 +1217,7 @@ class InvestmentDetailPanel(QWidget):
         if proj is None:
             self._proj_stack.setCurrentIndex(0)
             self._proj_panel.set_meta(None)
+            self._refresh_fgc_block()
             return
         tb = proj.tax_breakdown
         tax_pct = _format_brazilian_percent(tb.tax_rate * Decimal("100"))
@@ -1141,6 +1240,7 @@ class InvestmentDetailPanel(QWidget):
         self._proj_net_lbl.setText(proj.net_at_maturity.to_display())
         self._proj_panel.set_meta(STR.PROJ_AS_OF.format(date=proj.as_of.strftime('%d/%m/%Y')))
         self._proj_stack.setCurrentIndex(1)
+        self._refresh_fgc_block()
 
     # ── Delete ────────────────────────────────────────────────────────────────
 
@@ -2729,11 +2829,14 @@ class MainWindow(QMainWindow):
         self._projected_label = QLabel(STR.SUMMARY_PROJECTED.format(value="—"))
         self._projected_label.setFont(_MONO_FONT)
         self._rows_label = QLabel(STR.ROWS.format(n=0))
+        self._fgc_count_label = QLabel()
         totals_row.addWidget(self._principal_label)
         totals_row.addSpacing(16)
         totals_row.addWidget(self._current_label)
         totals_row.addSpacing(16)
         totals_row.addWidget(self._projected_label)
+        totals_row.addSpacing(16)
+        totals_row.addWidget(self._fgc_count_label)
         totals_row.addStretch()
         totals_row.addWidget(self._rows_label)
         root.addWidget(totals_container)
@@ -3090,7 +3193,8 @@ class MainWindow(QMainWindow):
         matured = [inv for inv in visible if     _is_matured(inv)]
 
         # Totals always exclude matured rows, independent of the Hide-matured toggle.
-        totals = compute_totals(active, self.projection_cache)
+        fgc_by_id = self._fgc_status_by_id()
+        totals = compute_totals(active, self.projection_cache, fgc_by_id)
 
         principal = totals["principal_total"].to_display()
         current = (
@@ -3105,6 +3209,21 @@ class MainWindow(QMainWindow):
         self._principal_label.setText(STR.SUMMARY_PRINCIPAL.format(value=principal))
         self._current_label.setText(STR.SUMMARY_CURRENT.format(value=current))
         self._projected_label.setText(STR.SUMMARY_PROJECTED.format(value=projected))
+
+        fgc_counts = totals.get("fgc_counts")
+        if fgc_counts is None:
+            self._fgc_count_label.setText("")
+        elif fgc_counts["over"] > 0:
+            self._fgc_count_label.setText(STR.FGC_COUNT_OVER.format(n=fgc_counts["over"]))
+            self._fgc_count_label.setStyleSheet(f"color: {COLORS.FGC_OVER};")
+        elif fgc_counts["approaching"] > 0:
+            self._fgc_count_label.setText(STR.FGC_COUNT_APPROACHING.format(n=fgc_counts["approaching"]))
+            self._fgc_count_label.setStyleSheet(f"color: {COLORS.WARN};")
+        elif fgc_counts["ok"] > 0:
+            self._fgc_count_label.setText(STR.FGC_COUNT_OK.format(n=fgc_counts["ok"]))
+            self._fgc_count_label.setStyleSheet(f"color: {COLORS.FGC_UNDER};")
+        else:
+            self._fgc_count_label.setText("")
 
         if matured:
             # At least one matured row visible (Hide matured toggle is OFF).
@@ -3202,7 +3321,7 @@ class MainWindow(QMainWindow):
     ) -> None:
         self._cell(row, _COL_ISSUER, inv.issuer.name)
 
-        # Conglomerate — gray italic when [unverified]
+        # Conglomerate — gray italic when [unverified]; "— mesmo —" when issuer==cong
         cong = inv.issuer.conglomerate
         cong_item = QTableWidgetItem(display_conglomerate(cong))
         cong_item.setData(Qt.ItemDataRole.EditRole, cong)
@@ -3210,6 +3329,9 @@ class MainWindow(QMainWindow):
             font = cong_item.font()
             font.setItalic(True)
             cong_item.setFont(font)
+            cong_item.setForeground(QColor(COLORS.INK_3))
+        elif cong == inv.issuer.name:
+            cong_item.setText(STR.CONG_SAME)
             cong_item.setForeground(QColor(COLORS.INK_3))
         self._table.setItem(row, _COL_CONGLOMERATE, cong_item)
 
@@ -3882,10 +4004,19 @@ class MainWindow(QMainWindow):
     def _on_project_done(self, results: list) -> None:
         self._set_busy(False)
         self._ts_label.setText(STR.STATUS_PROJECTED_TS.format(ts=f"{datetime.now():%Y-%m-%d %H:%M}"))
-        self.statusBar().showMessage(
-            STR.MSG_PROJECTED_COUNT.format(count=len(results), date=f"{date.today():%d/%m/%Y}"), 6000
-        )
         self.projection_cache = results
+        report = fgc_concentration_report_from_projections(results)
+        over_n = sum(1 for c in report.conglomerates if c.current_status.value == "over")
+        if over_n == 1:
+            fgc_echo = f"  {STR.FGC_TOAST_OVER_1}"
+        elif over_n > 1:
+            fgc_echo = f"  {STR.FGC_TOAST_OVER_N.format(n=over_n)}"
+        else:
+            fgc_echo = ""
+        self.statusBar().showMessage(
+            STR.MSG_PROJECTED_COUNT.format(count=len(results), date=f"{date.today():%d/%m/%Y}") + fgc_echo,
+            6000,
+        )
         self.refresh_table()
         self._detail_panel.refresh_projection()
 
