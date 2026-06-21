@@ -925,7 +925,7 @@ genuine findings:
   editable column. **Why parked:** (1) no real density pressure — the tab is at its
   column-count limit but has ample horizontal whitespace, so the redundant column
   crowds nothing out; (2) the column is load-bearing as the editable curation
-  surface, and the #6 affordance (shipped `fd2ab55`) now advertises that
+  surface, and the #6 affordance (hover/focus pencil glyph, shipped `9f7ec4d`) now advertises that
   editability — de-emphasizing it would fight that; (3) any display/value divergence
   on this editable column is a proven data-integrity hazard (the "— mesmo —"
   incident). **Revisit trigger:** only if the Investments tab needs a NEW column and
@@ -943,7 +943,7 @@ genuine findings:
 
 **Scope note:** To stay actionable rather than becoming a permanent "make it nicer" item, this is a bounded design-review with a definable output (the prioritized improvement list), not open-ended polishing. UI design work for this project routes through the Claude Design tool — see CLAUDE.md.
 
-**Trigger to revisit:** B38's actionable work is complete. #6 (Conglomerado-cell edit affordance) and the two detail-panel follow-ups (label/value baseline alignment; widened label so "Data de vencimento:" no longer clips) shipped 2026-06-20 in `fd2ab55`. #7 (column density) is parked won't-fix — see its finding above for the reasoning and the conditional revisit trigger. No B38 work remains open.
+**Trigger to revisit:** B38's actionable work is complete. #6 (Conglomerado-cell edit affordance) shipped as an always-on dotted underline in `fd2ab55`, but that read as table gridlines; it was replaced 2026-06-21 by a hover/focus pencil glyph in `9f7ec4d` (drawn only on the hovered/focused row at the cell trailing edge; matured rows use the demoted color). The two detail-panel follow-ups (label/value baseline alignment; widened label so "Data de vencimento:" no longer clips) shipped 2026-06-20 in `fd2ab55`. #7 (column density) is parked won't-fix — see its finding above for the reasoning and the conditional revisit trigger. No B38 work remains open.
 
 ### B39. InfoMoney endpoint investigation for automated curve fetch
 
