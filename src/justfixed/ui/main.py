@@ -3321,7 +3321,7 @@ class MainWindow(QMainWindow):
     ) -> None:
         self._cell(row, _COL_ISSUER, inv.issuer.name)
 
-        # Conglomerate — gray italic when [unverified]; "— mesmo —" when issuer==cong
+        # Conglomerate — gray italic when [unverified]
         cong = inv.issuer.conglomerate
         cong_item = QTableWidgetItem(display_conglomerate(cong))
         cong_item.setData(Qt.ItemDataRole.EditRole, cong)
@@ -3329,9 +3329,6 @@ class MainWindow(QMainWindow):
             font = cong_item.font()
             font.setItalic(True)
             cong_item.setFont(font)
-            cong_item.setForeground(QColor(COLORS.INK_3))
-        elif cong == inv.issuer.name:
-            cong_item.setText(STR.CONG_SAME)
             cong_item.setForeground(QColor(COLORS.INK_3))
         self._table.setItem(row, _COL_CONGLOMERATE, cong_item)
 

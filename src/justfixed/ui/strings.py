@@ -282,8 +282,5 @@ class Strings:
     DETAIL_FGC_EXPOSURE: str = "Exposição: {value}"
     DETAIL_FGC_CAP: str = "Teto: {value}"
 
-    # ── B38: Conglomerate column same-name collapse ──────────────────────────────
-    CONG_SAME: str = "— mesmo —"
-
 
 STR = Strings()
