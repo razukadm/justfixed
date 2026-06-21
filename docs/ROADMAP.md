@@ -914,7 +914,7 @@ genuine findings:
   `_fgc_status_by_id()` map as the badges), and a detail-panel "Concentração FGC"
   block (exposure vs the R$ 250k cap). Verified live on UNDER and OVER states.
 
-- **#7 conglomerate/issuer column density — OPEN (one approach reverted).** The
+- **#7 conglomerate/issuer column density — PARKED (won't-fix, 2026-06-20).** The
   Investments tab repeats Conglomerado≈Emissor on most rows. Dir B (collapse
   same-name cells to "— mesmo —", display-only) shipped in `358a518` and was
   reverted in `b0ca4be`: the display string was re-entered as a real conglomerate
@@ -922,8 +922,16 @@ genuine findings:
   up out-of-band via the repository API). **Known-bad approach:** a display string
   that resembles an enterable value can round-trip into stored data, even when the
   collapse is display-only — do not reuse "— mesmo —"-style placeholders on an
-  editable column. #7 stays open; a future density approach must not put a
-  re-typable sentinel in the editable Conglomerado cell.
+  editable column. **Why parked:** (1) no real density pressure — the tab is at its
+  column-count limit but has ample horizontal whitespace, so the redundant column
+  crowds nothing out; (2) the column is load-bearing as the editable curation
+  surface, and the #6 affordance (shipped `fd2ab55`) now advertises that
+  editability — de-emphasizing it would fight that; (3) any display/value divergence
+  on this editable column is a proven data-integrity hazard (the "— mesmo —"
+  incident). **Revisit trigger:** only if the Investments tab needs a NEW column and
+  genuinely runs out of horizontal space. At that point the ONLY safe approach is
+  real-value-always with purely typographic de-emphasis (e.g. muted color on
+  redundant rows) — never a displayed string that differs from the stored value.
 
 - **#2 blank-until-Project** reinforced existing **B21** (auto-project); logged there.
 
@@ -935,7 +943,7 @@ genuine findings:
 
 **Scope note:** To stay actionable rather than becoming a permanent "make it nicer" item, this is a bounded design-review with a definable output (the prioritized improvement list), not open-ended polishing. UI design work for this project routes through the Claude Design tool — see CLAUDE.md.
 
-**Trigger to revisit:** Open items remaining after the 2026-06-20 pass: #7 column density (any non-sentinel approach), #6 Conglomerado-cell edit affordance (more urgent post-revert), and two small follow-ups (detail-panel label/value alignment; clipped "Data de vencimento:" label). Address before beta release.
+**Trigger to revisit:** B38's actionable work is complete. #6 (Conglomerado-cell edit affordance) and the two detail-panel follow-ups (label/value baseline alignment; widened label so "Data de vencimento:" no longer clips) shipped 2026-06-20 in `fd2ab55`. #7 (column density) is parked won't-fix — see its finding above for the reasoning and the conditional revisit trigger. No B38 work remains open.
 
 ### B39. InfoMoney endpoint investigation for automated curve fetch
 
