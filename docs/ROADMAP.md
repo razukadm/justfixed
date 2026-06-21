@@ -902,6 +902,31 @@ to B37 (i18n), which will revisit these strings for translation regardless.
 
 ### B38. UI design-review pass
 
+**Status:** Review ran 2026-06-20. Of 11 findings, most were stale mockup drift
+(already shipped: B44 detail-panel projection, B42 custodian filter, B22 hide-matured;
+or already-correct: no toolbar-green overrides, Dev tab is JUSTFIXED_DEV-gated). Two
+genuine findings:
+
+- **#1 FGC prominence — SHIPPED** (`358a518`). Severity now reads at a glance:
+  glyph escalation in `_BADGE_STYLE` (over `▲`, approaching `◐`, under `●`,
+  propagating to table/accordion/rollup from one dict), a per-conglomerate FGC
+  counter in the totals strip with a status-bar echo (both derived from the same
+  `_fgc_status_by_id()` map as the badges), and a detail-panel "Concentração FGC"
+  block (exposure vs the R$ 250k cap). Verified live on UNDER and OVER states.
+
+- **#7 conglomerate/issuer column density — OPEN (one approach reverted).** The
+  Investments tab repeats Conglomerado≈Emissor on most rows. Dir B (collapse
+  same-name cells to "— mesmo —", display-only) shipped in `358a518` and was
+  reverted in `b0ca4be`: the display string was re-entered as a real conglomerate
+  name through ordinary editing/add-investment use, corrupting three DB rows (cleaned
+  up out-of-band via the repository API). **Known-bad approach:** a display string
+  that resembles an enterable value can round-trip into stored data, even when the
+  collapse is display-only — do not reuse "— mesmo —"-style placeholders on an
+  editable column. #7 stays open; a future density approach must not put a
+  re-typable sentinel in the editable Conglomerado cell.
+
+- **#2 blank-until-Project** reinforced existing **B21** (auto-project); logged there.
+
 **Source:** Session 2026-05-21.
 
 **What it is:** A holistic review of the UI as a whole — distinct from the specific, already-scoped UI features (B19, B22, B25, B27, B28). Step back, evaluate the current interface against real usage, and produce a prioritized list of improvements. The specific improvements identified then either become their own roadmap entries or feed the existing ones.
@@ -910,7 +935,7 @@ to B37 (i18n), which will revisit these strings for translation regardless.
 
 **Scope note:** To stay actionable rather than becoming a permanent "make it nicer" item, this is a bounded design-review with a definable output (the prioritized improvement list), not open-ended polishing. UI design work for this project routes through the Claude Design tool — see CLAUDE.md.
 
-**Trigger to revisit:** Before beta release, or when accumulated UI friction makes a deliberate review worthwhile.
+**Trigger to revisit:** Open items remaining after the 2026-06-20 pass: #7 column density (any non-sentinel approach), #6 Conglomerado-cell edit affordance (more urgent post-revert), and two small follow-ups (detail-panel label/value alignment; clipped "Data de vencimento:" label). Address before beta release.
 
 ### B39. InfoMoney endpoint investigation for automated curve fetch
 
@@ -1148,7 +1173,7 @@ dev-summary question (step 6) are all closed.
 5. ~~Extract `ProvenanceCallout` and `Panel`~~ SHIPPED (`widgets/`).
 6. Remove redundant dev-tab curve summaries.
 
-**Relationship to B38:** B38 is the open-ended UI design-review pass.
+**Relationship to B38:** B38 is the UI design-review pass (ran 2026-06-20; see B38).
 B43 infrastructure is complete; open items are cleanup/polish.
 
 ---

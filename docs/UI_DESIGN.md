@@ -244,6 +244,11 @@ Color mapping:
 - `APPROACHING` → yellow badge or warning icon.
 - `OVER` → red badge or alert icon.
 
+> **Superseded by B38 (2026-06-20):** the single-color badge gained glyph severity
+> escalation (over `▲`, approaching `◐`, under `●`) so OVER reads without relying on
+> hue, plus a totals-strip counter, status-bar echo, and a detail-panel FGC block.
+> See ROADMAP B38. The A′ description above is the original design record.
+
 Treasury investments don't appear in the FGC report (the engine filters
 them out). Their badge cell should show a neutral indicator — a dash,
 or "N/A — Treasury", or similar. The point is the user sees "this
