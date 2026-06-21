@@ -1430,3 +1430,27 @@ B41 (Calculator tab) and B44 (C′ projection detail view) both shipped
 and B41b (Solve-Tesouro hardening) are deferred items spun off from
 B41. B32 and B33 shipped 2026-05-29 (commits `4ba3f5b`, `a958e68`); the
 GuaranteeFund milestone remains open.
+
+---
+
+## Session status — 2026-06-21
+
+**2026-06-21 — Tab bar restyle (seated cards).** Replaced the flat
+text+underline tab bar with seated-card tabs (`a0168de`): 8 new `TAB_*`
+tokens (theme.py), top-corner-radius cards, 600/500 active/inactive
+weight, a deliberately cooler palette (#f6f6f6/#cccccc) than the warm
+panel tokens. The active tab merges into the content pane via a white
+bottom border painted over the pane seam — `border-bottom: 1px solid
+TAB_ACTIVE_BG` plus `margin-bottom: -1px` — which removed the line under
+the selected tab. `self._tabs` carries objectName `mainTabs` so the
+container/pane rules can be scoped. Qt note: `background-color` on
+`QTabBar`/`QTabWidget` does NOT paint a gutter band (two QSS attempts
+failed visually); the gray gutter was dropped — the merged seam alone
+makes the bar read. **Dev-tab de-emphasis — won't-fix:** attempted greying the (dev-only)
+Dev tab to INK_3 via `setTabTextColor`, but the QSS `QTabBar::tab`
+color rule overrides programmatic per-tab color (the API stores it and
+`tabTextColor()` returns it, but the render uses the stylesheet color —
+a false-green for any test asserting on the stored value). Per-tab
+color isn't expressible in global QSS by label either. Dropped as not
+worth a custom-paint fight for a tab that never appears in production
+builds.
