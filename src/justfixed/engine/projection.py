@@ -26,11 +26,19 @@ from decimal import Decimal
 from justfixed.domain.investment import Investment
 from justfixed.domain.money import Money
 from justfixed.domain.product import rules_for
-from justfixed.engine.accrual import accrue
+from justfixed.domain.rates import PostFixedIPCA
+from justfixed.engine.accrual import _accrue_step, _resolve_rate, accrue
 from justfixed.engine.calendar import business_days_between
-from justfixed.engine.cashflow import CashFlow, schedule
+from justfixed.engine.cashflow import CashFlow, CashFlowKind, schedule
 from justfixed.engine.curve import Curve
 from justfixed.engine.tax import TaxResult, compute_ir
+from justfixed.engine.trace import (
+    Assumptions,
+    CurveProvenance,
+    FlowTrace,
+    ProjectionTrace,
+    TaxTrace,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,48 +92,14 @@ def project(
         - If as_of >= maturity_date: current_value = gross_at_maturity.
         - Otherwise: current_value = principal accrued to as_of.
     """
-    # ----- 1. Current value (accrual from purchase to as_of) -----
-    current_value = _compute_current_value(
-        investment, as_of,
-        assumed_cdi=assumed_cdi,
-        assumed_ipca=assumed_ipca,
-        cdi_curve=cdi_curve,
-        ipca_curve=ipca_curve,
-    )
-
-    # ----- 2. Cash flow schedule -----
-    flows = schedule(
+    return _compute_projection(
         investment,
+        as_of=as_of,
         assumed_cdi=assumed_cdi,
         assumed_ipca=assumed_ipca,
         cdi_curve=cdi_curve,
         ipca_curve=ipca_curve,
-    )
-
-    # ----- 3. Gross at maturity (sum of all cash flows) -----
-    gross_at_maturity = _sum_money(
-        [f.amount for f in flows], currency=investment.principal.currency
-    )
-
-    # ----- 4. Tax: applied to total gain over the holding period -----
-    rule = rules_for(investment.product)
-    holding_calendar_days = (investment.maturity_date - investment.purchase_date).days
-    tax_breakdown = compute_ir(
-        principal=investment.principal,
-        gross=gross_at_maturity,
-        treatment=rule.tax_treatment,
-        holding_days=holding_calendar_days,
-    )
-
-    return ProjectionResult(
-        investment=investment,
-        as_of=as_of,
-        current_value=current_value,
-        cash_flows=flows,
-        gross_at_maturity=gross_at_maturity,
-        tax_breakdown=tax_breakdown,
-        net_at_maturity=tax_breakdown.net,
-    )
+    )[0]
 
 
 def _compute_current_value(
@@ -138,30 +112,14 @@ def _compute_current_value(
     ipca_curve: Curve | None = None,
 ) -> Money:
     """Accrual from purchase_date to as_of, capped at maturity_date."""
-    if as_of <= investment.purchase_date:
-        # Hasn't started earning yet (or just bought).
-        return investment.principal
-
-    # Don't accrue past maturity.
-    effective_date = min(as_of, investment.maturity_date)
-    bizdays = business_days_between(investment.purchase_date, effective_date)
-    effective_cdi = (
-        cdi_curve.rate_at(effective_date)
-        if (cdi_curve is not None and cdi_curve.vertices)
-        else assumed_cdi
+    steps = _current_value_steps(
+        investment, as_of,
+        assumed_cdi=assumed_cdi,
+        assumed_ipca=assumed_ipca,
+        cdi_curve=cdi_curve,
+        ipca_curve=ipca_curve,
     )
-    effective_ipca = (
-        ipca_curve.rate_at(investment.maturity_date)
-        if (ipca_curve is not None and ipca_curve.vertices)
-        else assumed_ipca
-    )
-    return accrue(
-        investment.principal,
-        investment.rate,
-        bizdays,
-        assumed_cdi=effective_cdi,
-        assumed_ipca=effective_ipca,
-    )
+    return steps[-1].closing_balance if steps else investment.principal
 
 
 def _sum_money(amounts: list[Money], *, currency: str) -> Money:
@@ -170,3 +128,231 @@ def _sum_money(amounts: list[Money], *, currency: str) -> Money:
     for amount in amounts:
         total = total + amount
     return total
+
+
+def _current_value_steps(
+    investment: Investment,
+    as_of: date,
+    *,
+    assumed_cdi: Decimal | None,
+    assumed_ipca: Decimal | None,
+    cdi_curve: Curve | None,
+    ipca_curve: Curve | None,
+) -> tuple:
+    """Accrual step(s) for current value, or () when there is nothing to accrue."""
+    if as_of <= investment.purchase_date:
+        return ()
+
+    effective_date = min(as_of, investment.maturity_date)
+    bizdays = business_days_between(investment.purchase_date, effective_date)
+    if bizdays == 0:
+        return ()
+
+    match investment.rate:
+        case PostFixedIPCA():
+            lookup_date = investment.maturity_date
+        case _:
+            lookup_date = effective_date
+
+    rate_resolution = _resolve_rate(
+        investment.rate,
+        lookup_date=lookup_date,
+        assumed_cdi=assumed_cdi,
+        assumed_ipca=assumed_ipca,
+        cdi_curve=cdi_curve,
+        ipca_curve=ipca_curve,
+    )
+    step = _accrue_step(
+        investment.principal,
+        rate_resolution,
+        from_date=investment.purchase_date,
+        to_date=effective_date,
+        business_days=bizdays,
+    )
+    return (step,)
+
+
+def _flow_traces(
+    investment: Investment,
+    flows: list[CashFlow],
+    *,
+    assumed_cdi: Decimal | None,
+    assumed_ipca: Decimal | None,
+    cdi_curve: Curve | None,
+    ipca_curve: Curve | None,
+) -> tuple:
+    """Build one FlowTrace per cash flow, mirroring schedule() without recomputing amounts."""
+    currency = investment.principal.currency
+    zero = Money.zero(currency)
+    period_start = investment.purchase_date
+    result: list[FlowTrace] = []
+
+    for cf in flows:
+        du = business_days_between(period_start, cf.date)
+
+        match investment.rate:
+            case PostFixedIPCA():
+                lookup_date = investment.maturity_date
+            case _:
+                lookup_date = cf.date
+
+        rate_resolution = _resolve_rate(
+            investment.rate,
+            lookup_date=lookup_date,
+            assumed_cdi=assumed_cdi,
+            assumed_ipca=assumed_ipca,
+            cdi_curve=cdi_curve,
+            ipca_curve=ipca_curve,
+        )
+        step = _accrue_step(
+            investment.principal,
+            rate_resolution,
+            from_date=period_start,
+            to_date=cf.date,
+            business_days=du,
+        )
+
+        interest_component = step.closing_balance - investment.principal
+        principal_component = (
+            investment.principal
+            if cf.kind in {CashFlowKind.PRINCIPAL, CashFlowKind.COUPON_AND_PRINCIPAL}
+            else zero
+        )
+
+        result.append(FlowTrace(
+            pay_date=cf.date,
+            kind=cf.kind,
+            amount=cf.amount,
+            interest_component=interest_component,
+            principal_component=principal_component,
+            accrual=(step,),
+        ))
+        period_start = cf.date
+
+    return tuple(result)
+
+
+def _compute_projection(
+    investment: Investment,
+    *,
+    as_of: date,
+    assumed_cdi: Decimal | None,
+    assumed_ipca: Decimal | None,
+    cdi_curve: Curve | None,
+    ipca_curve: Curve | None,
+) -> tuple:
+    """Single computation that produces both ProjectionResult and ProjectionTrace."""
+    # 1. Current value
+    cv_steps = _current_value_steps(
+        investment, as_of,
+        assumed_cdi=assumed_cdi, assumed_ipca=assumed_ipca,
+        cdi_curve=cdi_curve, ipca_curve=ipca_curve,
+    )
+    current_value = cv_steps[-1].closing_balance if cv_steps else investment.principal
+
+    # 2. Cash flow schedule
+    flows = schedule(
+        investment,
+        assumed_cdi=assumed_cdi, assumed_ipca=assumed_ipca,
+        cdi_curve=cdi_curve, ipca_curve=ipca_curve,
+    )
+
+    # 3. Flow traces (mirror schedule, carry amounts up)
+    flow_traces = _flow_traces(
+        investment, flows,
+        assumed_cdi=assumed_cdi, assumed_ipca=assumed_ipca,
+        cdi_curve=cdi_curve, ipca_curve=ipca_curve,
+    )
+
+    # 4. Gross at maturity
+    gross_at_maturity = _sum_money(
+        [f.amount for f in flows], currency=investment.principal.currency
+    )
+
+    # 5. Tax
+    rule = rules_for(investment.product)
+    holding_calendar_days = (investment.maturity_date - investment.purchase_date).days
+    tax_breakdown = compute_ir(
+        principal=investment.principal,
+        gross=gross_at_maturity,
+        treatment=rule.tax_treatment,
+        holding_days=holding_calendar_days,
+    )
+
+    # 6. Trace sub-objects
+    tax_trace = TaxTrace(
+        treatment=rule.tax_treatment,
+        holding_calendar_days=holding_calendar_days,
+        bracket_rate=tax_breakdown.tax_rate,
+        taxable_gain=tax_breakdown.gain,
+        tax_amount=tax_breakdown.tax_amount,
+        iof_modeled=False,
+    )
+
+    curve_anchor = None
+    for step in cv_steps:
+        if step.rate.source == "curve":
+            curve_anchor = step.rate.curve_anchor
+            break
+    if curve_anchor is None:
+        for ft in flow_traces:
+            for step in ft.accrual:
+                if step.rate.source == "curve":
+                    curve_anchor = step.rate.curve_anchor
+                    break
+            if curve_anchor is not None:
+                break
+
+    result = ProjectionResult(
+        investment=investment,
+        as_of=as_of,
+        current_value=current_value,
+        cash_flows=flows,
+        gross_at_maturity=gross_at_maturity,
+        tax_breakdown=tax_breakdown,
+        net_at_maturity=tax_breakdown.net,
+    )
+    trace = ProjectionTrace(
+        investment=investment,
+        as_of=as_of,
+        convention="252 bd/yr; B3/ANBIMA holidays",
+        current_value=current_value,
+        current_value_accrual=cv_steps,
+        cash_flows=flow_traces,
+        gross_at_maturity=gross_at_maturity,
+        tax=tax_trace,
+        net_at_maturity=tax_breakdown.net,
+        assumptions=Assumptions(
+            assumed_cdi=assumed_cdi,
+            assumed_ipca=assumed_ipca,
+        ),
+        curve_provenance=CurveProvenance(
+            source=None,
+            anchor=curve_anchor,
+        ),
+    )
+    return result, trace
+
+
+def project_traced(
+    investment: Investment,
+    *,
+    as_of: date,
+    assumed_cdi: Decimal | None = None,
+    assumed_ipca: Decimal | None = None,
+    cdi_curve: Curve | None = None,
+    ipca_curve: Curve | None = None,
+) -> ProjectionTrace:
+    """Project an investment and return the full calculation trace.
+
+    Same inputs as project(); returns a ProjectionTrace containing both
+    the results and every intermediate step that produced them.
+    """
+    return _compute_projection(
+        investment,
+        as_of=as_of,
+        assumed_cdi=assumed_cdi,
+        assumed_ipca=assumed_ipca,
+        cdi_curve=cdi_curve,
+        ipca_curve=ipca_curve,
+    )[1]
