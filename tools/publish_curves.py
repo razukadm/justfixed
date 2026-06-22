@@ -17,8 +17,11 @@ Requires the [tools] extra:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import importlib.metadata
 import json
 import re
+import shutil
 import subprocess
 import sys
 from datetime import date
@@ -270,7 +273,158 @@ def _resolve_b3_path(b3_arg: str | None, data_repo: str) -> Path:
     return Path(data_repo) / "BDI.pdf"
 
 
-def _parse_args() -> argparse.Namespace:
+# =============================================================================
+# Track B — provenance, retention, and deterministic re-derivation (F-02)
+# =============================================================================
+
+
+def resolve_tool_version() -> str | None:
+    """Return the installed justfixed package version, or None."""
+    try:
+        return importlib.metadata.version("justfixed")
+    except Exception:
+        return None
+
+
+def resolve_git_commit() -> str | None:
+    """Return short HEAD commit hash (+dirty if worktree is unclean), or None."""
+    try:
+        repo_root = Path(__file__).resolve().parent.parent
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            return None
+        commit = result.stdout.strip()
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+        if status.returncode == 0 and status.stdout.strip():
+            commit += "+dirty"
+        return commit
+    except Exception:
+        return None
+
+
+def _source_entry(
+    path: Path,
+    role: str,
+    produces: list[str],
+    retained: str,
+) -> dict:
+    data = path.read_bytes()
+    return {
+        "role": role,
+        "produces": produces,
+        "filename": path.name,
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "size_bytes": len(data),
+        "retained": retained,
+    }
+
+
+def build_provenance(
+    *,
+    anbima_path: Path,
+    b3_path: Path,
+    anbima_retained: str,
+    b3_retained: str,
+    tool_version: str | None = None,
+    tool_git_commit: str | None = None,
+) -> dict:
+    """Compose the provenance block added to the published curves payload.
+
+    Injectable tool_version / tool_git_commit let tests assert exact output.
+    No wall-clock timestamp — the block is byte-identical for identical inputs.
+    """
+    return {
+        "manifest_version": 1,
+        "tool": {
+            "name": "justfixed.publish_curves",
+            "version": tool_version,
+            "git_commit": tool_git_commit,
+        },
+        "sources": [
+            _source_entry(b3_path, "b3_bdi_pdf", ["cdi"], b3_retained),
+            _source_entry(anbima_path, "anbima_ettj_csv", ["pre", "ipca_real"], anbima_retained),
+        ],
+        "convention": "252 bd/yr; B3/ANBIMA holidays",
+        "notes": (
+            "Curve sections unchanged (schema_version 1). No wall-clock timestamp -- "
+            "publish time is the data-repo commit."
+        ),
+    }
+
+
+def verify_publication(data_repo: Path, as_of: date) -> list[str]:
+    """Re-derive and verify the current publication in data_repo.
+
+    Returns an empty list when everything matches, or a list of discrepancy
+    strings describing each problem found.
+    """
+    discrepancies: list[str] = []
+
+    latest_path = data_repo / "curves" / "latest.json"
+    try:
+        payload = json.loads(latest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return ["latest.json missing or unreadable"]
+
+    if payload.get("as_of") != as_of.isoformat():
+        return [
+            f"published as_of {payload.get('as_of')!r} does not match "
+            f"{as_of.isoformat()!r}; only the current publication can be verified "
+            "against latest.json (use the data-repo git history for older publications)"
+        ]
+
+    sources = payload.get("provenance", {}).get("sources", [])
+    b3_entry = next((s for s in sources if s["role"] == "b3_bdi_pdf"), None)
+    anbima_entry = next((s for s in sources if s["role"] == "anbima_ettj_csv"), None)
+
+    files_ok = True
+    for entry, label in ((b3_entry, "b3_bdi_pdf"), (anbima_entry, "anbima_ettj_csv")):
+        if entry is None:
+            discrepancies.append(f"provenance source '{label}' not found")
+            files_ok = False
+            continue
+        retained_path = data_repo / entry["retained"]
+        if not retained_path.exists():
+            discrepancies.append(f"retained file missing: {entry['retained']}")
+            files_ok = False
+            continue
+        actual_sha = hashlib.sha256(retained_path.read_bytes()).hexdigest()
+        if actual_sha != entry["sha256"]:
+            discrepancies.append(
+                f"sha256 mismatch for {entry['retained']}: "
+                f"expected {entry['sha256']}, got {actual_sha}"
+            )
+            files_ok = False
+
+    if not files_ok:
+        return discrepancies
+
+    # Re-derive from retained inputs and compare each curve section
+    retained_anbima = data_repo / anbima_entry["retained"]
+    retained_b3 = data_repo / b3_entry["retained"]
+    pre_v, ipca_v = parse_anbima(retained_anbima, as_of)
+    cdi_v = parse_b3(retained_b3, as_of)
+    rebuilt = build_unified_json(as_of, cdi_v, pre_v, ipca_v)
+    for section in ("cdi", "pre", "ipca_real"):
+        if rebuilt[section] != payload[section]:
+            discrepancies.append(
+                f"section '{section}' does not match re-derived data"
+            )
+
+    return discrepancies
+
+
+def _parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Publish curves/latest.json from ANBIMA ETTJ CSV + B3 BDI_00 PDF."
     )
@@ -289,12 +443,29 @@ def _parse_args() -> argparse.Namespace:
                              "(default: write only, no commit)")
     parser.add_argument("--push", action="store_true",
                         help="git push after committing (implies --commit)")
-    return parser.parse_args()
+    parser.add_argument("--verify-as-of", metavar="YYYY-MM-DD",
+                        help="Verify the published curves for this date instead of "
+                             "publishing (requires only --data-repo)")
+    return parser.parse_args(argv)
 
 
-def main() -> None:
-    args = _parse_args()
+def main(argv=None) -> None:
+    args = _parse_args(argv)
 
+    # --- Verify mode: re-derive and check; does not run the publish path ---
+    if args.verify_as_of:
+        as_of_verify = date.fromisoformat(args.verify_as_of)
+        data_repo_path = Path(args.data_repo)
+        discrepancies = verify_publication(data_repo_path, as_of_verify)
+        if not discrepancies:
+            print("Verified.")
+            sys.exit(0)
+        else:
+            for d in discrepancies:
+                print(d)
+            sys.exit("verification failed")
+
+    # --- Publish path ---
     as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
     anbima_path = _resolve_anbima_path(args.anbima, args.data_repo)
     b3_path = _resolve_b3_path(args.b3, args.data_repo)
@@ -321,16 +492,38 @@ def main() -> None:
 
     payload = build_unified_json(as_of, cdi_vertices, pre_vertices, ipca_vertices)
 
+    # Retain raw inputs to data_repo/raw/<as_of>/
+    raw_dir = data_repo_path / "raw" / as_of.isoformat()
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(anbima_path, raw_dir / anbima_path.name)
+    shutil.copy2(b3_path, raw_dir / b3_path.name)
+    anbima_retained = f"raw/{as_of.isoformat()}/{anbima_path.name}"
+    b3_retained = f"raw/{as_of.isoformat()}/{b3_path.name}"
+
+    # Compose provenance block (additive; does not modify curve sections)
+    payload["provenance"] = build_provenance(
+        anbima_path=anbima_path,
+        b3_path=b3_path,
+        anbima_retained=anbima_retained,
+        b3_retained=b3_retained,
+        tool_version=resolve_tool_version(),
+        tool_git_commit=resolve_git_commit(),
+    )
+
     out_path = data_repo_path / "curves" / "latest.json"
     out_path.parent.mkdir(exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(f"\nWrote {out_path}")
+    print(f"Retained raw inputs: {anbima_retained}, {b3_retained}")
 
     # --push implies --commit; pushing without a prior local commit is meaningless
     do_commit = args.commit or args.push
 
     if do_commit:
-        subprocess.run(["git", "add", "curves/latest.json"], cwd=data_repo_path, check=True)
+        subprocess.run(
+            ["git", "add", "curves/latest.json", anbima_retained, b3_retained],
+            cwd=data_repo_path, check=True,
+        )
 
         try:
             subprocess.run(
