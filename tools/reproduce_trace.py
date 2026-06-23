@@ -360,7 +360,7 @@ def trace_to_text(trace: ProjectionTrace, *, curve_file: dict | None) -> str:
         if cp.source is not None
         else "not stamped (pending wiring slice)"
     )
-    ref_str = cp.curve_ref if cp.curve_ref is not None else "pending Track B"
+    ref_str = cp.curve_ref if cp.curve_ref is not None else "(no curve)"
     lines.append(f"Source:    {source_str}")
     lines.append(f"Anchor:    {iso(cp.anchor) if cp.anchor is not None else '--'}")
     lines.append(f"curve_ref: {ref_str}")
@@ -402,6 +402,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--curve",
         metavar="PATH",
         help="Path to a curves/latest.json-format file",
+    )
+    parser.add_argument(
+        "--curve-source",
+        metavar="TEXT",
+        help="Label stamped into CurveProvenance.source (e.g. the curve file path or origin tag)",
     )
     parser.add_argument(
         "--json-out",
@@ -457,6 +462,7 @@ def main(argv: list[str] | None = None) -> int:
             assumed_ipca=assumed_ipca,
             cdi_curve=cdi_curve,
             ipca_curve=ipca_curve,
+            curve_source=args.curve_source,
         )
     except ValueError as e:
         sys.exit(str(e))

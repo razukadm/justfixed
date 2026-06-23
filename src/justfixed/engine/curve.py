@@ -16,6 +16,7 @@ Design notes:
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -90,3 +91,16 @@ class Curve:
         # Unreachable: flat-extension guards ensure days is strictly inside
         # [first.business_days, last.business_days] at this point.
         raise AssertionError("rate_at: no bracketing vertices found (should be unreachable).")
+
+
+def curve_content_hash(curve: Curve) -> str:
+    """Return a deterministic SHA-256 hex digest identifying this curve's content.
+
+    Canonical form: anchor ISO date, then each vertex as "bd:rate", joined with "|".
+    The rate is rendered via str(Decimal) — exact, no float conversion.
+    """
+    parts = [curve.anchor.isoformat()]
+    for v in curve.vertices:
+        parts.append(f"{v.business_days}:{str(v.rate)}")
+    canonical = "|".join(parts)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

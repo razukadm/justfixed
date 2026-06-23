@@ -72,6 +72,7 @@ def project(
     assumed_ipca: Decimal | None = None,
     cdi_curve: Curve | None = None,
     ipca_curve: Curve | None = None,
+    curve_source: str | None = None,
 ) -> ProjectionResult:
     """Project an investment's value as of a given date and at maturity.
 
@@ -99,6 +100,7 @@ def project(
         assumed_ipca=assumed_ipca,
         cdi_curve=cdi_curve,
         ipca_curve=ipca_curve,
+        curve_source=curve_source,
     )[0]
 
 
@@ -240,6 +242,7 @@ def _compute_projection(
     assumed_ipca: Decimal | None,
     cdi_curve: Curve | None,
     ipca_curve: Curve | None,
+    curve_source: str | None = None,
 ) -> tuple:
     """Single computation that produces both ProjectionResult and ProjectionTrace."""
     # 1. Current value
@@ -290,15 +293,18 @@ def _compute_projection(
     )
 
     curve_anchor = None
+    curve_ref = None
     for step in cv_steps:
         if step.rate.source == "curve":
             curve_anchor = step.rate.curve_anchor
+            curve_ref = step.rate.curve_ref
             break
     if curve_anchor is None:
         for ft in flow_traces:
             for step in ft.accrual:
                 if step.rate.source == "curve":
                     curve_anchor = step.rate.curve_anchor
+                    curve_ref = step.rate.curve_ref
                     break
             if curve_anchor is not None:
                 break
@@ -327,8 +333,9 @@ def _compute_projection(
             assumed_ipca=assumed_ipca,
         ),
         curve_provenance=CurveProvenance(
-            source=None,
+            source=curve_source,
             anchor=curve_anchor,
+            curve_ref=curve_ref,
         ),
     )
     return result, trace
@@ -342,6 +349,7 @@ def project_traced(
     assumed_ipca: Decimal | None = None,
     cdi_curve: Curve | None = None,
     ipca_curve: Curve | None = None,
+    curve_source: str | None = None,
 ) -> ProjectionTrace:
     """Project an investment and return the full calculation trace.
 
@@ -355,4 +363,5 @@ def project_traced(
         assumed_ipca=assumed_ipca,
         cdi_curve=cdi_curve,
         ipca_curve=ipca_curve,
+        curve_source=curve_source,
     )[1]

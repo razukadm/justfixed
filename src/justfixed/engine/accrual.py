@@ -35,7 +35,7 @@ from justfixed.domain.rates import (
     Rate,
 )
 from justfixed.engine.calendar import BUSINESS_DAYS_PER_YEAR
-from justfixed.engine.curve import Curve
+from justfixed.engine.curve import Curve, curve_content_hash
 from justfixed.engine.trace import AccrualStep, RateResolution
 
 
@@ -175,11 +175,13 @@ def _resolve_rate(
                 source = "curve"
                 anchor = cdi_curve.anchor
                 tenor_date: date | None = lookup_date
+                ref: str | None = curve_content_hash(cdi_curve)
             else:
                 resolved = assumed_cdi
                 source = "assumed_fallback"
                 anchor = None
                 tenor_date = None
+                ref = None
             if resolved is None:
                 raise ValueError(
                     "PostFixedCDI rate requires assumed_cdi parameter "
@@ -195,6 +197,7 @@ def _resolve_rate(
                 index_multiplier_or_spread=p,
                 curve_anchor=anchor,
                 curve_tenor_date=tenor_date,
+                curve_ref=ref,
             )
 
         case PostFixedIPCA(spread=s):
@@ -203,11 +206,13 @@ def _resolve_rate(
                 source = "curve"
                 anchor = ipca_curve.anchor
                 tenor_date = lookup_date
+                ref = curve_content_hash(ipca_curve)
             else:
                 resolved = assumed_ipca
                 source = "assumed_fallback"
                 anchor = None
                 tenor_date = None
+                ref = None
             if resolved is None:
                 raise ValueError(
                     "PostFixedIPCA rate requires assumed_ipca parameter "
@@ -223,6 +228,7 @@ def _resolve_rate(
                 index_multiplier_or_spread=s,
                 curve_anchor=anchor,
                 curve_tenor_date=tenor_date,
+                curve_ref=ref,
             )
 
         case PostFixedCDIPlusSpread(spread=s):
@@ -231,11 +237,13 @@ def _resolve_rate(
                 source = "curve"
                 anchor = cdi_curve.anchor
                 tenor_date = lookup_date
+                ref = curve_content_hash(cdi_curve)
             else:
                 resolved = assumed_cdi
                 source = "assumed_fallback"
                 anchor = None
                 tenor_date = None
+                ref = None
             if resolved is None:
                 raise ValueError(
                     "PostFixedCDIPlusSpread rate requires assumed_cdi parameter "
@@ -251,6 +259,7 @@ def _resolve_rate(
                 index_multiplier_or_spread=s,
                 curve_anchor=anchor,
                 curve_tenor_date=tenor_date,
+                curve_ref=ref,
             )
 
         case _:
