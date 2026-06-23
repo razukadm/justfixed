@@ -267,20 +267,23 @@ are not taxed with per-coupon withholding. **Materiality: medium for coupon inst
 otherwise. Surfaced: the single `TaxTrace` with `holding_calendar_days` to maturity; `cash_flows`
 shows the gross coupons it was applied to.
 
-**F-08 — Single-point-flat curve use; assumed-scalar fallback; provenance not yet stamped on
-output.** The curve is read at one tenor and applied flat (Section 4); when no usable curve is
+**F-08 — Single-point-flat curve use; assumed-scalar fallback; live/cached source not yet stamped
+by the app.** The curve is read at one tenor and applied flat (Section 4); when no usable curve is
 present the engine falls back to a static assumed scalar. **Materiality: medium.** The fallback,
 previously silent, is now surfaced via `RateResolution.source == "assumed_fallback"`, and the
-tenor via `curve_tenor_date`. The curve **data-provenance** stamp (live vs cached, and a content
-reference) is **not yet attached to the projected output**: `ProjectionTrace.curve_provenance.source`
-and `curve_ref` are `None` pending the curve-provenance work (see F-02) and a later wiring slice
-that threads the fetch result into projection. `curve_provenance.anchor` is populated from the
-curve when one is used.
+tenor via `curve_tenor_date`. **Provenance status:** `curve_provenance.curve_ref` is now populated
+with a deterministic SHA-256 content-hash of the curve used (anchor + sorted vertices); it is
+`None` only when no curve resolved the rate (pure-fixed or assumed-fallback). `curve_provenance.source`
+is threaded via a `curve_source` parameter on `project_traced()`; it is stamped when a caller
+supplies it. The running application does not yet emit traces (it calls `project()`, not
+`project_traced()`), so the live-vs-cached source captured from a live fetch is still future work —
+the plumbing exists, the app-level producer does not. `curve_provenance.anchor` is populated from
+the curve when one is used.
 
-**F-02 — Published curve has no provenance/chain of custody (advisory→tracked).** The published
-curve file carries only `as_of`, `schema_version`, and the curve blocks; it records no source
-filenames, hashes, dates, or tool version. Until that manifest exists, `curve_ref` in the trace
-is `None`.
+**F-02 — Published curve provenance/chain of custody (resolved).** The published curve now carries
+a Track B provenance manifest: per-source role, filename, sha256, size, retained-path, tool
+name/version/git_commit, and convention. `curve_ref` in the trace is populated with a deterministic
+SHA-256 content-hash of the curve used (see F-08 above).
 
 **F-09 — Curve rates are serialized as floating point (advisory).** The published curve stores
 rates as JSON floats; they are parsed back into `Decimal` on load. The serialization format is a
@@ -290,9 +293,9 @@ float; all *computation* is `Decimal`.
 describes the method. It is a simplification and **may differ from the index provider's official
 ETTJ interpolation methodology; it has not been reconciled against ANBIMA's published method.**
 
-**F-11 — No headless reproduce command yet (advisory).** A command-line path that takes an
-instrument spec plus a curve file and emits the trace as JSON and readable text is not yet
-present; it is the subject of a subsequent slice.
+**F-11 — Headless reproduce-trace command (shipped).** `tools/reproduce_trace.py` takes an
+instrument-spec JSON plus an optional curve file and emits the full calculation trace as JSON and
+readable text; see `tools/` for usage.
 
 ---
 
