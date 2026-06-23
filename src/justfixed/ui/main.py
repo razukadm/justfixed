@@ -1119,6 +1119,13 @@ class InvestmentDetailPanel(QWidget):
         self._proj_net_lbl       = _mono_lbl()
 
         _row(STR.PROJ_CURRENT, self._proj_current_lbl)
+        self._proj_current_tag_lbl = QLabel(STR.PROJ_CURRENT_TAG)
+        self._proj_current_tag_lbl.setStyleSheet(
+            f"color: {COLORS.INK_3}; font-size: {FONTS.UI_SIZE_SM}pt;"
+            " padding-left: 168px;"
+        )
+        self._proj_current_tag_lbl.setVisible(False)
+        bl.addWidget(self._proj_current_tag_lbl)
         _row(STR.PROJ_GROSS,   self._proj_gross_lbl)
         _row(STR.PROJ_GAIN,    self._proj_gain_lbl)
         _row(STR.PROJ_TAX,     self._proj_tax_lbl)
@@ -1213,6 +1220,7 @@ class InvestmentDetailPanel(QWidget):
         if self._current_inv is None or not cache:
             self._proj_stack.setCurrentIndex(0)
             self._proj_panel.set_meta(None)
+            self._proj_current_tag_lbl.setVisible(False)
             self._refresh_fgc_block()
             return
         proj = next(
@@ -1221,6 +1229,7 @@ class InvestmentDetailPanel(QWidget):
         if proj is None:
             self._proj_stack.setCurrentIndex(0)
             self._proj_panel.set_meta(None)
+            self._proj_current_tag_lbl.setVisible(False)
             self._refresh_fgc_block()
             return
         tb = proj.tax_breakdown
@@ -1232,12 +1241,15 @@ class InvestmentDetailPanel(QWidget):
             self._proj_current_lbl.setText(
                 f"{inv.user_edited_value.to_display()} (edited)"
             )
+            self._proj_current_tag_lbl.setVisible(False)
         elif inv is not None and inv.broker_reported_value is not None:
             self._proj_current_lbl.setText(
                 f"{inv.broker_reported_value.to_display()} (broker)"
             )
+            self._proj_current_tag_lbl.setVisible(False)
         else:
             self._proj_current_lbl.setText(proj.current_value.to_display())
+            self._proj_current_tag_lbl.setVisible(True)
         self._proj_gross_lbl.setText(proj.gross_at_maturity.to_display())
         self._proj_gain_lbl.setText(tb.gain.to_display())
         self._proj_tax_lbl.setText(f"{tax_pct} — {tb.tax_amount.to_display()}")
@@ -2874,6 +2886,12 @@ class MainWindow(QMainWindow):
         _below_table_layout.addWidget(self._project_btn)
         _below_table_layout.addWidget(self._export_btn)
         root.addWidget(_below_table_container)
+
+        self._value_basis_note = QLabel(STR.VALUE_BASIS_NOTE)
+        self._value_basis_note.setStyleSheet(
+            f"color: {COLORS.INK_3}; font-size: {FONTS.UI_SIZE_SM}pt;"
+        )
+        root.addWidget(self._value_basis_note)
 
         status_bar = QStatusBar()
         self._curve_label = QLabel("")

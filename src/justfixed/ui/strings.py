@@ -73,6 +73,7 @@ class Strings:
     ROWS: str = "Linhas: {n}"
     ROWS_FILTERED: str = "Linhas: {n} de {total}"
     ROWS_ACTIVE_MATURED: str = "{active} ativos · {matured} vencidos"
+    VALUE_BASIS_NOTE: str = "Valor atual = valor na curva (não marcação a mercado)"
 
     # ── Empty states ───────────────────────────────────────────────────────────
     EMPTY_INVESTMENTS: str = "Nenhum investimento ainda.\nImporte um extrato, ou adicione um investimento manualmente."
@@ -114,6 +115,7 @@ class Strings:
     PROJ_TITLE: str = "Projeção"
     PROJ_AS_OF: str = "em {date}"
     PROJ_CURRENT: str = "Valor atual"
+    PROJ_CURRENT_TAG: str = "valor na curva"
     PROJ_GROSS: str = "Bruto no vencimento"
     PROJ_GAIN: str = "Rendimento"
     PROJ_TAX: str = "IR"
