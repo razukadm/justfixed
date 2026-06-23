@@ -514,14 +514,18 @@ def main(argv=None) -> None:
     out_path.parent.mkdir(exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(f"\nWrote {out_path}")
-    print(f"Retained raw inputs: {anbima_retained}, {b3_retained}")
+    print(f"Retained raw inputs (local only, not committed): {anbima_retained}, {b3_retained}")
 
     # --push implies --commit; pushing without a prior local commit is meaningless
     do_commit = args.commit or args.push
 
     if do_commit:
+        # Stage only the published curve. The retained raw inputs (raw/<as_of>/) are admin source
+        # files the data repo's .gitignore intentionally excludes (public repo); their
+        # sha256/size/retained-path are recorded in the provenance manifest for chain of custody,
+        # but the bytes themselves are not committed.
         subprocess.run(
-            ["git", "add", "curves/latest.json", anbima_retained, b3_retained],
+            ["git", "add", "curves/latest.json"],
             cwd=data_repo_path, check=True,
         )
 
