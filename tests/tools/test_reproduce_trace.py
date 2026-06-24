@@ -488,6 +488,76 @@ def test_fidelity_semi_annual_coupon(tmp_path):
     assert len(loaded["trace"]["cash_flows"]) > 1
 
 
+def test_per_flow_tax_in_coupon_json(tmp_path):
+    # Coupon instrument: per_flow list has one entry per cash flow; aggregate keys intact.
+    spec_path = tmp_path / "spec_d.json"
+    spec_path.write_text(json.dumps(_SPEC_D), encoding="utf-8")
+    out_path = tmp_path / "out_d.json"
+
+    main([str(spec_path), "--json-out", str(out_path)])
+
+    loaded = json.loads(out_path.read_text(encoding="utf-8"))
+    tax = loaded["trace"]["tax"]
+    n_flows = len(loaded["trace"]["cash_flows"])
+
+    # per_flow list is present and has one entry per flow
+    assert "per_flow" in tax
+    assert len(tax["per_flow"]) == n_flows
+
+    # Each entry has all required keys and no floats
+    for pf in tax["per_flow"]:
+        assert "pay_date" in pf
+        assert "holding_days" in pf
+        assert "bracket_rate" in pf
+        assert "taxable_interest" in pf
+        assert "tax_amount" in pf
+        assert isinstance(pf["holding_days"], int)
+        assert not isinstance(pf["bracket_rate"], float)
+
+    # Aggregate keys still present and unchanged in structure
+    assert "bracket_rate" in tax
+    assert "taxable_gain" in tax
+    assert "tax_amount" in tax
+    assert "holding_calendar_days" in tax
+
+
+def test_per_flow_tax_bullet_still_present_length_one(tmp_path):
+    # Bullet instrument: per_flow has exactly one entry (but text worksheet omits it).
+    spec_path = tmp_path / "spec_a.json"
+    spec_path.write_text(json.dumps(_SPEC_A), encoding="utf-8")
+    out_path = tmp_path / "out_a.json"
+
+    main([str(spec_path), "--json-out", str(out_path)])
+
+    loaded = json.loads(out_path.read_text(encoding="utf-8"))
+    tax = loaded["trace"]["tax"]
+    assert len(tax["per_flow"]) == 1
+
+
+def test_per_flow_text_section_present_for_coupon(tmp_path):
+    # Text worksheet includes per-flow breakdown only for coupon instruments.
+    spec_path = tmp_path / "spec_d.json"
+    spec_path.write_text(json.dumps(_SPEC_D), encoding="utf-8")
+    out_path = tmp_path / "out_d.txt"
+
+    main([str(spec_path), "--text-out", str(out_path)])
+
+    text = out_path.read_text(encoding="utf-8")
+    assert "Per-flow IR withholding" in text
+
+
+def test_per_flow_text_section_absent_for_bullet(tmp_path):
+    # Text worksheet omits per-flow breakdown for bullet instruments.
+    spec_path = tmp_path / "spec_a.json"
+    spec_path.write_text(json.dumps(_SPEC_A), encoding="utf-8")
+    out_path = tmp_path / "out_a.txt"
+
+    main([str(spec_path), "--text-out", str(out_path)])
+
+    text = out_path.read_text(encoding="utf-8")
+    assert "Per-flow IR withholding" not in text
+
+
 # =============================================================================
 # 8. Text worksheet -- key strings present (light assertions)
 # =============================================================================

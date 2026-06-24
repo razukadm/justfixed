@@ -70,8 +70,28 @@ class FlowTrace:
 
 
 @dataclass(frozen=True, slots=True)
+class FlowTax:
+    """Per-flow IR withholding record, one entry per cash flow."""
+
+    pay_date: date
+    holding_days: int          # calendar days from purchase to this flow's pay_date
+    bracket_rate: Decimal
+    taxable_interest: Money
+    tax_amount: Money
+
+
+@dataclass(frozen=True, slots=True)
 class TaxTrace:
-    """IR (Imposto de Renda) calculation breakdown."""
+    """IR (Imposto de Renda) calculation breakdown.
+
+    All aggregate fields reflect the total across all flows:
+    - bracket_rate: effective blended rate (equals the single bracket for a bullet)
+    - taxable_gain: total gain (gross - principal)
+    - tax_amount: sum of per-flow taxes
+
+    holding_calendar_days is the full period (maturity - purchase), for reference.
+    per_flow contains one FlowTax per cash flow; for a bullet it has one entry.
+    """
 
     treatment: TaxTreatment
     holding_calendar_days: int
@@ -79,6 +99,7 @@ class TaxTrace:
     taxable_gain: Money
     tax_amount: Money
     iof_modeled: bool                       # always False today (F-06 not yet modeled)
+    per_flow: tuple[FlowTax, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

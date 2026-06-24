@@ -133,3 +133,99 @@ def compute_ir(
         tax_amount=tax_amount,
         net=net,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class FlowTaxResult:
+    """Per-flow IR breakdown produced by compute_ir_schedule."""
+
+    holding_days: int
+    bracket_rate: Decimal
+    taxable_interest: Money
+    tax_amount: Money
+
+
+def compute_ir_schedule(
+    flow_interests: list[tuple[Money, int]],
+    *,
+    principal: Money,
+    gross: Money,
+    treatment: TaxTreatment,
+) -> tuple[TaxResult, tuple[FlowTaxResult, ...]]:
+    """Compute IR by taxing each cash flow at its own regressive bracket.
+
+    Args:
+        flow_interests: (interest_component, holding_days) per flow, chronological.
+            holding_days is purchase->pay_date in calendar days (not period-to-period).
+        principal: Amount originally invested.
+        gross: Total received pre-tax (sum of all cash flow amounts).
+        treatment: Which tax regime applies.
+
+    Returns:
+        (aggregate TaxResult, tuple of per-flow FlowTaxResult).
+        aggregate.tax_rate is the effective blended rate (= single bracket for one flow).
+        For negative gain, per_flow is () and tax is zero.
+
+    KEY INVARIANT: for a single-element flow_interests where interest == gain and
+    treatment == IR_REGRESSIVE, the returned aggregate matches compute_ir() exactly.
+    """
+    if principal.currency != gross.currency:
+        raise ValueError(
+            f"Currency mismatch: principal {principal.currency} "
+            f"vs gross {gross.currency}"
+        )
+    for i, (interest, _) in enumerate(flow_interests):
+        if interest.currency != gross.currency:
+            raise ValueError(
+                f"Currency mismatch: flow {i} interest {interest.currency} "
+                f"vs gross {gross.currency}"
+            )
+
+    gain = gross - principal
+
+    if gain.amount < Decimal("0"):
+        return (
+            TaxResult(
+                gross=gross,
+                gain=gain,
+                tax_rate=Decimal("0"),
+                tax_amount=Money.zero(gross.currency),
+                net=gross,
+            ),
+            (),
+        )
+
+    per_flow: list[FlowTaxResult] = []
+    total_tax = Money.zero(gross.currency)
+
+    for interest, holding_days in flow_interests:
+        if treatment == TaxTreatment.IR_EXEMPT:
+            rate = Decimal("0")
+        else:
+            rate = regressive_rate_for(holding_days)
+        tax_i = interest * rate
+        per_flow.append(FlowTaxResult(
+            holding_days=holding_days,
+            bracket_rate=rate,
+            taxable_interest=interest,
+            tax_amount=tax_i,
+        ))
+        total_tax = total_tax + tax_i
+
+    if treatment == TaxTreatment.IR_EXEMPT or gain.amount <= Decimal("0"):
+        effective_rate = Decimal("0")
+    elif len(per_flow) == 1:
+        # Single-flow (bullet): effective rate IS the bracket rate — avoid the
+        # quantization error that (tax_8dp / gain_8dp) would introduce.
+        effective_rate = per_flow[0].bracket_rate
+    else:
+        effective_rate = total_tax.amount / gain.amount
+
+    aggregate = TaxResult(
+        gross=gross,
+        gain=gain,
+        tax_rate=effective_rate,
+        tax_amount=total_tax,
+        net=gross - total_tax,
+    )
+    return (aggregate, tuple(per_flow))

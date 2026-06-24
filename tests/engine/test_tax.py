@@ -8,7 +8,7 @@ import pytest
 
 from justfixed.domain.money import Money
 from justfixed.domain.product import TaxTreatment
-from justfixed.engine.tax import compute_ir, regressive_rate_for
+from justfixed.engine.tax import FlowTaxResult, compute_ir, compute_ir_schedule, regressive_rate_for
 
 
 # ---------- regressive_rate_for ----------
@@ -253,3 +253,166 @@ class TestTaxResult:
                 holding_days=days,
             )
             assert result.net + result.tax_amount == result.gross
+
+
+# ---------- compute_ir_schedule ----------
+
+
+class TestComputeIRSchedule:
+    """Per-flow IR schedule: KEY INVARIANT and multi-flow correctness."""
+
+    # KEY INVARIANT: single flow where interest == gain matches compute_ir exactly
+
+    def test_single_flow_15_bracket_matches_compute_ir(self) -> None:
+        # 730 days → 15%; gain=1200; tax=180; net=11020
+        principal = Money.from_reais("10000")
+        gross = Money.from_reais("11200")
+        aggregate, per_flow = compute_ir_schedule(
+            [(Money.from_reais("1200"), 730)],
+            principal=principal,
+            gross=gross,
+            treatment=TaxTreatment.IR_REGRESSIVE,
+        )
+        expected = compute_ir(principal, gross, TaxTreatment.IR_REGRESSIVE, 730)
+        assert aggregate.tax_amount == expected.tax_amount
+        assert aggregate.tax_rate == expected.tax_rate
+        assert aggregate.net == expected.net
+        assert len(per_flow) == 1
+        assert per_flow[0].bracket_rate == Decimal("0.15")
+        assert per_flow[0].tax_amount == Money.from_reais("180")
+
+    def test_single_flow_225_bracket_matches_compute_ir(self) -> None:
+        # 90 days → 22.5%; gain=500; tax=112.50; net=10387.50
+        principal = Money.from_reais("10000")
+        gross = Money.from_reais("10500")
+        aggregate, per_flow = compute_ir_schedule(
+            [(Money.from_reais("500"), 90)],
+            principal=principal,
+            gross=gross,
+            treatment=TaxTreatment.IR_REGRESSIVE,
+        )
+        expected = compute_ir(principal, gross, TaxTreatment.IR_REGRESSIVE, 90)
+        assert aggregate.tax_amount == expected.tax_amount
+        assert aggregate.net == expected.net
+
+    def test_single_flow_175_bracket_matches_compute_ir(self) -> None:
+        # 400 days → 17.5%; gain=1000; tax=175; net=10825
+        principal = Money.from_reais("10000")
+        gross = Money.from_reais("11000")
+        aggregate, per_flow = compute_ir_schedule(
+            [(Money.from_reais("1000"), 400)],
+            principal=principal,
+            gross=gross,
+            treatment=TaxTreatment.IR_REGRESSIVE,
+        )
+        expected = compute_ir(principal, gross, TaxTreatment.IR_REGRESSIVE, 400)
+        assert aggregate.tax_amount == expected.tax_amount
+        assert aggregate.net == expected.net
+
+    def test_single_flow_effective_rate_equals_bracket(self) -> None:
+        # For one flow where interest == gain, effective_rate == bracket_rate exactly.
+        # 730 days → 15%; gain=1000; tax=150; effective = 150/1000 = 0.15
+        principal = Money.from_reais("10000")
+        gross = Money.from_reais("11000")
+        aggregate, _ = compute_ir_schedule(
+            [(Money.from_reais("1000"), 730)],
+            principal=principal,
+            gross=gross,
+            treatment=TaxTreatment.IR_REGRESSIVE,
+        )
+        assert aggregate.tax_rate == Decimal("0.15")
+
+    def test_two_flow_coupon_hand_computed(self) -> None:
+        # Hand-computed expected values:
+        # Flow 1: interest=500, holding_days=90  → bracket 22.5% → tax = 500 × 0.225 = 112.50
+        # Flow 2: interest=700, holding_days=500 → bracket 17.5% → tax = 700 × 0.175 = 122.50
+        # total_tax = 235.00; net = 11200 - 235 = 10965.00
+        # effective_rate = 235.00000000 / 1200.00000000
+        principal = Money.from_reais("10000")
+        gross = Money.from_reais("11200")
+        aggregate, per_flow = compute_ir_schedule(
+            [(Money.from_reais("500"), 90), (Money.from_reais("700"), 500)],
+            principal=principal,
+            gross=gross,
+            treatment=TaxTreatment.IR_REGRESSIVE,
+        )
+        assert len(per_flow) == 2
+        assert per_flow[0].bracket_rate == Decimal("0.225")
+        assert per_flow[0].tax_amount == Money.from_reais("112.50")
+        assert per_flow[1].bracket_rate == Decimal("0.175")
+        assert per_flow[1].tax_amount == Money.from_reais("122.50")
+        assert aggregate.tax_amount == Money.from_reais("235")
+        assert aggregate.net == Money.from_reais("10965")
+        expected_rate = Decimal("235.00000000") / Decimal("1200.00000000")
+        assert aggregate.tax_rate == expected_rate
+
+    def test_two_flow_net_plus_tax_equals_gross(self) -> None:
+        # Invariant holds even for multi-flow.
+        principal = Money.from_reais("10000")
+        gross = Money.from_reais("11200")
+        aggregate, _ = compute_ir_schedule(
+            [(Money.from_reais("500"), 90), (Money.from_reais("700"), 500)],
+            principal=principal,
+            gross=gross,
+            treatment=TaxTreatment.IR_REGRESSIVE,
+        )
+        assert aggregate.net + aggregate.tax_amount == aggregate.gross
+
+    def test_exempt_all_flows_zero_tax(self) -> None:
+        principal = Money.from_reais("10000")
+        gross = Money.from_reais("11000")
+        aggregate, per_flow = compute_ir_schedule(
+            [(Money.from_reais("500"), 90), (Money.from_reais("500"), 365)],
+            principal=principal,
+            gross=gross,
+            treatment=TaxTreatment.IR_EXEMPT,
+        )
+        assert aggregate.tax_amount == Money.zero()
+        assert aggregate.net == gross
+        assert aggregate.tax_rate == Decimal("0")
+        assert len(per_flow) == 2
+        for flow_result in per_flow:
+            assert flow_result.bracket_rate == Decimal("0")
+            assert flow_result.tax_amount == Money.zero()
+
+    def test_negative_gain_zero_tax_empty_per_flow(self) -> None:
+        principal = Money.from_reais("10000")
+        gross = Money.from_reais("9500")
+        aggregate, per_flow = compute_ir_schedule(
+            [(Money.from_reais("500"), 90)],
+            principal=principal,
+            gross=gross,
+            treatment=TaxTreatment.IR_REGRESSIVE,
+        )
+        assert aggregate.tax_amount == Money.zero()
+        assert aggregate.net == gross
+        assert aggregate.tax_rate == Decimal("0")
+        assert per_flow == ()
+
+    def test_currency_mismatch_principal_vs_gross_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Currency mismatch"):
+            compute_ir_schedule(
+                [(Money.from_reais("500", currency="BRL"), 90)],
+                principal=Money.from_reais("10000", currency="BRL"),
+                gross=Money.from_reais("10500", currency="USD"),
+                treatment=TaxTreatment.IR_REGRESSIVE,
+            )
+
+    def test_currency_mismatch_flow_vs_gross_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Currency mismatch"):
+            compute_ir_schedule(
+                [(Money.from_reais("500", currency="USD"), 90)],
+                principal=Money.from_reais("10000", currency="BRL"),
+                gross=Money.from_reais("10500", currency="BRL"),
+                treatment=TaxTreatment.IR_REGRESSIVE,
+            )
+
+    def test_flow_tax_result_is_frozen(self) -> None:
+        r = FlowTaxResult(
+            holding_days=90,
+            bracket_rate=Decimal("0.225"),
+            taxable_interest=Money.from_reais("500"),
+            tax_amount=Money.from_reais("112.50"),
+        )
+        with pytest.raises(AttributeError):
+            r.holding_days = 999  # type: ignore[misc]

@@ -31,10 +31,11 @@ from justfixed.engine.accrual import _accrue_step, _resolve_rate, accrue
 from justfixed.engine.calendar import business_days_between
 from justfixed.engine.cashflow import CashFlow, CashFlowKind, schedule
 from justfixed.engine.curve import Curve
-from justfixed.engine.tax import TaxResult, compute_ir
+from justfixed.engine.tax import TaxResult, compute_ir_schedule
 from justfixed.engine.trace import (
     Assumptions,
     CurveProvenance,
+    FlowTax,
     FlowTrace,
     ProjectionTrace,
     TaxTrace,
@@ -272,24 +273,39 @@ def _compute_projection(
         [f.amount for f in flows], currency=investment.principal.currency
     )
 
-    # 5. Tax
+    # 5. Tax — per-flow schedule: each flow's interest taxed at its own bracket
     rule = rules_for(investment.product)
     holding_calendar_days = (investment.maturity_date - investment.purchase_date).days
-    tax_breakdown = compute_ir(
+    flow_interests = [
+        (ft.interest_component, (ft.pay_date - investment.purchase_date).days)
+        for ft in flow_traces
+    ]
+    aggregate, per_flow_results = compute_ir_schedule(
+        flow_interests,
         principal=investment.principal,
         gross=gross_at_maturity,
         treatment=rule.tax_treatment,
-        holding_days=holding_calendar_days,
     )
+    tax_breakdown = aggregate
 
     # 6. Trace sub-objects
     tax_trace = TaxTrace(
         treatment=rule.tax_treatment,
         holding_calendar_days=holding_calendar_days,
-        bracket_rate=tax_breakdown.tax_rate,
-        taxable_gain=tax_breakdown.gain,
-        tax_amount=tax_breakdown.tax_amount,
+        bracket_rate=aggregate.tax_rate,
+        taxable_gain=aggregate.gain,
+        tax_amount=aggregate.tax_amount,
         iof_modeled=False,
+        per_flow=tuple(
+            FlowTax(
+                pay_date=ft.pay_date,
+                holding_days=hd,
+                bracket_rate=r.bracket_rate,
+                taxable_interest=r.taxable_interest,
+                tax_amount=r.tax_amount,
+            )
+            for ft, (_, hd), r in zip(flow_traces, flow_interests, per_flow_results)
+        ),
     )
 
     curve_anchor = None

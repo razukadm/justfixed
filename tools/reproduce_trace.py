@@ -198,6 +198,16 @@ def tax_to_dict(t: TaxTrace) -> dict:
         "taxable_gain": amt(t.taxable_gain),
         "tax_amount": amt(t.tax_amount),
         "iof_modeled": t.iof_modeled,
+        "per_flow": [
+            {
+                "pay_date": iso(f.pay_date),
+                "holding_days": f.holding_days,
+                "bracket_rate": dec(f.bracket_rate),
+                "taxable_interest": amt(f.taxable_interest),
+                "tax_amount": amt(f.tax_amount),
+            }
+            for f in t.per_flow
+        ],
     }
 
 
@@ -342,6 +352,15 @@ def trace_to_text(trace: ProjectionTrace, *, curve_file: dict | None) -> str:
     lines.append(f"Taxable gain:          {t.taxable_gain.to_display()}")
     lines.append(f"Tax amount (IR):       {t.tax_amount.to_display()}")
     lines.append(f"Net at maturity:       {trace.net_at_maturity.to_display()}")
+    if len(t.per_flow) > 1:
+        lines.append("  Per-flow IR withholding:")
+        for pf in t.per_flow:
+            lines.append(
+                f"    {iso(pf.pay_date)}  hd={pf.holding_days}"
+                f"  rate={dec(pf.bracket_rate)}"
+                f"  interest={pf.taxable_interest.to_display()}"
+                f"  tax={pf.tax_amount.to_display()}"
+            )
     lines.append("")
 
     # 6. Assumptions
