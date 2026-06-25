@@ -362,8 +362,20 @@ def build_provenance(
     }
 
 
-def verify_publication(data_repo: Path, as_of: date) -> list[str]:
+def verify_publication(
+    data_repo: Path,
+    as_of: date,
+    *,
+    anbima_override: Path | None = None,
+    b3_override: Path | None = None,
+) -> list[str]:
     """Re-derive and verify the current publication in data_repo.
+
+    When anbima_override / b3_override are supplied, those paths are used
+    instead of the retained raw files in data_repo.  This lets an auditor
+    furnished with the (gitignored) admin inputs re-derive without committing
+    them.  The two overrides are applied independently; omitting one falls
+    back to the retained path for that source.
 
     Returns an empty list when everything matches, or a list of discrepancy
     strings describing each problem found.
@@ -388,32 +400,54 @@ def verify_publication(data_repo: Path, as_of: date) -> list[str]:
     anbima_entry = next((s for s in sources if s["role"] == "anbima_ettj_csv"), None)
 
     files_ok = True
-    for entry, label in ((b3_entry, "b3_bdi_pdf"), (anbima_entry, "anbima_ettj_csv")):
+    resolved: dict[str, Path] = {}  # role -> resolved source path (exists + sha256 ok)
+
+    for entry, label, override in (
+        (b3_entry, "b3_bdi_pdf", b3_override),
+        (anbima_entry, "anbima_ettj_csv", anbima_override),
+    ):
         if entry is None:
             discrepancies.append(f"provenance source '{label}' not found")
             files_ok = False
             continue
-        retained_path = data_repo / entry["retained"]
-        if not retained_path.exists():
-            discrepancies.append(f"retained file missing: {entry['retained']}")
+
+        source_path = override if override is not None else (data_repo / entry["retained"])
+
+        if not source_path.exists():
+            if override is not None:
+                discrepancies.append(f"furnished file not found: {override}")
+            else:
+                discrepancies.append(
+                    f"raw input not available: {entry['retained']} is not present in the repo "
+                    f"(admin inputs are gitignored by policy). Furnish the file out-of-band and pass "
+                    f"--anbima/--b3 to re-derive."
+                )
             files_ok = False
             continue
-        actual_sha = hashlib.sha256(retained_path.read_bytes()).hexdigest()
+
+        actual_sha = hashlib.sha256(source_path.read_bytes()).hexdigest()
         if actual_sha != entry["sha256"]:
-            discrepancies.append(
-                f"sha256 mismatch for {entry['retained']}: "
-                f"expected {entry['sha256']}, got {actual_sha}"
-            )
+            if override is not None:
+                discrepancies.append(
+                    f"furnished {entry['role']} does not match the published manifest: expected "
+                    f"{entry['sha256']}, got {actual_sha} "
+                    f"(this is not the file that was published)"
+                )
+            else:
+                discrepancies.append(
+                    f"sha256 mismatch for {entry['retained']}: "
+                    f"expected {entry['sha256']}, got {actual_sha}"
+                )
             files_ok = False
+        else:
+            resolved[entry["role"]] = source_path
 
     if not files_ok:
         return discrepancies
 
-    # Re-derive from retained inputs and compare each curve section
-    retained_anbima = data_repo / anbima_entry["retained"]
-    retained_b3 = data_repo / b3_entry["retained"]
-    pre_v, ipca_v = parse_anbima(retained_anbima, as_of)
-    cdi_v = parse_b3(retained_b3, as_of)
+    # Re-derive from resolved inputs (override or retained) and compare each curve section
+    pre_v, ipca_v = parse_anbima(resolved["anbima_ettj_csv"], as_of)
+    cdi_v = parse_b3(resolved["b3_bdi_pdf"], as_of)
     rebuilt = build_unified_json(as_of, cdi_v, pre_v, ipca_v)
     for section in ("cdi", "pre", "ipca_real"):
         if rebuilt[section] != payload[section]:
@@ -445,7 +479,8 @@ def _parse_args(argv=None) -> argparse.Namespace:
                         help="git push after committing (implies --commit)")
     parser.add_argument("--verify-as-of", metavar="YYYY-MM-DD",
                         help="Verify the published curves for this date instead of "
-                             "publishing (requires only --data-repo)")
+                             "publishing (requires only --data-repo); pass --anbima/--b3 "
+                             "to supply furnished raw inputs when retained files are absent")
     return parser.parse_args(argv)
 
 
@@ -456,7 +491,13 @@ def main(argv=None) -> None:
     if args.verify_as_of:
         as_of_verify = date.fromisoformat(args.verify_as_of)
         data_repo_path = Path(args.data_repo)
-        discrepancies = verify_publication(data_repo_path, as_of_verify)
+        anbima_override = Path(args.anbima) if args.anbima else None
+        b3_override = Path(args.b3) if args.b3 else None
+        discrepancies = verify_publication(
+            data_repo_path, as_of_verify,
+            anbima_override=anbima_override,
+            b3_override=b3_override,
+        )
         if not discrepancies:
             print("Verified.")
             sys.exit(0)
