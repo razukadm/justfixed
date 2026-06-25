@@ -116,6 +116,7 @@ class Strings:
     PROJ_AS_OF: str = "em {date}"
     PROJ_CURRENT: str = "Valor atual"
     PROJ_CURRENT_TAG: str = "valor na curva"
+    PROJ_IOF_CAVEAT: str = "IOF não considerado (resgate < 30 dias)"
     PROJ_GROSS: str = "Bruto no vencimento"
     PROJ_GAIN: str = "Rendimento"
     PROJ_TAX: str = "IR"

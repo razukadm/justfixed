@@ -1126,6 +1126,13 @@ class InvestmentDetailPanel(QWidget):
         )
         self._proj_current_tag_lbl.setVisible(False)
         bl.addWidget(self._proj_current_tag_lbl)
+        self._proj_iof_lbl = QLabel(STR.PROJ_IOF_CAVEAT)
+        self._proj_iof_lbl.setStyleSheet(
+            f"color: {COLORS.INK_3}; font-size: {FONTS.UI_SIZE_SM}pt;"
+            " padding-left: 168px;"
+        )
+        self._proj_iof_lbl.setVisible(False)
+        bl.addWidget(self._proj_iof_lbl)
         _row(STR.PROJ_GROSS,   self._proj_gross_lbl)
         _row(STR.PROJ_GAIN,    self._proj_gain_lbl)
         _row(STR.PROJ_TAX,     self._proj_tax_lbl)
@@ -1221,6 +1228,7 @@ class InvestmentDetailPanel(QWidget):
             self._proj_stack.setCurrentIndex(0)
             self._proj_panel.set_meta(None)
             self._proj_current_tag_lbl.setVisible(False)
+            self._proj_iof_lbl.setVisible(False)
             self._refresh_fgc_block()
             return
         proj = next(
@@ -1230,6 +1238,7 @@ class InvestmentDetailPanel(QWidget):
             self._proj_stack.setCurrentIndex(0)
             self._proj_panel.set_meta(None)
             self._proj_current_tag_lbl.setVisible(False)
+            self._proj_iof_lbl.setVisible(False)
             self._refresh_fgc_block()
             return
         tb = proj.tax_breakdown
@@ -1250,6 +1259,12 @@ class InvestmentDetailPanel(QWidget):
         else:
             self._proj_current_lbl.setText(proj.current_value.to_display())
             self._proj_current_tag_lbl.setVisible(True)
+        purchase_date = self._current_inv.purchase_date
+        show_iof = (
+            isinstance(purchase_date, date)
+            and (proj.as_of - purchase_date).days < 30
+        )
+        self._proj_iof_lbl.setVisible(show_iof)
         self._proj_gross_lbl.setText(proj.gross_at_maturity.to_display())
         self._proj_gain_lbl.setText(tb.gain.to_display())
         self._proj_tax_lbl.setText(f"{tax_pct} — {tb.tax_amount.to_display()}")
