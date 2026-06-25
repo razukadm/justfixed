@@ -213,19 +213,27 @@ days** (not business days — one of the few places Brazilian tax law uses calen
 
 **Exempt regime (`IR_EXEMPT`).** Rate is 0% for individuals (PF).
 
-**Holding period used.** `holding_calendar_days = (maturity_date − purchase_date).days`, i.e.
-the full holding period to maturity.
+**Holding period used for bracket lookup.** For **bullets** (one terminal flow), the holding
+period is `(maturity_date − purchase_date).days` — the full term. For **coupon instruments**,
+each flow's interest is taxed at the bracket for its own period: `(pay_date − purchase_date).days`
+measured from purchase to that specific payment date. Principal is never taxed.
 
-**Coupon instruments — simplification.** IR is computed once, on the **summed** gross at the
-**terminal** bracket implied by the full holding period — it is **not** withheld per coupon at
-each coupon's own bracket. The per-coupon rule would apply higher (less favourable) brackets to
-early coupons; the difference is modest for typical retail holdings. See disclosure F-07.
+**Coupon instruments — per-flow withholding.** Each cash flow's `interest_component` is taxed
+at the regressive bracket for `(purchase_date → pay_date)`. Results are aggregated:
+`tax_amount = Σ tax_i`, `net_at_maturity = gross_at_maturity − tax_amount`. Early coupons bear
+higher (less favourable) brackets than the terminal flow — the correct treatment per IN RFB
+1.585/2015. Bullets collapse to the prior single-bracket result exactly: their single flow's
+holding period is the full term. See F-07.
 
 **IOF.** Not modelled. The trace's `TaxTrace.iof_modeled` is always `False`, self-disclosing
 the omission. See disclosure F-06.
 
-In the trace, `TaxTrace` records `treatment`, `holding_calendar_days`, `bracket_rate`,
-`taxable_gain`, `tax_amount`, and `iof_modeled`. `net_at_maturity = gross_at_maturity − tax_amount`.
+In the trace, `TaxTrace` records `treatment`, `holding_calendar_days` (full term, for reference),
+`bracket_rate` (effective blended rate — total tax ÷ total taxable interest; equals the single
+bracket for a bullet), `taxable_gain`, `tax_amount`, and `iof_modeled`. `TaxTrace.per_flow`
+holds one `FlowTax` per cash flow, each carrying `pay_date`, `holding_days` (purchase→pay,
+calendar days), `bracket_rate`, `taxable_interest`, and `tax_amount`.
+`net_at_maturity = gross_at_maturity − tax_amount`.
 
 ---
 
@@ -249,8 +257,9 @@ frequencies (single source of truth in `domain/product.py`):
 
 ## 9. Stated limitations and disclosures
 
-These are deliberate, known properties of the current engine. Each states what the engine does,
-why, its materiality, and where it is surfaced in the trace.
+These are deliberate, known properties of the current engine, plus corrected findings retained
+for audit continuity. Each states what the engine does (or did), its materiality, and where it
+is surfaced in the trace.
 
 **F-05 — Current value is accrual-only, not mark-to-market.** Current value compounds principal
 at the instrument's effective rate (Section 5); it is not a marked price. **Materiality: high
@@ -262,10 +271,15 @@ is no MtM field.
 **F-06 — IOF is not modelled.** The IOF levied on redemptions within the first 30 days is not
 computed. **Materiality: low** (most holdings clear 30 days). Surfaced: `TaxTrace.iof_modeled = False`.
 
-**F-07 — Coupon IR uses the terminal bracket on summed gain.** Per Section 7, coupon instruments
-are not taxed with per-coupon withholding. **Materiality: medium for coupon instruments**, low
-otherwise. Surfaced: the single `TaxTrace` with `holding_calendar_days` to maturity; `cash_flows`
-shows the gross coupons it was applied to.
+**F-07 — Per-coupon IR withholding (corrected).** The engine now withholds IR per cash flow:
+each flow's `interest_component` is taxed at the regressive bracket for `(purchase_date → pay_date)`;
+principal is untaxed; results aggregate to `net_at_maturity`. Early coupons therefore bear higher
+(less favourable) brackets than the terminal flow — the correct treatment under IN RFB 1.585/2015.
+Bullets are unchanged: their single flow spans the full holding period, so the per-flow path
+collapses to the prior single-bracket result exactly.
+Surfaced: `TaxTrace.per_flow` (one `FlowTax` per flow, each carrying `pay_date`, `holding_days`,
+`bracket_rate`, `taxable_interest`, `tax_amount`); aggregate `TaxTrace.bracket_rate` is the
+effective blended rate (total tax ÷ total taxable interest).
 
 **F-08 — Single-point-flat curve use; assumed-scalar fallback; live/cached source not yet stamped
 by the app.** The curve is read at one tenor and applied flat (Section 4); when no usable curve is
