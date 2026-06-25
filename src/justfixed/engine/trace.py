@@ -41,7 +41,7 @@ class RateResolution:
                                                  # CDI+spread / IPCA: the spread; None for Prefixed
     curve_anchor: date | None               # curve.anchor when source=="curve", else None
     curve_tenor_date: date | None           # the date passed to rate_at(); None when no curve
-    curve_ref: str | None = None            # content hash / as_of — left None until Track B
+    curve_ref: str | None = None            # content hash of the curve used; None when the rate did not resolve from a curve
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,9 +114,9 @@ class Assumptions:
 class CurveProvenance:
     """Data-provenance layer for the yield curve used in this projection."""
 
-    source: str | None                      # "live"|"cached"|"unavailable" — None in Slice 1
+    source: str | None                      # "live"|"cached"|"unavailable" — set when a caller passes curve_source; else None
     anchor: date | None
-    curve_ref: str | None = None            # content hash — None until Track B
+    curve_ref: str | None = None            # SHA-256 content-hash of the curve used; None when no curve resolved the rate
 
 
 @dataclass(frozen=True, slots=True)

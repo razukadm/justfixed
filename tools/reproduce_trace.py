@@ -377,7 +377,7 @@ def trace_to_text(trace: ProjectionTrace, *, curve_file: dict | None) -> str:
     source_str = (
         cp.source
         if cp.source is not None
-        else "not stamped (pending wiring slice)"
+        else "not stamped (no curve_source supplied)"
     )
     ref_str = cp.curve_ref if cp.curve_ref is not None else "(no curve)"
     lines.append(f"Source:    {source_str}")
